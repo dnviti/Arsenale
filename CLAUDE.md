@@ -30,14 +30,14 @@ npm run db:push             # Sync schema to database (no migration)
 npm run db:migrate          # Run migrations
 
 # Docker
-npm run docker:dev          # Start guacd container (required for RDP)
+npm run docker:dev          # Start guacd + PostgreSQL containers (required for dev)
 npm run docker:dev:down     # Stop dev containers
-npm run docker:prod         # Full production stack (PostgreSQL + guacd + server + client)
+npm run docker:prod         # Full production stack (requires .env.production)
 ```
 
 ## Environment Setup
 
-Copy `.env.example` to `.env`. SQLite is used in development (`file:./dev.db`), PostgreSQL in production. Docker is required for `guacd` (Guacamole daemon) to support RDP connections.
+Copy `.env.example` to `.env`. PostgreSQL is used in both development and production. Docker is required for both PostgreSQL and `guacd` (Guacamole daemon). The `predev` script starts both containers automatically.
 
 ## Architecture
 

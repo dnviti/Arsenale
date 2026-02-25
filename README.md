@@ -18,7 +18,7 @@ A web-based application for managing and accessing remote SSH and RDP connection
 |-------|-------------|
 | **Server** | Express, TypeScript, Prisma, Socket.IO, ssh2, guacamole-lite |
 | **Client** | React 19, Vite, Material-UI v6, Zustand, XTerm.js, guacamole-common-js |
-| **Database** | SQLite (dev) / PostgreSQL 16 (prod) |
+| **Database** | PostgreSQL 16 |
 | **Infrastructure** | Docker, Nginx, guacd |
 
 ## Prerequisites
@@ -58,15 +58,16 @@ npm run predev && npm run dev
 ```
 
 This starts:
+- PostgreSQL 16 on port 5432 (Docker)
+- guacd container on port 4822 (Docker)
 - Express API server on `http://localhost:3001`
 - Vite dev server on `http://localhost:3000` (proxies API and WebSocket requests)
-- guacd Docker container on port 4822
 
 ## Environment Variables
 
 | Variable | Default | Description |
 |----------|---------|-------------|
-| `DATABASE_URL` | `file:./dev.db` | Database connection string (SQLite for dev, PostgreSQL for prod) |
+| `DATABASE_URL` | `postgresql://rdm:rdm_password@127.0.0.1:5432/remote_desktop_manager` | PostgreSQL connection string |
 | `JWT_SECRET` | `change-me-in-production` | Secret key for signing JWT tokens |
 | `JWT_EXPIRES_IN` | `15m` | Access token TTL |
 | `JWT_REFRESH_EXPIRES_IN` | `7d` | Refresh token TTL |
@@ -105,7 +106,7 @@ remote-desktop-manager/
 │   └── nginx.conf                # Production reverse proxy config
 │
 ├── docker-compose.yml            # Production stack
-├── docker-compose.dev.yml        # Dev (guacd only)
+├── docker-compose.dev.yml        # Dev (guacd + PostgreSQL)
 └── .env.example                  # Environment template
 ```
 
@@ -128,9 +129,9 @@ npm run db:push             # Sync schema to DB (no migration)
 npm run db:migrate          # Run Prisma migrations
 
 # Docker
-npm run docker:dev          # Start guacd container
+npm run docker:dev          # Start guacd + PostgreSQL containers
 npm run docker:dev:down     # Stop dev containers
-npm run docker:prod         # Full production stack
+npm run docker:prod         # Full production stack (requires .env.production)
 ```
 
 ## Production Deployment
@@ -138,7 +139,11 @@ npm run docker:prod         # Full production stack
 Deploy the full stack with Docker Compose:
 
 ```bash
-# Set production environment variables in .env, then:
+# 1. Create production secrets
+cp .env.production.example .env.production
+# Edit .env.production — set strong values for POSTGRES_PASSWORD, JWT_SECRET, GUACAMOLE_SECRET
+
+# 2. Launch the stack
 npm run docker:prod
 ```
 

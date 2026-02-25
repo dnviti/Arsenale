@@ -19,9 +19,7 @@ services:
     restart: unless-stopped
 
   server:
-    build:
-      context: .
-      dockerfile: server/Dockerfile
+    image: ghcr.io/dnviti/remote-desktop-manager/server:latest
     ports:
       - "3001:3001"
     depends_on:
@@ -42,9 +40,7 @@ services:
     restart: unless-stopped
 
   client:
-    build:
-      context: .
-      dockerfile: client/Dockerfile
+    image: ghcr.io/dnviti/remote-desktop-manager/client:latest
     ports:
       - "3000:80"
     depends_on:
