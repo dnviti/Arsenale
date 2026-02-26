@@ -1,23 +1,45 @@
 import { create } from 'zustand';
 import { getVaultStatus } from '../api/vault.api';
 
+const POLL_INTERVAL_MS = 60_000;
+
+let pollTimer: ReturnType<typeof setInterval> | null = null;
+
 interface VaultState {
   unlocked: boolean;
+  initialized: boolean;
   checkStatus: () => Promise<void>;
   setUnlocked: (unlocked: boolean) => void;
+  startPolling: () => void;
+  stopPolling: () => void;
 }
 
 export const useVaultStore = create<VaultState>((set) => ({
   unlocked: false,
+  initialized: false,
 
   checkStatus: async () => {
     try {
       const data = await getVaultStatus();
-      set({ unlocked: data.unlocked });
+      set({ unlocked: data.unlocked, initialized: true });
     } catch {
-      set({ unlocked: false });
+      set({ unlocked: false, initialized: true });
     }
   },
 
   setUnlocked: (unlocked) => set({ unlocked }),
+
+  startPolling: () => {
+    if (pollTimer) return;
+    pollTimer = setInterval(() => {
+      get().checkStatus();
+    }, POLL_INTERVAL_MS);
+  },
+
+  stopPolling: () => {
+    if (pollTimer) {
+      clearInterval(pollTimer);
+      pollTimer = null;
+    }
+  },
 }));

@@ -109,6 +109,10 @@ export function getVaultSession(userId: string): VaultSession | null {
     return null;
   }
 
+  // Sliding window: reset TTL on every successful access
+  const ttlMs = config.vaultTtlMinutes * 60 * 1000;
+  session.expiresAt = Date.now() + ttlMs;
+
   return session;
 }
 

@@ -7,10 +7,14 @@ import { useVaultStore } from '../store/vaultStore';
 export default function DashboardPage() {
   const fetchConnections = useConnectionsStore((s) => s.fetchConnections);
   const checkVaultStatus = useVaultStore((s) => s.checkStatus);
+  const startPolling = useVaultStore((s) => s.startPolling);
+  const stopPolling = useVaultStore((s) => s.stopPolling);
 
   useEffect(() => {
     checkVaultStatus();
     fetchConnections();
+    startPolling();
+    return () => stopPolling();
   }, []);
 
   return (
