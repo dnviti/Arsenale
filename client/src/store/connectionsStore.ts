@@ -1,12 +1,8 @@
 import { create } from 'zustand';
 import { ConnectionData, listConnections } from '../api/connections.api';
+import { FolderData, listFolders } from '../api/folders.api';
 
-interface Folder {
-  id: string;
-  name: string;
-  parentId: string | null;
-  sortOrder: number;
-}
+export type Folder = FolderData;
 
 interface ConnectionsState {
   ownConnections: ConnectionData[];
@@ -14,7 +10,7 @@ interface ConnectionsState {
   folders: Folder[];
   loading: boolean;
   fetchConnections: () => Promise<void>;
-  setFolders: (folders: Folder[]) => void;
+  fetchFolders: () => Promise<void>;
 }
 
 export const useConnectionsStore = create<ConnectionsState>((set) => ({
@@ -26,10 +22,14 @@ export const useConnectionsStore = create<ConnectionsState>((set) => ({
   fetchConnections: async () => {
     set({ loading: true });
     try {
-      const data = await listConnections();
+      const [connData, foldersData] = await Promise.all([
+        listConnections(),
+        listFolders(),
+      ]);
       set({
-        ownConnections: data.own,
-        sharedConnections: data.shared,
+        ownConnections: connData.own,
+        sharedConnections: connData.shared,
+        folders: foldersData,
         loading: false,
       });
     } catch {
@@ -37,5 +37,10 @@ export const useConnectionsStore = create<ConnectionsState>((set) => ({
     }
   },
 
-  setFolders: (folders) => set({ folders }),
+  fetchFolders: async () => {
+    try {
+      const folders = await listFolders();
+      set({ folders });
+    } catch {}
+  },
 }));

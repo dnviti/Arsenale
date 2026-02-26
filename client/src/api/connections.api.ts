@@ -41,9 +41,20 @@ export async function createConnection(data: ConnectionInput): Promise<Connectio
   return res.data;
 }
 
+export interface ConnectionUpdate {
+  name?: string;
+  type?: 'RDP' | 'SSH';
+  host?: string;
+  port?: number;
+  username?: string;
+  password?: string;
+  description?: string;
+  folderId?: string | null;
+}
+
 export async function updateConnection(
   id: string,
-  data: Partial<ConnectionInput>
+  data: ConnectionUpdate
 ): Promise<ConnectionData> {
   const res = await api.put(`/connections/${id}`, data);
   return res.data;

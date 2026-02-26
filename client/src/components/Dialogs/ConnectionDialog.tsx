@@ -3,16 +3,17 @@ import {
   Dialog, DialogTitle, DialogContent, DialogActions, Button, TextField,
   FormControl, InputLabel, Select, MenuItem, Box, Alert,
 } from '@mui/material';
-import { createConnection, updateConnection, ConnectionInput, ConnectionData } from '../../api/connections.api';
+import { createConnection, updateConnection, ConnectionInput, ConnectionUpdate, ConnectionData } from '../../api/connections.api';
 import { useConnectionsStore } from '../../store/connectionsStore';
 
 interface ConnectionDialogProps {
   open: boolean;
   onClose: () => void;
   connection?: ConnectionData | null;
+  folderId?: string | null;
 }
 
-export default function ConnectionDialog({ open, onClose, connection }: ConnectionDialogProps) {
+export default function ConnectionDialog({ open, onClose, connection, folderId }: ConnectionDialogProps) {
   const [name, setName] = useState('');
   const [type, setType] = useState<'SSH' | 'RDP'>('SSH');
   const [host, setHost] = useState('');
@@ -66,7 +67,7 @@ export default function ConnectionDialog({ open, onClose, connection }: Connecti
     setLoading(true);
     try {
       if (isEditMode && connection) {
-        const data: Partial<ConnectionInput> = {
+        const data: ConnectionUpdate = {
           name,
           type,
           host,
@@ -85,6 +86,7 @@ export default function ConnectionDialog({ open, onClose, connection }: Connecti
           username,
           password,
           description: description || undefined,
+          ...(folderId ? { folderId } : {}),
         };
         await createConnection(data);
       }

@@ -1,6 +1,7 @@
 import { useState } from 'react';
 import {
   AppBar, Toolbar, Typography, IconButton, Box, Chip, Menu, MenuItem,
+  Snackbar, Alert,
 } from '@mui/material';
 import {
   Lock as LockIcon,
@@ -12,12 +13,15 @@ import ConnectionTree from '../Sidebar/ConnectionTree';
 import TabBar from '../Tabs/TabBar';
 import TabPanel from '../Tabs/TabPanel';
 import ConnectionDialog from '../Dialogs/ConnectionDialog';
+import FolderDialog from '../Dialogs/FolderDialog';
 import VaultUnlockDialog from '../Dialogs/VaultUnlockDialog';
 import { useAuthStore } from '../../store/authStore';
 import { useVaultStore } from '../../store/vaultStore';
 import { logoutApi } from '../../api/auth.api';
 import { lockVault } from '../../api/vault.api';
 import { ConnectionData } from '../../api/connections.api';
+import type { Folder } from '../../store/connectionsStore';
+import { useNotificationStore } from '../../store/notificationStore';
 
 const SIDEBAR_WIDTH = 280;
 
@@ -27,15 +31,40 @@ export default function MainLayout() {
   const refreshToken = useAuthStore((s) => s.refreshToken);
   const vaultUnlocked = useVaultStore((s) => s.unlocked);
   const setVaultUnlocked = useVaultStore((s) => s.setUnlocked);
+  const notification = useNotificationStore((s) => s.notification);
+  const clearNotification = useNotificationStore((s) => s.clear);
 
   const [connectionDialogOpen, setConnectionDialogOpen] = useState(false);
   const [editingConnection, setEditingConnection] = useState<ConnectionData | null>(null);
+  const [connectionFolderId, setConnectionFolderId] = useState<string | null>(null);
+  const [folderDialogOpen, setFolderDialogOpen] = useState(false);
+  const [editingFolder, setEditingFolder] = useState<Folder | null>(null);
+  const [newFolderParentId, setNewFolderParentId] = useState<string | null>(null);
   const [vaultDialogOpen, setVaultDialogOpen] = useState(false);
   const [anchorEl, setAnchorEl] = useState<null | HTMLElement>(null);
 
   const handleEditConnection = (conn: ConnectionData) => {
     setEditingConnection(conn);
+    setConnectionFolderId(null);
     setConnectionDialogOpen(true);
+  };
+
+  const handleCreateConnection = (folderId?: string) => {
+    setEditingConnection(null);
+    setConnectionFolderId(folderId || null);
+    setConnectionDialogOpen(true);
+  };
+
+  const handleCreateFolder = (parentId?: string) => {
+    setEditingFolder(null);
+    setNewFolderParentId(parentId || null);
+    setFolderDialogOpen(true);
+  };
+
+  const handleEditFolder = (folder: Folder) => {
+    setEditingFolder(folder);
+    setNewFolderParentId(null);
+    setFolderDialogOpen(true);
   };
 
   const handleLogout = async () => {
@@ -71,7 +100,7 @@ export default function MainLayout() {
           <Box sx={{ flexGrow: 1 }} />
           <IconButton
             color="inherit"
-            onClick={() => { setEditingConnection(null); setConnectionDialogOpen(true); }}
+            onClick={() => handleCreateConnection()}
             title="New connection"
           >
             <AddIcon />
@@ -107,7 +136,12 @@ export default function MainLayout() {
             bgcolor: 'background.paper',
           }}
         >
-          <ConnectionTree onEditConnection={handleEditConnection} />
+          <ConnectionTree
+            onEditConnection={handleEditConnection}
+            onCreateConnection={handleCreateConnection}
+            onCreateFolder={handleCreateFolder}
+            onEditFolder={handleEditFolder}
+          />
         </Box>
 
         {/* Main content */}
@@ -119,13 +153,36 @@ export default function MainLayout() {
 
       <ConnectionDialog
         open={connectionDialogOpen}
-        onClose={() => { setConnectionDialogOpen(false); setEditingConnection(null); }}
+        onClose={() => { setConnectionDialogOpen(false); setEditingConnection(null); setConnectionFolderId(null); }}
         connection={editingConnection}
+        folderId={connectionFolderId}
+      />
+      <FolderDialog
+        open={folderDialogOpen}
+        onClose={() => { setFolderDialogOpen(false); setEditingFolder(null); setNewFolderParentId(null); }}
+        folder={editingFolder}
+        parentId={newFolderParentId}
       />
       <VaultUnlockDialog
         open={vaultDialogOpen}
         onClose={() => setVaultDialogOpen(false)}
       />
+
+      <Snackbar
+        open={notification !== null}
+        autoHideDuration={5000}
+        onClose={clearNotification}
+        anchorOrigin={{ vertical: 'bottom', horizontal: 'center' }}
+      >
+        <Alert
+          onClose={clearNotification}
+          severity={notification?.severity || 'error'}
+          variant="filled"
+          sx={{ width: '100%' }}
+        >
+          {notification?.message}
+        </Alert>
+      </Snackbar>
     </>
   );
 }
