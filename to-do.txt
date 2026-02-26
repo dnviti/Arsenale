@@ -11,12 +11,13 @@
 ================================================================================
 
 ------------------------------------------------------------------------------
-[~] FOLD-001 — Gestione cartelle per organizzare le connessioni
+[x] FOLD-001 — Gestione cartelle per organizzare le connessioni
 ------------------------------------------------------------------------------
   Priorita: ALTA
   Dipendenze: Nessuna
   Stato backend: COMPLETO (API CRUD gia' implementata)
-  Stato frontend: PARZIALE (visualizzazione cartelle OK, manca CRUD UI)
+  Stato frontend: COMPLETO (API client, FolderDialog, ConnectionTree, connectionsStore)
+  COMPLETATO: Frontend CRUD completo (API, Dialog, Tree, Store)
 
   DESCRIZIONE:
   Permettere agli utenti di creare, rinominare ed eliminare cartelle
@@ -54,10 +55,11 @@
 
 
 ------------------------------------------------------------------------------
-[ ] UI-002 — Spostare bottone "Nuova connessione" sopra la lista connessioni
+[x] UI-002 — Spostare bottone "Nuova connessione" sopra la lista connessioni
 ------------------------------------------------------------------------------
   Priorita: ALTA
   Dipendenze: Nessuna
+  COMPLETATO: AddIcon rimosso da AppBar, aggiunto nella sidebar header di ConnectionTree
 
   DESCRIZIONE:
   Attualmente il bottone "+" per creare una nuova connessione si trova
@@ -126,7 +128,7 @@
 
 
 ------------------------------------------------------------------------------
-[ ] SHR-005 — Condivisione connessioni dal menu contestuale (view/edit)
+[~] SHR-005 — Condivisione connessioni dal menu contestuale (view/edit)
 ------------------------------------------------------------------------------
   Priorita: ALTA
   Dipendenze: CTX-003 (completato)
@@ -217,7 +219,7 @@
 
 
 ------------------------------------------------------------------------------
-[ ] USER-007 — Pannello amministrazione utente
+[~] USER-007 — Pannello amministrazione utente
 ------------------------------------------------------------------------------
   Priorita: ALTA
   Dipendenze: Nessuna
@@ -293,22 +295,21 @@
 ================================================================================
 
 ------------------------------------------------------------------------------
-[~] EDIT-008 — Modifica connessioni esistenti (UI)
+[x] EDIT-008 — Modifica connessioni esistenti (UI)
 ------------------------------------------------------------------------------
   Priorita: ALTA
   Dipendenze: CTX-003 (completato)
-  Stato: PARZIALE — voce Edit nel context menu + callback handleEditConnection
-         implementati, ConnectionDialog gia' riceve prop connection per edit
+  COMPLETATO: Full edit flow via context menu, ConnectionDialog edit mode, server PUT endpoint
 
-  DESCRIZIONE:
-  Permettere la modifica di connessioni esistenti tramite il context menu.
-  Il backend PUT /api/connections/:id esiste gia'.
-
-  DA VERIFICARE/COMPLETARE:
-    - ConnectionDialog.tsx supporta modalita' edit (prop connection)?
-    - I campi vengono pre-popolati con i dati della connessione?
-    - Le credenziali (username/password) sono gestite correttamente in edit?
-    - Dopo il salvataggio, la lista si aggiorna?
+  STATO IMPLEMENTAZIONE:
+  - Context menu "Edit" con ownership check (isOwner): OK
+  - ConnectionDialog edit mode con pre-popolamento campi: OK
+  - Type field disabilitato in edit mode: OK
+  - Username/password opzionali ("Leave blank to keep unchanged"): OK
+  - Cancellazione description (fix: invia null al server): OK
+  - Server-side: validazione Zod, ownership check, vault unlock, encryption: OK
+  - Refresh lista dopo salvataggio: OK
+  - Folder preservation (edit non cambia folderId, "Move to Folder" separato): OK
 
 
 ------------------------------------------------------------------------------
@@ -533,6 +534,166 @@
     MODIFICARE: package.json (dipendenza react-hotkeys-hook)
 
 
+------------------------------------------------------------------------------
+[~] CLIP-017 — Clipboard (copy/paste) per connessioni RDP e SSH
+------------------------------------------------------------------------------
+  Priorita: ALTA
+  Dipendenze: Nessuna
+
+  DESCRIZIONE:
+  Abilitare il copia/incolla bidirezionale tra il browser e le sessioni
+  remote (RDP e SSH). Attualmente non e' implementato in nessuno dei due
+  protocolli. Per RDP si usano le API clipboard di guacamole-common-js,
+  per SSH si intercettano le combinazioni tastiera in xterm.js.
+
+  DETTAGLI TECNICI:
+  RDP Clipboard (guacamole-common-js):
+    1. In RdpViewer.tsx, aggiungere handler client.onclipboard:
+       - Decodificare dati con Guacamole.StringReader
+       - Scrivere nel clipboard del browser con navigator.clipboard.writeText()
+    2. Direzione inversa (browser → remote):
+       - Leggere navigator.clipboard.readText() su focus/input del display
+       - Inviare al remote via Guacamole.OutputStream + Guacamole.StringWriter
+    3. Nessuna modifica server-side necessaria (guacd abilita clipboard
+       di default se non ci sono flag disable-copy/disable-paste)
+
+  SSH Clipboard (xterm.js):
+    1. In SshTerminal.tsx, aggiungere terminal.attachCustomKeyEventHandler():
+       - Ctrl+Shift+C → navigator.clipboard.writeText(terminal.getSelection())
+       - Ctrl+Shift+V → navigator.clipboard.readText() → socket.emit('data', text)
+    2. Nessun pacchetto aggiuntivo necessario
+
+  FILE COINVOLTI:
+    MODIFICARE: client/src/components/RDP/RdpViewer.tsx
+                (onclipboard handler, clipboard write/read, navigator.clipboard)
+    MODIFICARE: client/src/components/Terminal/SshTerminal.tsx
+                (attachCustomKeyEventHandler per Ctrl+Shift+C/V)
+
+
+------------------------------------------------------------------------------
+[ ] RDPFS-018 — Condivisione file/cartelle via drive redirection (RDP)
+------------------------------------------------------------------------------
+  Priorita: MEDIA
+  Dipendenze: Nessuna
+
+  DESCRIZIONE:
+  Abilitare la drive redirection di guacd per permettere il trasferimento
+  di file tra il browser e la sessione RDP. Il desktop remoto vedra' un
+  disco di rete condiviso ("Shared") dove l'utente puo' copiare file.
+  Lato browser, una UI permette di caricare/scaricare file da quel disco.
+
+  DETTAGLI TECNICI:
+  Server (guacd parameters):
+    1. In rdp.service.ts, aggiungere ai settings del token:
+       - 'enable-drive': 'true'
+       - 'drive-name': 'Shared'
+       - 'drive-path': '/guacd-drive'
+       - 'create-drive-path': 'true'
+
+  Docker (volume condiviso):
+    2. In docker-compose.dev.yml e docker-compose.prod.yml:
+       - Montare volume rdm_drive:/guacd-drive nel container guacd
+       - Montare stesso volume nel container server (per accesso API)
+       - Dichiarare volume rdm_drive nelle volumes globali
+
+  Server API (gestione file):
+    3. Creare routes + controller + service per file transfer:
+       - GET    /api/files         → Lista file nella cartella condivisa
+       - GET    /api/files/:name   → Download file
+       - POST   /api/files         → Upload file (multer)
+       - DELETE /api/files/:name   → Elimina file
+    4. Installare multer per gestione upload multipart
+
+  Frontend (file browser):
+    5. Creare componente FileBrowser per navigare la cartella condivisa
+       - Lista file con nome, dimensione, data
+       - Bottone upload (input file o drag-and-drop)
+       - Bottone download per ogni file
+       - Accessibile dalla tab RDP o da un pannello laterale
+
+  FILE COINVOLTI:
+    MODIFICARE: server/src/services/rdp.service.ts
+                (aggiungere parametri enable-drive al token)
+    MODIFICARE: docker-compose.dev.yml (volume guacd-drive)
+    MODIFICARE: docker-compose.yml (volume guacd-drive)
+    MODIFICARE: docker-compose.prod.yml (volume guacd-drive)
+    CREARE:  server/src/routes/filetransfer.routes.ts
+    CREARE:  server/src/controllers/filetransfer.controller.ts
+    CREARE:  server/src/services/filetransfer.service.ts
+    CREARE:  client/src/components/FileTransfer/FileBrowser.tsx
+    MODIFICARE: server/src/app.ts (montare routes filetransfer)
+    MODIFICARE: package.json (dipendenza multer)
+
+
+------------------------------------------------------------------------------
+[x] LOG-018 — Logging configurabile per connessioni
+------------------------------------------------------------------------------
+  Priorita: MEDIA
+  Dipendenze: Nessuna
+  COMPLETATO: Logger utility, LOG_LEVEL env var, guacamole-lite level mapping
+
+  DESCRIZIONE:
+  Disabilitare i log verbosi di guacamole-lite in sviluppo e rendere il
+  livello di logging configurabile tramite variabile d'ambiente LOG_LEVEL.
+
+  STATO IMPLEMENTAZIONE:
+  - LOG_LEVEL env var (error | warn | info | debug), default: info
+  - Logger utility senza dipendenze esterne (server/src/utils/logger.ts)
+  - Guacamole-lite usa livello mappato da LOG_LEVEL (non piu' hardcoded DEBUG)
+  - Tutti i console.log/error/warn sostituiti con logger.*
+  - Con default "info": guacamole gira a NORMAL (niente spam DEBUG)
+
+  FILE COINVOLTI:
+    CREATO:    server/src/utils/logger.ts
+    MODIFICATO: server/src/config.ts (campo logLevel)
+    MODIFICATO: server/src/index.ts (usa logger + toGuacamoleLogLevel)
+    MODIFICATO: server/src/middleware/error.middleware.ts (usa logger)
+    MODIFICATO: .env.example (LOG_LEVEL)
+
+
+------------------------------------------------------------------------------
+[ ] SFTP-019 — Trasferimento file via SFTP (SSH)
+------------------------------------------------------------------------------
+  Priorita: MEDIA
+  Dipendenze: Nessuna
+
+  DESCRIZIONE:
+  Abilitare il trasferimento file bidirezionale nelle sessioni SSH
+  tramite il protocollo SFTP. La libreria ssh2 gia' presente nel progetto
+  supporta SFTP nativamente via client.sftp(). Serve un file browser
+  nel frontend e nuovi eventi socket lato server.
+
+  DETTAGLI TECNICI:
+  Server (SFTP via ssh2):
+    1. In ssh.service.ts, aggiungere metodo per creare sessione SFTP:
+       - Usare client.sftp() sulla connessione SSH esistente
+    2. In ssh.handler.ts, aggiungere nuovi eventi socket:
+       - sftp:list (directory) → Lista file/cartelle con stat
+       - sftp:upload (path, data) → Scrive file sul server remoto
+       - sftp:download (path) → Legge file e invia al client
+       - sftp:mkdir (path) → Crea cartella
+       - sftp:delete (path) → Elimina file/cartella
+    3. Alternativa: creare routes HTTP con multer per upload/download
+       streaming attraverso canale SFTP
+
+  Frontend (SFTP browser):
+    4. Creare componente SftpBrowser:
+       - Navigazione directory con breadcrumb
+       - Lista file con nome, dimensione, permessi, data
+       - Upload file (drag-and-drop con react-dropzone o input nativo)
+       - Download file (click o bottone)
+       - Creazione cartelle, eliminazione file
+       - Accessibile dalla tab SSH come pannello split o tab separata
+    5. Opzionale: installare react-dropzone per UX upload migliore
+
+  FILE COINVOLTI:
+    MODIFICARE: server/src/socket/ssh.handler.ts
+                (aggiungere eventi SFTP: list, upload, download, mkdir, delete)
+    MODIFICARE: server/src/services/ssh.service.ts
+                (aggiungere creazione sessione SFTP via client.sftp())
+    CREARE:  client/src/components/FileTransfer/SftpBrowser.tsx
+
+
 ================================================================================
   ORDINE DI IMPLEMENTAZIONE CONSIGLIATO
 ================================================================================
@@ -542,22 +703,25 @@
     2. FOLD-001 Gestione cartelle UI (backend gia' pronto)
     3. EDIT-008 Verificare/completare modifica connessioni
 
-  Fase 2 — Context menu completo:
-    4. SHR-005  Condivisione dal context menu
-    5. USER-007 Pannello utente (necessario per CRED-006)
-    6. CRED-006 Connessione con credenziali alternative
+  Fase 2 — Context menu completo + clipboard:
+    4. SHR-005   Condivisione dal context menu
+    5. CLIP-017  Clipboard RDP e SSH (quick win, solo frontend)
+    6. USER-007  Pannello utente (necessario per CRED-006)
+    7. CRED-006  Connessione con credenziali alternative
 
   Fase 3 — Miglioramenti UX:
-    7. SEARCH-009  Barra di ricerca
-    8. THEME-011   Tema scuro/chiaro
-    9. FAVS-014    Preferiti e recenti
-   10. KEYS-016    Scorciatoie tastiera
+    8. SEARCH-009  Barra di ricerca
+    9. THEME-011   Tema scuro/chiaro
+   10. FAVS-014    Preferiti e recenti
+   11. KEYS-016    Scorciatoie tastiera
+   12. RDPFS-018   Drive redirection RDP (file transfer)
+   13. SFTP-019    Trasferimento file SFTP (SSH)
 
   Fase 4 — Sicurezza e amministrazione:
-   11. 2FA-012     Autenticazione due fattori
-   12. AUDIT-013   Log attivita'
-   13. NOTIF-015   Notifiche condivisione
-   14. DND-010     Drag and drop
+   14. 2FA-012     Autenticazione due fattori
+   15. AUDIT-013   Log attivita'
+   16. NOTIF-015   Notifiche condivisione
+   17. DND-010     Drag and drop
 
 
 ================================================================================
@@ -570,4 +734,7 @@
   - CRED-006 richiede modifiche sia frontend che backend
   - USER-007 e' il task piu' grande: richiede nuovo layer backend completo
   - Il cambio password (USER-007) e' critico: deve ri-cifrare la vault key
+  - CLIP-017 e' un quick win: solo modifiche frontend, nessun backend
+  - RDPFS-018 richiede volume Docker condiviso tra guacd e server
+  - SFTP-019 usa client.sftp() di ssh2 (gia' installato), nessun nuovo pacchetto
 ================================================================================
