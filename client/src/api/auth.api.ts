@@ -5,7 +5,7 @@ export async function loginApi(email: string, password: string) {
   return res.data as {
     accessToken: string;
     refreshToken: string;
-    user: { id: string; email: string };
+    user: { id: string; email: string; username: string | null; avatarData: string | null };
   };
 }
 
@@ -16,7 +16,10 @@ export async function registerApi(email: string, password: string) {
 
 export async function refreshApi(refreshToken: string) {
   const res = await api.post('/auth/refresh', { refreshToken });
-  return res.data as { accessToken: string };
+  return res.data as {
+    accessToken: string;
+    user: { id: string; email: string; username: string | null; avatarData: string | null };
+  };
 }
 
 export async function logoutApi(refreshToken: string) {

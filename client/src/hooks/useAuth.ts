@@ -10,7 +10,10 @@ export function useAuth() {
   useEffect(() => {
     if (!isAuthenticated && refreshToken) {
       refreshApi(refreshToken)
-        .then((data) => setAccessToken(data.accessToken))
+        .then((data) => {
+          setAccessToken(data.accessToken);
+          if (data.user) useAuthStore.getState().updateUser(data.user);
+        })
         .catch(() => {
           logout();
           navigate('/login');

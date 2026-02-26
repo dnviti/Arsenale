@@ -70,9 +70,10 @@ interface ConnectionItemProps {
   onEdit: (conn: ConnectionData) => void;
   onDelete: (conn: ConnectionData) => void;
   onMove: (conn: ConnectionData) => void;
+  onShare: (conn: ConnectionData) => void;
 }
 
-function ConnectionItem({ conn, depth, onEdit, onDelete, onMove }: ConnectionItemProps) {
+function ConnectionItem({ conn, depth, onEdit, onDelete, onMove, onShare }: ConnectionItemProps) {
   const openTab = useTabsStore((s) => s.openTab);
   const [contextMenu, setContextMenu] = useState<{ mouseX: number; mouseY: number } | null>(null);
 
@@ -107,6 +108,11 @@ function ConnectionItem({ conn, depth, onEdit, onDelete, onMove }: ConnectionIte
   const handleMove = () => {
     handleCloseMenu();
     onMove(conn);
+  };
+
+  const handleShare = () => {
+    handleCloseMenu();
+    onShare(conn);
   };
 
   return (
@@ -159,6 +165,10 @@ function ConnectionItem({ conn, depth, onEdit, onDelete, onMove }: ConnectionIte
           <ListItemIcon><EditIcon fontSize="small" /></ListItemIcon>
           <ListItemText>Edit</ListItemText>
         </MenuItem>
+        <MenuItem onClick={handleShare} disabled={!conn.isOwner}>
+          <ListItemIcon><ShareIcon fontSize="small" /></ListItemIcon>
+          <ListItemText>Share</ListItemText>
+        </MenuItem>
         <MenuItem onClick={handleDelete} disabled={!conn.isOwner}>
           <ListItemIcon><DeleteIcon fontSize="small" color={conn.isOwner ? 'error' : undefined} /></ListItemIcon>
           <ListItemText>Delete</ListItemText>
@@ -178,6 +188,7 @@ interface FolderItemProps {
   onEditConnection: (conn: ConnectionData) => void;
   onDeleteConnection: (conn: ConnectionData) => void;
   onMoveConnection: (conn: ConnectionData) => void;
+  onShareConnection: (conn: ConnectionData) => void;
   onCreateConnection: (folderId: string) => void;
   onCreateFolder: (parentId?: string) => void;
   onEditFolder: (folder: Folder) => void;
@@ -186,8 +197,8 @@ interface FolderItemProps {
 
 function FolderItem({
   node, connections, folderMap, depth,
-  onEditConnection, onDeleteConnection, onMoveConnection, onCreateConnection,
-  onCreateFolder, onEditFolder, onDeleteFolder,
+  onEditConnection, onDeleteConnection, onMoveConnection, onShareConnection,
+  onCreateConnection, onCreateFolder, onEditFolder, onDeleteFolder,
 }: FolderItemProps) {
   const [open, setOpen] = useState(true);
   const [contextMenu, setContextMenu] = useState<{ mouseX: number; mouseY: number } | null>(null);
@@ -259,6 +270,7 @@ function FolderItem({
               onEditConnection={onEditConnection}
               onDeleteConnection={onDeleteConnection}
               onMoveConnection={onMoveConnection}
+              onShareConnection={onShareConnection}
               onCreateConnection={onCreateConnection}
               onCreateFolder={onCreateFolder}
               onEditFolder={onEditFolder}
@@ -273,6 +285,7 @@ function FolderItem({
               onEdit={onEditConnection}
               onDelete={onDeleteConnection}
               onMove={onMoveConnection}
+              onShare={onShareConnection}
             />
           ))}
         </List>
@@ -285,12 +298,13 @@ function FolderItem({
 
 interface ConnectionTreeProps {
   onEditConnection: (conn: ConnectionData) => void;
+  onShareConnection: (conn: ConnectionData) => void;
   onCreateConnection: (folderId?: string) => void;
   onCreateFolder: (parentId?: string) => void;
   onEditFolder: (folder: Folder) => void;
 }
 
-export default function ConnectionTree({ onEditConnection, onCreateConnection, onCreateFolder, onEditFolder }: ConnectionTreeProps) {
+export default function ConnectionTree({ onEditConnection, onShareConnection, onCreateConnection, onCreateFolder, onEditFolder }: ConnectionTreeProps) {
   const ownConnections = useConnectionsStore((s) => s.ownConnections);
   const sharedConnections = useConnectionsStore((s) => s.sharedConnections);
   const folders = useConnectionsStore((s) => s.folders);
@@ -364,6 +378,9 @@ export default function ConnectionTree({ onEditConnection, onCreateConnection, o
         <Typography variant="subtitle2" sx={{ flexGrow: 1 }}>
           My Connections
         </Typography>
+        <IconButton size="small" onClick={() => onCreateConnection()} title="New Connection">
+          <AddIcon fontSize="small" />
+        </IconButton>
         <IconButton size="small" onClick={() => onCreateFolder()} title="New Folder">
           <CreateNewFolderIcon fontSize="small" />
         </IconButton>
@@ -379,6 +396,7 @@ export default function ConnectionTree({ onEditConnection, onCreateConnection, o
             onEditConnection={onEditConnection}
             onDeleteConnection={setDeleteTarget}
             onMoveConnection={handleOpenMoveDialog}
+            onShareConnection={onShareConnection}
             onCreateConnection={onCreateConnection}
             onCreateFolder={onCreateFolder}
             onEditFolder={onEditFolder}
@@ -393,6 +411,7 @@ export default function ConnectionTree({ onEditConnection, onCreateConnection, o
             onEdit={onEditConnection}
             onDelete={setDeleteTarget}
             onMove={handleOpenMoveDialog}
+            onShare={onShareConnection}
           />
         ))}
       </List>
@@ -412,6 +431,7 @@ export default function ConnectionTree({ onEditConnection, onCreateConnection, o
                 onEdit={onEditConnection}
                 onDelete={setDeleteTarget}
                 onMove={handleOpenMoveDialog}
+                onShare={onShareConnection}
               />
             ))}
           </List>
