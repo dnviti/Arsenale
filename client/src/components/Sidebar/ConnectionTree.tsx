@@ -26,6 +26,8 @@ import {
   Star as StarIcon,
   StarBorder as StarBorderIcon,
   AccessTime as RecentIcon,
+  ViewList as ViewListIcon,
+  ViewCompact as ViewCompactIcon,
 } from '@mui/icons-material';
 import { useConnectionsStore, Folder } from '../../store/connectionsStore';
 import { useTabsStore } from '../../store/tabsStore';
@@ -93,6 +95,7 @@ function buildFolderTree(folders: Folder[]): FolderNode[] {
 interface ConnectionItemProps {
   conn: ConnectionData;
   depth: number;
+  compact?: boolean;
   onEdit: (conn: ConnectionData) => void;
   onDelete: (conn: ConnectionData) => void;
   onMove: (conn: ConnectionData) => void;
@@ -100,7 +103,7 @@ interface ConnectionItemProps {
   onToggleFavorite?: (conn: ConnectionData) => void;
 }
 
-function ConnectionItem({ conn, depth, onEdit, onDelete, onMove, onShare, onToggleFavorite }: ConnectionItemProps) {
+function ConnectionItem({ conn, depth, compact, onEdit, onDelete, onMove, onShare, onToggleFavorite }: ConnectionItemProps) {
   const openTab = useTabsStore((s) => s.openTab);
   const [contextMenu, setContextMenu] = useState<{ mouseX: number; mouseY: number } | null>(null);
 
@@ -148,9 +151,9 @@ function ConnectionItem({ conn, depth, onEdit, onDelete, onMove, onShare, onTogg
         dense
         onDoubleClick={() => openTab(conn)}
         onContextMenu={handleContextMenu}
-        sx={{ pl: depthPl(depth) }}
+        sx={{ pl: depthPl(depth), ...(compact && { py: 0.125 }) }}
       >
-        <ListItemIcon sx={{ minWidth: 32 }}>
+        <ListItemIcon sx={{ minWidth: compact ? 24 : 32 }}>
           {conn.type === 'RDP' ? (
             <RdpIcon fontSize="small" color="primary" />
           ) : (
@@ -159,7 +162,7 @@ function ConnectionItem({ conn, depth, onEdit, onDelete, onMove, onShare, onTogg
         </ListItemIcon>
         <ListItemText
           primary={conn.name}
-          secondary={`${conn.host}:${conn.port}`}
+          secondary={compact ? undefined : `${conn.host}:${conn.port}`}
           primaryTypographyProps={{ variant: 'body2', noWrap: true }}
           secondaryTypographyProps={{ variant: 'caption', noWrap: true }}
         />
@@ -233,6 +236,7 @@ interface FolderItemProps {
   connections: ConnectionData[];
   folderMap: Map<string, ConnectionData[]>;
   depth: number;
+  compact?: boolean;
   onEditConnection: (conn: ConnectionData) => void;
   onDeleteConnection: (conn: ConnectionData) => void;
   onMoveConnection: (conn: ConnectionData) => void;
@@ -245,7 +249,7 @@ interface FolderItemProps {
 }
 
 function FolderItem({
-  node, connections, folderMap, depth,
+  node, connections, folderMap, depth, compact,
   onEditConnection, onDeleteConnection, onMoveConnection, onShareConnection, onToggleFavorite,
   onCreateConnection, onCreateFolder, onEditFolder, onDeleteFolder,
 }: FolderItemProps) {
@@ -266,9 +270,9 @@ function FolderItem({
         dense
         onClick={() => setOpen(!open)}
         onContextMenu={handleContextMenu}
-        sx={{ pl: depthPl(depth) }}
+        sx={{ pl: depthPl(depth), ...(compact && { py: 0.125 }) }}
       >
-        <ListItemIcon sx={{ minWidth: 32 }}>
+        <ListItemIcon sx={{ minWidth: compact ? 24 : 32 }}>
           {open ? <FolderOpenIcon fontSize="small" /> : <FolderIcon fontSize="small" />}
         </ListItemIcon>
         <ListItemText
@@ -316,6 +320,7 @@ function FolderItem({
               connections={folderMap.get(child.folder.id) || []}
               folderMap={folderMap}
               depth={depth + 1}
+              compact={compact}
               onEditConnection={onEditConnection}
               onDeleteConnection={onDeleteConnection}
               onMoveConnection={onMoveConnection}
@@ -332,6 +337,7 @@ function FolderItem({
               key={conn.id}
               conn={conn}
               depth={depth + 1}
+              compact={compact}
               onEdit={onEditConnection}
               onDelete={onDeleteConnection}
               onMove={onMoveConnection}
@@ -365,6 +371,9 @@ export default function ConnectionTree({ onEditConnection, onShareConnection, on
   const recentTick = useTabsStore((s) => s.recentTick);
   const notify = useNotificationStore((s) => s.notify);
   const [searchQuery, setSearchQuery] = useState('');
+  const [favoritesOpen, setFavoritesOpen] = useState(true);
+  const [recentsOpen, setRecentsOpen] = useState(true);
+  const [compact, setCompact] = useState(false);
   const [deleteTarget, setDeleteTarget] = useState<ConnectionData | null>(null);
   const [deleteFolderTarget, setDeleteFolderTarget] = useState<Folder | null>(null);
   const [moveTarget, setMoveTarget] = useState<ConnectionData | null>(null);
@@ -468,6 +477,9 @@ export default function ConnectionTree({ onEditConnection, onShareConnection, on
         <Typography variant="subtitle2" sx={{ flexGrow: 1 }}>
           My Connections
         </Typography>
+        <IconButton size="small" onClick={() => setCompact((v) => !v)} title={compact ? 'Normal view' : 'Compact view'}>
+          {compact ? <ViewListIcon fontSize="small" /> : <ViewCompactIcon fontSize="small" />}
+        </IconButton>
         <IconButton size="small" onClick={() => onCreateConnection()} title="New Connection">
           <AddIcon fontSize="small" />
         </IconButton>
@@ -505,48 +517,62 @@ export default function ConnectionTree({ onEditConnection, onShareConnection, on
       {/* Favorites section */}
       {!isSearching && favoriteConnections.length > 0 && (
         <>
-          <Box sx={{ display: 'flex', alignItems: 'center', px: 2, mt: 1, mb: 0.5 }}>
+          <Box
+            sx={{ display: 'flex', alignItems: 'center', px: 2, mt: 1, mb: 0.5, cursor: 'pointer', userSelect: 'none' }}
+            onClick={() => setFavoritesOpen((prev) => !prev)}
+          >
+            {favoritesOpen ? <ExpandMore sx={{ fontSize: 18, mr: 0.5 }} /> : <ChevronRight sx={{ fontSize: 18, mr: 0.5 }} />}
             <StarIcon fontSize="small" color="warning" sx={{ mr: 1 }} />
             <Typography variant="subtitle2">Favorites</Typography>
           </Box>
-          <List disablePadding>
-            {favoriteConnections.map((conn) => (
-              <ConnectionItem
-                key={`fav-${conn.id}`}
-                conn={conn}
-                depth={0}
-                onEdit={onEditConnection}
-                onDelete={setDeleteTarget}
-                onMove={handleOpenMoveDialog}
-                onShare={onShareConnection}
-                onToggleFavorite={handleToggleFavorite}
-              />
-            ))}
-          </List>
+          <Collapse in={favoritesOpen}>
+            <List disablePadding>
+              {favoriteConnections.map((conn) => (
+                <ConnectionItem
+                  key={`fav-${conn.id}`}
+                  conn={conn}
+                  depth={0}
+                  compact={compact}
+                  onEdit={onEditConnection}
+                  onDelete={setDeleteTarget}
+                  onMove={handleOpenMoveDialog}
+                  onShare={onShareConnection}
+                  onToggleFavorite={handleToggleFavorite}
+                />
+              ))}
+            </List>
+          </Collapse>
         </>
       )}
 
       {/* Recent section */}
       {!isSearching && recentConnections.length > 0 && (
         <>
-          <Box sx={{ display: 'flex', alignItems: 'center', px: 2, mt: 1, mb: 0.5 }}>
+          <Box
+            sx={{ display: 'flex', alignItems: 'center', px: 2, mt: 1, mb: 0.5, cursor: 'pointer', userSelect: 'none' }}
+            onClick={() => setRecentsOpen((prev) => !prev)}
+          >
+            {recentsOpen ? <ExpandMore sx={{ fontSize: 18, mr: 0.5 }} /> : <ChevronRight sx={{ fontSize: 18, mr: 0.5 }} />}
             <RecentIcon fontSize="small" sx={{ mr: 1 }} />
             <Typography variant="subtitle2">Recent</Typography>
           </Box>
-          <List disablePadding>
-            {recentConnections.map((conn) => (
-              <ConnectionItem
-                key={`recent-${conn.id}`}
-                conn={conn}
-                depth={0}
-                onEdit={onEditConnection}
-                onDelete={setDeleteTarget}
-                onMove={handleOpenMoveDialog}
-                onShare={onShareConnection}
-                onToggleFavorite={conn.isOwner ? handleToggleFavorite : undefined}
-              />
-            ))}
-          </List>
+          <Collapse in={recentsOpen}>
+            <List disablePadding>
+              {recentConnections.map((conn) => (
+                <ConnectionItem
+                  key={`recent-${conn.id}`}
+                  conn={conn}
+                  depth={0}
+                  compact={compact}
+                  onEdit={onEditConnection}
+                  onDelete={setDeleteTarget}
+                  onMove={handleOpenMoveDialog}
+                  onShare={onShareConnection}
+                  onToggleFavorite={conn.isOwner ? handleToggleFavorite : undefined}
+                />
+              ))}
+            </List>
+          </Collapse>
         </>
       )}
 
@@ -563,6 +589,7 @@ export default function ConnectionTree({ onEditConnection, onShareConnection, on
             connections={filteredFolderMap.get(node.folder.id) || []}
             folderMap={filteredFolderMap}
             depth={0}
+            compact={compact}
             onEditConnection={onEditConnection}
             onDeleteConnection={setDeleteTarget}
             onMoveConnection={handleOpenMoveDialog}
@@ -579,6 +606,7 @@ export default function ConnectionTree({ onEditConnection, onShareConnection, on
             key={conn.id}
             conn={conn}
             depth={0}
+            compact={compact}
             onEdit={onEditConnection}
             onDelete={setDeleteTarget}
             onMove={handleOpenMoveDialog}
@@ -606,6 +634,7 @@ export default function ConnectionTree({ onEditConnection, onShareConnection, on
                 key={conn.id}
                 conn={conn}
                 depth={0}
+                compact={compact}
                 onEdit={onEditConnection}
                 onDelete={setDeleteTarget}
                 onMove={handleOpenMoveDialog}
