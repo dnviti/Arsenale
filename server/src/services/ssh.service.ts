@@ -1,4 +1,4 @@
-import { Client, ClientChannel } from 'ssh2';
+import { Client, ClientChannel, SFTPWrapper } from 'ssh2';
 
 export interface SshConnectionParams {
   host: string;
@@ -56,4 +56,13 @@ export function resizeSshTerminal(
   rows: number
 ): void {
   stream.setWindow(rows, cols, 0, 0);
+}
+
+export function createSftpSession(client: Client): Promise<SFTPWrapper> {
+  return new Promise((resolve, reject) => {
+    client.sftp((err, sftp) => {
+      if (err) return reject(err);
+      resolve(sftp);
+    });
+  });
 }

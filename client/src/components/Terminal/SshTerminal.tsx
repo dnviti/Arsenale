@@ -1,24 +1,58 @@
-import { useEffect, useRef, useState } from 'react';
+import { useEffect, useRef, useState, useMemo } from 'react';
 import { Box, CircularProgress, Typography, Alert } from '@mui/material';
+import { FolderOpen as FolderOpenIcon } from '@mui/icons-material';
 import { Terminal } from '@xterm/xterm';
 import { FitAddon } from '@xterm/addon-fit';
 import { io, Socket } from 'socket.io-client';
 import { useAuthStore } from '../../store/authStore';
+import { useUiPreferencesStore } from '../../store/uiPreferencesStore';
+import type { CredentialOverride } from '../../store/tabsStore';
+import FloatingToolbar, { ToolbarAction } from '../shared/FloatingToolbar';
+import SftpBrowser from '../SSH/SftpBrowser';
 import '@xterm/xterm/css/xterm.css';
 
 interface SshTerminalProps {
   connectionId: string;
   tabId: string;
+  credentials?: CredentialOverride;
 }
 
-export default function SshTerminal({ connectionId, tabId }: SshTerminalProps) {
+export default function SshTerminal({ connectionId, tabId, credentials }: SshTerminalProps) {
   const termRef = useRef<HTMLDivElement>(null);
+  const containerRef = useRef<HTMLDivElement>(null);
   const terminalRef = useRef<Terminal | null>(null);
   const socketRef = useRef<Socket | null>(null);
   const fitAddonRef = useRef<FitAddon | null>(null);
   const [status, setStatus] = useState<'connecting' | 'connected' | 'error'>('connecting');
   const [error, setError] = useState('');
   const accessToken = useAuthStore((s) => s.accessToken);
+
+  const sftpOpen = useUiPreferencesStore((s) => s.sshSftpBrowserOpen);
+  const togglePref = useUiPreferencesStore((s) => s.toggle);
+
+  const toolbarActions = useMemo<ToolbarAction[]>(() => [
+    {
+      id: 'sftp-browser',
+      icon: <FolderOpenIcon fontSize="small" />,
+      tooltip: 'SFTP File Browser',
+      onClick: () => togglePref('sshSftpBrowserOpen'),
+      active: sftpOpen,
+    },
+  ], [sftpOpen, togglePref]);
+
+  // Refit terminal when SFTP drawer opens/closes
+  useEffect(() => {
+    const timer = setTimeout(() => {
+      fitAddonRef.current?.fit();
+      if (socketRef.current?.connected && terminalRef.current) {
+        socketRef.current.emit('resize', {
+          cols: terminalRef.current.cols,
+          rows: terminalRef.current.rows,
+        });
+      }
+    }, 300);
+    return () => clearTimeout(timer);
+  }, [sftpOpen]);
 
   useEffect(() => {
     if (!termRef.current) return;
@@ -81,7 +115,10 @@ export default function SshTerminal({ connectionId, tabId }: SshTerminalProps) {
     });
 
     socket.on('connect', () => {
-      socket.emit('session:start', { connectionId });
+      socket.emit('session:start', {
+        connectionId,
+        ...(credentials && { username: credentials.username, password: credentials.password }),
+      });
     });
 
     socket.on('session:ready', () => {
@@ -131,7 +168,7 @@ export default function SshTerminal({ connectionId, tabId }: SshTerminalProps) {
   }, [connectionId, accessToken]);
 
   return (
-    <Box sx={{ flex: 1, display: 'flex', flexDirection: 'column', position: 'relative' }}>
+    <Box ref={containerRef} sx={{ flex: 1, display: 'flex', flexDirection: 'column', position: 'relative' }}>
       {status === 'connecting' && (
         <Box
           sx={{
@@ -156,10 +193,20 @@ export default function SshTerminal({ connectionId, tabId }: SshTerminalProps) {
           {error}
         </Alert>
       )}
-      <Box
-        ref={termRef}
-        sx={{ flex: 1, overflow: 'hidden', '& .xterm': { height: '100%', padding: '4px' } }}
-      />
+      {status === 'connected' && (
+        <FloatingToolbar actions={toolbarActions} containerRef={containerRef} />
+      )}
+      <Box sx={{ display: 'flex', flex: 1, overflow: 'hidden' }}>
+        <Box
+          ref={termRef}
+          sx={{ flex: 1, overflow: 'hidden', '& .xterm': { height: '100%', padding: '4px' } }}
+        />
+        <SftpBrowser
+          open={sftpOpen}
+          onClose={() => togglePref('sshSftpBrowserOpen')}
+          socket={socketRef.current}
+        />
+      </Box>
     </Box>
   );
 }

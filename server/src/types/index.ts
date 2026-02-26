@@ -19,3 +19,10 @@ export interface VaultSession {
   masterKey: Buffer;
   expiresAt: number;
 }
+
+export interface SftpEntry {
+  name: string;
+  size: number;
+  type: 'file' | 'directory' | 'symlink';
+  modifiedAt: string;
+}
