@@ -186,6 +186,7 @@ export async function listConnections(userId: string) {
       port: true,
       folderId: true,
       description: true,
+      isFavorite: true,
       createdAt: true,
       updatedAt: true,
     },
@@ -217,6 +218,7 @@ export async function listConnections(userId: string) {
       ...s.connection,
       folderId: null,
       isOwner: false,
+      isFavorite: false,
       permission: s.permission,
       sharedBy: s.sharedBy.email,
     })),
@@ -267,4 +269,18 @@ export async function getConnectionCredentials(
   }
 
   throw new AppError('Connection not found or credentials unavailable', 404);
+}
+
+export async function toggleFavorite(userId: string, connectionId: string) {
+  const connection = await prisma.connection.findFirst({
+    where: { id: connectionId, userId },
+  });
+  if (!connection) throw new AppError('Connection not found', 404);
+
+  const updated = await prisma.connection.update({
+    where: { id: connectionId },
+    data: { isFavorite: !connection.isFavorite },
+  });
+
+  return { id: updated.id, isFavorite: updated.isFavorite };
 }

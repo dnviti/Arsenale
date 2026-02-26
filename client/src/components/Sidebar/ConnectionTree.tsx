@@ -1,7 +1,7 @@
 import { useState, useMemo } from 'react';
 import {
   Box, Typography, List, ListItemButton, ListItemIcon, ListItemText,
-  Collapse, Menu, MenuItem, Divider, IconButton,
+  Collapse, Menu, MenuItem, Divider, IconButton, TextField, InputAdornment,
   Dialog, DialogTitle, DialogContent, DialogContentText, DialogActions, Button,
   FormControl, InputLabel, Select,
 } from '@mui/material';
@@ -21,13 +21,20 @@ import {
   CreateNewFolder as CreateNewFolderIcon,
   Add as AddIcon,
   DriveFileMove as MoveIcon,
+  Search as SearchIcon,
+  Clear as ClearIcon,
+  Star as StarIcon,
+  StarBorder as StarBorderIcon,
+  AccessTime as RecentIcon,
 } from '@mui/icons-material';
 import { useConnectionsStore, Folder } from '../../store/connectionsStore';
 import { useTabsStore } from '../../store/tabsStore';
+import { useAuthStore } from '../../store/authStore';
 import { useNotificationStore } from '../../store/notificationStore';
 import { ConnectionData, deleteConnection, updateConnection } from '../../api/connections.api';
 import { deleteFolder } from '../../api/folders.api';
 import { openConnectionWindow } from '../../utils/openConnectionWindow';
+import { getRecentConnectionIds } from '../../utils/recentConnections';
 
 function getErrorMessage(err: unknown, fallback: string): string {
   return (err as { response?: { data?: { error?: string } } })?.response?.data?.error || fallback;
@@ -43,6 +50,25 @@ function depthPl(depth: number) { return BASE_PL + depth * INDENT; }
 interface FolderNode {
   folder: Folder;
   children: FolderNode[];
+}
+
+function matchesSearch(conn: ConnectionData, query: string): boolean {
+  const q = query.toLowerCase();
+  return conn.name.toLowerCase().includes(q)
+    || conn.host.toLowerCase().includes(q)
+    || conn.type.toLowerCase().includes(q)
+    || (conn.description?.toLowerCase().includes(q) ?? false);
+}
+
+function pruneFolderTree(nodes: FolderNode[], folderMap: Map<string, ConnectionData[]>): FolderNode[] {
+  return nodes.reduce<FolderNode[]>((acc, node) => {
+    const prunedChildren = pruneFolderTree(node.children, folderMap);
+    const hasConnections = (folderMap.get(node.folder.id) || []).length > 0;
+    if (hasConnections || prunedChildren.length > 0) {
+      acc.push({ ...node, children: prunedChildren });
+    }
+    return acc;
+  }, []);
 }
 
 function buildFolderTree(folders: Folder[]): FolderNode[] {
@@ -71,9 +97,10 @@ interface ConnectionItemProps {
   onDelete: (conn: ConnectionData) => void;
   onMove: (conn: ConnectionData) => void;
   onShare: (conn: ConnectionData) => void;
+  onToggleFavorite?: (conn: ConnectionData) => void;
 }
 
-function ConnectionItem({ conn, depth, onEdit, onDelete, onMove, onShare }: ConnectionItemProps) {
+function ConnectionItem({ conn, depth, onEdit, onDelete, onMove, onShare, onToggleFavorite }: ConnectionItemProps) {
   const openTab = useTabsStore((s) => s.openTab);
   const [contextMenu, setContextMenu] = useState<{ mouseX: number; mouseY: number } | null>(null);
 
@@ -136,6 +163,17 @@ function ConnectionItem({ conn, depth, onEdit, onDelete, onMove, onShare }: Conn
           primaryTypographyProps={{ variant: 'body2', noWrap: true }}
           secondaryTypographyProps={{ variant: 'caption', noWrap: true }}
         />
+        {conn.isOwner && onToggleFavorite && (
+          <IconButton
+            size="small"
+            onClick={(e) => { e.stopPropagation(); onToggleFavorite(conn); }}
+            sx={{ p: 0.25 }}
+          >
+            {conn.isFavorite
+              ? <StarIcon fontSize="small" color="warning" />
+              : <StarBorderIcon fontSize="small" sx={{ opacity: 0.3 }} />}
+          </IconButton>
+        )}
       </ListItemButton>
 
       <Menu
@@ -156,6 +194,16 @@ function ConnectionItem({ conn, depth, onEdit, onDelete, onMove, onShare }: Conn
           <ListItemIcon><OpenInNewIcon fontSize="small" /></ListItemIcon>
           <ListItemText>Open in New Window</ListItemText>
         </MenuItem>
+        {conn.isOwner && onToggleFavorite && (
+          <MenuItem onClick={() => { handleCloseMenu(); onToggleFavorite(conn); }}>
+            <ListItemIcon>
+              {conn.isFavorite
+                ? <StarBorderIcon fontSize="small" />
+                : <StarIcon fontSize="small" color="warning" />}
+            </ListItemIcon>
+            <ListItemText>{conn.isFavorite ? 'Remove from Favorites' : 'Add to Favorites'}</ListItemText>
+          </MenuItem>
+        )}
         <Divider />
         <MenuItem onClick={handleMove} disabled={!conn.isOwner}>
           <ListItemIcon><MoveIcon fontSize="small" /></ListItemIcon>
@@ -189,6 +237,7 @@ interface FolderItemProps {
   onDeleteConnection: (conn: ConnectionData) => void;
   onMoveConnection: (conn: ConnectionData) => void;
   onShareConnection: (conn: ConnectionData) => void;
+  onToggleFavorite: (conn: ConnectionData) => void;
   onCreateConnection: (folderId: string) => void;
   onCreateFolder: (parentId?: string) => void;
   onEditFolder: (folder: Folder) => void;
@@ -197,7 +246,7 @@ interface FolderItemProps {
 
 function FolderItem({
   node, connections, folderMap, depth,
-  onEditConnection, onDeleteConnection, onMoveConnection, onShareConnection,
+  onEditConnection, onDeleteConnection, onMoveConnection, onShareConnection, onToggleFavorite,
   onCreateConnection, onCreateFolder, onEditFolder, onDeleteFolder,
 }: FolderItemProps) {
   const [open, setOpen] = useState(true);
@@ -271,6 +320,7 @@ function FolderItem({
               onDeleteConnection={onDeleteConnection}
               onMoveConnection={onMoveConnection}
               onShareConnection={onShareConnection}
+              onToggleFavorite={onToggleFavorite}
               onCreateConnection={onCreateConnection}
               onCreateFolder={onCreateFolder}
               onEditFolder={onEditFolder}
@@ -286,6 +336,7 @@ function FolderItem({
               onDelete={onDeleteConnection}
               onMove={onMoveConnection}
               onShare={onShareConnection}
+              onToggleFavorite={onToggleFavorite}
             />
           ))}
         </List>
@@ -309,11 +360,19 @@ export default function ConnectionTree({ onEditConnection, onShareConnection, on
   const sharedConnections = useConnectionsStore((s) => s.sharedConnections);
   const folders = useConnectionsStore((s) => s.folders);
   const fetchConnections = useConnectionsStore((s) => s.fetchConnections);
+  const toggleFav = useConnectionsStore((s) => s.toggleFavorite);
+  const userId = useAuthStore((s) => s.user?.id);
+  const recentTick = useTabsStore((s) => s.recentTick);
   const notify = useNotificationStore((s) => s.notify);
+  const [searchQuery, setSearchQuery] = useState('');
   const [deleteTarget, setDeleteTarget] = useState<ConnectionData | null>(null);
   const [deleteFolderTarget, setDeleteFolderTarget] = useState<Folder | null>(null);
   const [moveTarget, setMoveTarget] = useState<ConnectionData | null>(null);
   const [moveDestination, setMoveDestination] = useState('');
+
+  const handleToggleFavorite = async (conn: ConnectionData) => {
+    await toggleFav(conn.id);
+  };
 
   const handleOpenMoveDialog = (conn: ConnectionData) => {
     setMoveTarget(conn);
@@ -358,19 +417,50 @@ export default function ConnectionTree({ onEditConnection, onShareConnection, on
     setDeleteFolderTarget(null);
   };
 
-  // Group own connections by folder
-  const rootConnections = ownConnections.filter((c) => !c.folderId);
-  const folderMap = new Map<string, ConnectionData[]>();
-  ownConnections.forEach((c) => {
-    if (c.folderId) {
-      const list = folderMap.get(c.folderId) || [];
-      list.push(c);
-      folderMap.set(c.folderId, list);
-    }
-  });
+  // Filter and group connections by folder
+  const { filteredRootConnections, filteredFolderMap, filteredFolderTree, filteredSharedConnections } = useMemo(() => {
+    const isSearching = searchQuery.trim().length > 0;
+    const filteredOwn = isSearching ? ownConnections.filter((c) => matchesSearch(c, searchQuery)) : ownConnections;
+    const filteredShared = isSearching ? sharedConnections.filter((c) => matchesSearch(c, searchQuery)) : sharedConnections;
 
-  // Build hierarchical tree from flat folders list
-  const folderTree = useMemo(() => buildFolderTree(folders), [folders]);
+    const rootConns = filteredOwn.filter((c) => !c.folderId);
+    const fMap = new Map<string, ConnectionData[]>();
+    filteredOwn.forEach((c) => {
+      if (c.folderId) {
+        const list = fMap.get(c.folderId) || [];
+        list.push(c);
+        fMap.set(c.folderId, list);
+      }
+    });
+
+    const fullTree = buildFolderTree(folders);
+    const prunedTree = isSearching ? pruneFolderTree(fullTree, fMap) : fullTree;
+
+    return {
+      filteredRootConnections: rootConns,
+      filteredFolderMap: fMap,
+      filteredFolderTree: prunedTree,
+      filteredSharedConnections: filteredShared,
+    };
+  }, [ownConnections, sharedConnections, folders, searchQuery]);
+
+  const favoriteConnections = useMemo(() => {
+    return ownConnections.filter((c) => c.isFavorite);
+  }, [ownConnections]);
+
+  const recentConnections = useMemo(() => {
+    if (!userId) return [];
+    const recentIds = getRecentConnectionIds(userId);
+    const allConnections = [...ownConnections, ...sharedConnections];
+    const connectionMap = new Map(allConnections.map((c) => [c.id, c]));
+    return recentIds
+      .map((id) => connectionMap.get(id))
+      .filter((c): c is ConnectionData => c !== undefined)
+      .slice(0, 5);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [ownConnections, sharedConnections, userId, recentTick]);
+
+  const isSearching = searchQuery.trim().length > 0;
 
   return (
     <Box sx={{ py: 1 }}>
@@ -385,25 +475,106 @@ export default function ConnectionTree({ onEditConnection, onShareConnection, on
           <CreateNewFolderIcon fontSize="small" />
         </IconButton>
       </Box>
+      <Box sx={{ px: 2, mb: 1 }}>
+        <TextField
+          size="small"
+          fullWidth
+          placeholder="Search connections..."
+          value={searchQuery}
+          onChange={(e) => setSearchQuery(e.target.value)}
+          onKeyDown={(e) => { if (e.key === 'Escape') setSearchQuery(''); }}
+          slotProps={{
+            input: {
+              startAdornment: (
+                <InputAdornment position="start">
+                  <SearchIcon fontSize="small" color="action" />
+                </InputAdornment>
+              ),
+              endAdornment: searchQuery ? (
+                <InputAdornment position="end">
+                  <IconButton size="small" onClick={() => setSearchQuery('')} edge="end">
+                    <ClearIcon fontSize="small" />
+                  </IconButton>
+                </InputAdornment>
+              ) : null,
+            },
+          }}
+        />
+      </Box>
+
+      {/* Favorites section */}
+      {!isSearching && favoriteConnections.length > 0 && (
+        <>
+          <Box sx={{ display: 'flex', alignItems: 'center', px: 2, mt: 1, mb: 0.5 }}>
+            <StarIcon fontSize="small" color="warning" sx={{ mr: 1 }} />
+            <Typography variant="subtitle2">Favorites</Typography>
+          </Box>
+          <List disablePadding>
+            {favoriteConnections.map((conn) => (
+              <ConnectionItem
+                key={`fav-${conn.id}`}
+                conn={conn}
+                depth={0}
+                onEdit={onEditConnection}
+                onDelete={setDeleteTarget}
+                onMove={handleOpenMoveDialog}
+                onShare={onShareConnection}
+                onToggleFavorite={handleToggleFavorite}
+              />
+            ))}
+          </List>
+        </>
+      )}
+
+      {/* Recent section */}
+      {!isSearching && recentConnections.length > 0 && (
+        <>
+          <Box sx={{ display: 'flex', alignItems: 'center', px: 2, mt: 1, mb: 0.5 }}>
+            <RecentIcon fontSize="small" sx={{ mr: 1 }} />
+            <Typography variant="subtitle2">Recent</Typography>
+          </Box>
+          <List disablePadding>
+            {recentConnections.map((conn) => (
+              <ConnectionItem
+                key={`recent-${conn.id}`}
+                conn={conn}
+                depth={0}
+                onEdit={onEditConnection}
+                onDelete={setDeleteTarget}
+                onMove={handleOpenMoveDialog}
+                onShare={onShareConnection}
+                onToggleFavorite={conn.isOwner ? handleToggleFavorite : undefined}
+              />
+            ))}
+          </List>
+        </>
+      )}
+
+      {/* Divider between quick-access sections and main tree */}
+      {!isSearching && (favoriteConnections.length > 0 || recentConnections.length > 0) && (
+        <Divider sx={{ my: 1 }} />
+      )}
+
       <List disablePadding>
-        {folderTree.map((node) => (
+        {filteredFolderTree.map((node) => (
           <FolderItem
             key={node.folder.id}
             node={node}
-            connections={folderMap.get(node.folder.id) || []}
-            folderMap={folderMap}
+            connections={filteredFolderMap.get(node.folder.id) || []}
+            folderMap={filteredFolderMap}
             depth={0}
             onEditConnection={onEditConnection}
             onDeleteConnection={setDeleteTarget}
             onMoveConnection={handleOpenMoveDialog}
             onShareConnection={onShareConnection}
+            onToggleFavorite={handleToggleFavorite}
             onCreateConnection={onCreateConnection}
             onCreateFolder={onCreateFolder}
             onEditFolder={onEditFolder}
             onDeleteFolder={setDeleteFolderTarget}
           />
         ))}
-        {rootConnections.map((conn) => (
+        {filteredRootConnections.map((conn) => (
           <ConnectionItem
             key={conn.id}
             conn={conn}
@@ -412,18 +583,25 @@ export default function ConnectionTree({ onEditConnection, onShareConnection, on
             onDelete={setDeleteTarget}
             onMove={handleOpenMoveDialog}
             onShare={onShareConnection}
+            onToggleFavorite={handleToggleFavorite}
           />
         ))}
       </List>
 
-      {sharedConnections.length > 0 && (
+      {searchQuery.trim() && filteredRootConnections.length === 0 && filteredFolderTree.length === 0 && filteredSharedConnections.length === 0 && (
+        <Typography variant="body2" color="text.secondary" sx={{ px: 2, py: 2, textAlign: 'center' }}>
+          No connections match your search.
+        </Typography>
+      )}
+
+      {filteredSharedConnections.length > 0 && (
         <>
           <Box sx={{ display: 'flex', alignItems: 'center', px: 2, mt: 2, mb: 1 }}>
             <ShareIcon fontSize="small" sx={{ mr: 1 }} />
             <Typography variant="subtitle2">Shared with me</Typography>
           </Box>
           <List disablePadding>
-            {sharedConnections.map((conn) => (
+            {filteredSharedConnections.map((conn) => (
               <ConnectionItem
                 key={conn.id}
                 conn={conn}
@@ -432,6 +610,7 @@ export default function ConnectionTree({ onEditConnection, onShareConnection, on
                 onDelete={setDeleteTarget}
                 onMove={handleOpenMoveDialog}
                 onShare={onShareConnection}
+                onToggleFavorite={handleToggleFavorite}
               />
             ))}
           </List>

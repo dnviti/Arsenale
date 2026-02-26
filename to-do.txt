@@ -313,7 +313,7 @@
 
 
 ------------------------------------------------------------------------------
-[ ] SEARCH-009 — Barra di ricerca connessioni nella sidebar
+[~] SEARCH-009 — Barra di ricerca connessioni nella sidebar
 ------------------------------------------------------------------------------
   Priorita: MEDIA
   Dipendenze: Nessuna
@@ -358,7 +358,7 @@
 
 
 ------------------------------------------------------------------------------
-[ ] THEME-011 — Toggle tema scuro/chiaro
+[~] THEME-011 — Toggle tema scuro/chiaro
 ------------------------------------------------------------------------------
   Priorita: BASSA
   Dipendenze: Nessuna
@@ -446,7 +446,7 @@
 
 
 ------------------------------------------------------------------------------
-[ ] FAVS-014 — Connessioni preferite e recenti
+[~] FAVS-014 — Connessioni preferite e recenti
 ------------------------------------------------------------------------------
   Priorita: BASSA
   Dipendenze: Nessuna

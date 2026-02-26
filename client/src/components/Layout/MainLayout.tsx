@@ -9,6 +9,8 @@ import {
   LockOpen as LockOpenIcon,
   AccountCircle,
   Settings as SettingsIcon,
+  DarkMode,
+  LightMode,
 } from '@mui/icons-material';
 import ConnectionTree from '../Sidebar/ConnectionTree';
 import TabBar from '../Tabs/TabBar';
@@ -25,6 +27,7 @@ import { lockVault } from '../../api/vault.api';
 import { ConnectionData } from '../../api/connections.api';
 import type { Folder } from '../../store/connectionsStore';
 import { useNotificationStore } from '../../store/notificationStore';
+import { useThemeStore } from '../../store/themeStore';
 
 const SIDEBAR_WIDTH = 280;
 
@@ -38,6 +41,8 @@ export default function MainLayout() {
   const vaultLocked = vaultInitialized && !vaultUnlocked;
   const notification = useNotificationStore((s) => s.notification);
   const clearNotification = useNotificationStore((s) => s.clear);
+  const themeMode = useThemeStore((s) => s.mode);
+  const toggleTheme = useThemeStore((s) => s.toggle);
 
   const [connectionDialogOpen, setConnectionDialogOpen] = useState(false);
   const [editingConnection, setEditingConnection] = useState<ConnectionData | null>(null);
@@ -122,6 +127,13 @@ export default function MainLayout() {
             sx={{ mr: 2 }}
           />
           <Box sx={{ flexGrow: 1 }} />
+          <IconButton
+            color="inherit"
+            onClick={toggleTheme}
+            title={themeMode === 'dark' ? 'Switch to light mode' : 'Switch to dark mode'}
+          >
+            {themeMode === 'dark' ? <LightMode /> : <DarkMode />}
+          </IconButton>
           <IconButton
             color="inherit"
             onClick={(e) => setAnchorEl(e.currentTarget)}

@@ -78,3 +78,12 @@ export async function list(req: AuthRequest, res: Response, next: NextFunction) 
     next(err);
   }
 }
+
+export async function toggleFavorite(req: AuthRequest, res: Response, next: NextFunction) {
+  try {
+    const result = await connectionService.toggleFavorite(req.user!.userId, req.params.id as string);
+    res.json(result);
+  } catch (err) {
+    next(err);
+  }
+}

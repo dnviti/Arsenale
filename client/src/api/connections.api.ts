@@ -19,6 +19,7 @@ export interface ConnectionData {
   port: number;
   folderId: string | null;
   description: string | null;
+  isFavorite: boolean;
   isOwner: boolean;
   permission?: string;
   sharedBy?: string;
@@ -67,5 +68,10 @@ export async function deleteConnection(id: string) {
 
 export async function getConnection(id: string): Promise<ConnectionData> {
   const res = await api.get(`/connections/${id}`);
+  return res.data;
+}
+
+export async function toggleFavorite(id: string): Promise<{ id: string; isFavorite: boolean }> {
+  const res = await api.patch(`/connections/${id}/favorite`);
   return res.data;
 }

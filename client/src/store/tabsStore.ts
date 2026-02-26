@@ -1,5 +1,7 @@
 import { create } from 'zustand';
 import { ConnectionData } from '../api/connections.api';
+import { addRecentConnection } from '../utils/recentConnections';
+import { useAuthStore } from './authStore';
 
 export interface Tab {
   id: string;
@@ -10,6 +12,7 @@ export interface Tab {
 interface TabsState {
   tabs: Tab[];
   activeTabId: string | null;
+  recentTick: number;
   openTab: (connection: ConnectionData) => void;
   closeTab: (tabId: string) => void;
   setActiveTab: (tabId: string) => void;
@@ -18,22 +21,31 @@ interface TabsState {
 export const useTabsStore = create<TabsState>((set, get) => ({
   tabs: [],
   activeTabId: null,
+  recentTick: 0,
 
   openTab: (connection) => {
     const { tabs } = get();
+
+    // Track as recent
+    const userId = useAuthStore.getState().user?.id;
+    if (userId) {
+      addRecentConnection(userId, connection.id);
+    }
+
     // Check if already open
     const existing = tabs.find((t) => t.connection.id === connection.id);
     if (existing) {
-      set({ activeTabId: existing.id });
+      set((state) => ({ activeTabId: existing.id, recentTick: state.recentTick + 1 }));
       return;
     }
 
     const tabId = `tab-${connection.id}-${Date.now()}`;
     const newTab: Tab = { id: tabId, connection, active: true };
-    set({
+    set((state) => ({
       tabs: [...tabs.map((t) => ({ ...t, active: false })), newTab],
       activeTabId: tabId,
-    });
+      recentTick: state.recentTick + 1,
+    }));
   },
 
   closeTab: (tabId) => {
