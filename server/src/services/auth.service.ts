@@ -95,7 +95,7 @@ export async function login(email: string, password: string) {
   return {
     accessToken,
     refreshToken: refreshTokenValue,
-    user: { id: user.id, email: user.email },
+    user: { id: user.id, email: user.email, username: user.username, avatarData: user.avatarData },
   };
 }
 
@@ -120,7 +120,15 @@ export async function refreshAccessToken(refreshToken: string) {
     expiresIn: config.jwtExpiresIn as string,
   } as jwt.SignOptions);
 
-  return { accessToken };
+  return {
+    accessToken,
+    user: {
+      id: stored.user.id,
+      email: stored.user.email,
+      username: stored.user.username,
+      avatarData: stored.user.avatarData,
+    },
+  };
 }
 
 export async function logout(refreshToken: string) {

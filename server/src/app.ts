@@ -6,12 +6,13 @@ import connectionsRoutes from './routes/connections.routes';
 import foldersRoutes from './routes/folders.routes';
 import sharingRoutes from './routes/sharing.routes';
 import sessionsRoutes from './socket/rdp.handler';
+import userRoutes from './routes/user.routes';
 import { errorHandler } from './middleware/error.middleware';
 
 const app = express();
 
 app.use(cors({ origin: ['http://localhost:3000'], credentials: true }));
-app.use(express.json());
+app.use(express.json({ limit: '500kb' }));
 
 // Routes
 app.use('/api/auth', authRoutes);
@@ -20,6 +21,7 @@ app.use('/api/connections', connectionsRoutes);
 app.use('/api/folders', foldersRoutes);
 app.use('/api/connections', sharingRoutes);
 app.use('/api/sessions', sessionsRoutes);
+app.use('/api/user', userRoutes);
 
 // Health check
 app.get('/api/health', (_req, res) => {

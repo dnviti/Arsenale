@@ -10,6 +10,8 @@ datasource db {
 model User {
   id                String   @id @default(uuid())
   email             String   @unique
+  username          String?
+  avatarData        String?
   passwordHash      String
   vaultSalt         String
   encryptedVaultKey String
