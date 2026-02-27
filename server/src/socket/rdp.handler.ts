@@ -1,9 +1,10 @@
 import { Router, Response, NextFunction } from 'express';
 import path from 'path';
-import { AuthRequest } from '../types';
+import prisma from '../lib/prisma';
+import { AuthRequest, RdpSettings } from '../types';
 import { authenticate } from '../middleware/auth.middleware';
 import { getConnection, getConnectionCredentials } from '../services/connection.service';
-import { generateGuacamoleToken } from '../services/rdp.service';
+import { generateGuacamoleToken, mergeRdpSettings } from '../services/rdp.service';
 import { AppError } from '../middleware/error.middleware';
 import { z } from 'zod';
 
@@ -40,6 +41,15 @@ router.post('/rdp', async (req: AuthRequest, res: Response, next: NextFunction) 
       password = creds.password;
     }
 
+    // Load user RDP defaults and connection RDP settings, then merge
+    const user = await prisma.user.findUnique({
+      where: { id: req.user!.userId },
+      select: { rdpDefaults: true },
+    });
+    const userRdpDefaults = (user?.rdpDefaults as Partial<RdpSettings>) ?? null;
+    const connRdpSettings = (conn.rdpSettings as Partial<RdpSettings>) ?? null;
+    const mergedRdp = mergeRdpSettings(userRdpDefaults, connRdpSettings);
+
     const enableDrive = conn.enableDrive ?? false;
     const drivePath = enableDrive
       ? path.posix.join('/guacd-drive', req.user!.userId)
@@ -52,11 +62,12 @@ router.post('/rdp', async (req: AuthRequest, res: Response, next: NextFunction) 
       password,
       enableDrive,
       drivePath,
+      rdpSettings: mergedRdp,
     });
 
     res.json({ token, enableDrive });
   } catch (err) {
-    if (err instanceof z.ZodError) return next(new AppError(err.errors[0].message, 400));
+    if (err instanceof z.ZodError) return next(new AppError(err.issues[0].message, 400));
     next(err);
   }
 });
@@ -73,7 +84,7 @@ router.post('/ssh', async (req: AuthRequest, res: Response, next: NextFunction) 
     // SSH sessions are handled via Socket.io, we just validate access here
     res.json({ connectionId, type: 'SSH' });
   } catch (err) {
-    if (err instanceof z.ZodError) return next(new AppError(err.errors[0].message, 400));
+    if (err instanceof z.ZodError) return next(new AppError(err.issues[0].message, 400));
     next(err);
   }
 });

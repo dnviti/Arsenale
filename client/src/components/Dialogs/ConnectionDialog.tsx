@@ -11,6 +11,10 @@ import type { SshTerminalConfig } from '../../constants/terminalThemes';
 import { mergeTerminalConfig } from '../../constants/terminalThemes';
 import { useTerminalSettingsStore } from '../../store/terminalSettingsStore';
 import TerminalSettingsSection from '../Settings/TerminalSettingsSection';
+import type { RdpSettings } from '../../constants/rdpDefaults';
+import { mergeRdpConfig } from '../../constants/rdpDefaults';
+import { useRdpSettingsStore } from '../../store/rdpSettingsStore';
+import RdpSettingsSection from '../Settings/RdpSettingsSection';
 
 interface ConnectionDialogProps {
   open: boolean;
@@ -29,10 +33,12 @@ export default function ConnectionDialog({ open, onClose, connection, folderId }
   const [description, setDescription] = useState('');
   const [enableDrive, setEnableDrive] = useState(false);
   const [sshTerminalConfig, setSshTerminalConfig] = useState<Partial<SshTerminalConfig>>({});
+  const [rdpSettings, setRdpSettings] = useState<Partial<RdpSettings>>({});
   const [error, setError] = useState('');
   const [loading, setLoading] = useState(false);
   const fetchConnections = useConnectionsStore((s) => s.fetchConnections);
   const userDefaults = useTerminalSettingsStore((s) => s.userDefaults);
+  const rdpUserDefaults = useRdpSettingsStore((s) => s.userDefaults);
 
   const isEditMode = Boolean(connection);
 
@@ -49,6 +55,9 @@ export default function ConnectionDialog({ open, onClose, connection, folderId }
       setSshTerminalConfig(
         (connection.sshTerminalConfig as Partial<SshTerminalConfig>) ?? {}
       );
+      setRdpSettings(
+        (connection.rdpSettings as Partial<RdpSettings>) ?? {}
+      );
     } else if (open && !connection) {
       setName('');
       setType('SSH');
@@ -59,6 +68,7 @@ export default function ConnectionDialog({ open, onClose, connection, folderId }
       setDescription('');
       setEnableDrive(false);
       setSshTerminalConfig({});
+      setRdpSettings({});
     }
   }, [open, connection]);
 
@@ -92,6 +102,9 @@ export default function ConnectionDialog({ open, onClose, connection, folderId }
           ...(type === 'SSH' && {
             sshTerminalConfig: Object.keys(sshTerminalConfig).length > 0 ? sshTerminalConfig : null,
           }),
+          ...(type === 'RDP' && {
+            rdpSettings: Object.keys(rdpSettings).length > 0 ? rdpSettings : null,
+          }),
         };
         if (username) data.username = username;
         if (password) data.password = password;
@@ -109,6 +122,9 @@ export default function ConnectionDialog({ open, onClose, connection, folderId }
           ...(folderId ? { folderId } : {}),
           ...(type === 'SSH' && Object.keys(sshTerminalConfig).length > 0 && {
             sshTerminalConfig,
+          }),
+          ...(type === 'RDP' && Object.keys(rdpSettings).length > 0 && {
+            rdpSettings,
           }),
         };
         await createConnection(data);
@@ -135,6 +151,7 @@ export default function ConnectionDialog({ open, onClose, connection, folderId }
     setDescription('');
     setEnableDrive(false);
     setSshTerminalConfig({});
+    setRdpSettings({});
     setError('');
     onClose();
   };
@@ -226,6 +243,21 @@ export default function ConnectionDialog({ open, onClose, connection, folderId }
                   onChange={setSshTerminalConfig}
                   mode="connection"
                   resolvedDefaults={mergeTerminalConfig(userDefaults)}
+                />
+              </AccordionDetails>
+            </Accordion>
+          )}
+          {type === 'RDP' && (
+            <Accordion variant="outlined" disableGutters>
+              <AccordionSummary expandIcon={<ExpandMoreIcon />}>
+                <Typography variant="subtitle2">RDP Settings</Typography>
+              </AccordionSummary>
+              <AccordionDetails>
+                <RdpSettingsSection
+                  value={rdpSettings}
+                  onChange={setRdpSettings}
+                  mode="connection"
+                  resolvedDefaults={mergeRdpConfig(rdpUserDefaults)}
                 />
               </AccordionDetails>
             </Accordion>

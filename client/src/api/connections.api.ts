@@ -1,5 +1,6 @@
 import api from './client';
 import type { SshTerminalConfig } from '../constants/terminalThemes';
+import type { RdpSettings } from '../constants/rdpDefaults';
 
 export interface ConnectionInput {
   name: string;
@@ -12,6 +13,7 @@ export interface ConnectionInput {
   folderId?: string;
   enableDrive?: boolean;
   sshTerminalConfig?: Partial<SshTerminalConfig>;
+  rdpSettings?: Partial<RdpSettings>;
 }
 
 export interface ConnectionData {
@@ -25,6 +27,7 @@ export interface ConnectionData {
   isFavorite: boolean;
   enableDrive: boolean;
   sshTerminalConfig?: Partial<SshTerminalConfig> | null;
+  rdpSettings?: Partial<RdpSettings> | null;
   isOwner: boolean;
   permission?: string;
   sharedBy?: string;
@@ -58,6 +61,7 @@ export interface ConnectionUpdate {
   folderId?: string | null;
   enableDrive?: boolean;
   sshTerminalConfig?: Partial<SshTerminalConfig> | null;
+  rdpSettings?: Partial<RdpSettings> | null;
 }
 
 export async function updateConnection(

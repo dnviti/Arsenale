@@ -1,5 +1,6 @@
 import api from './client';
 import type { SshTerminalConfig } from '../constants/terminalThemes';
+import type { RdpSettings } from '../constants/rdpDefaults';
 
 export interface UserProfile {
   id: string;
@@ -7,6 +8,7 @@ export interface UserProfile {
   username: string | null;
   avatarData: string | null;
   sshDefaults: Partial<SshTerminalConfig> | null;
+  rdpDefaults: Partial<RdpSettings> | null;
   createdAt: string;
 }
 
@@ -29,6 +31,13 @@ export async function updateSshDefaults(
   data: Partial<SshTerminalConfig>
 ): Promise<{ id: string; sshDefaults: Partial<SshTerminalConfig> }> {
   const res = await api.put('/user/ssh-defaults', data);
+  return res.data;
+}
+
+export async function updateRdpDefaults(
+  data: Partial<RdpSettings>
+): Promise<{ id: string; rdpDefaults: Partial<RdpSettings> }> {
+  const res = await api.put('/user/rdp-defaults', data);
   return res.data;
 }
 

@@ -22,9 +22,32 @@ const sshDefaultsSchema = z.object({
   cursorStyle: z.enum(['block', 'underline', 'bar']).optional(),
   cursorBlink: z.boolean().optional(),
   theme: z.string().optional(),
-  customColors: z.record(z.string()).optional(),
+  customColors: z.record(z.string(), z.string()).optional(),
   scrollback: z.number().int().min(100).max(10000).optional(),
   bellStyle: z.enum(['none', 'sound', 'visual']).optional(),
+});
+
+const rdpDefaultsSchema = z.object({
+  colorDepth: z.union([z.literal(8), z.literal(16), z.literal(24)]).optional(),
+  width: z.number().int().min(640).max(7680).optional(),
+  height: z.number().int().min(480).max(4320).optional(),
+  dpi: z.number().int().min(48).max(384).optional(),
+  resizeMethod: z.enum(['display-update', 'reconnect']).optional(),
+  qualityPreset: z.enum(['performance', 'balanced', 'quality', 'custom']).optional(),
+  enableWallpaper: z.boolean().optional(),
+  enableTheming: z.boolean().optional(),
+  enableFontSmoothing: z.boolean().optional(),
+  enableFullWindowDrag: z.boolean().optional(),
+  enableDesktopComposition: z.boolean().optional(),
+  enableMenuAnimations: z.boolean().optional(),
+  forceLossless: z.boolean().optional(),
+  disableAudio: z.boolean().optional(),
+  enableAudioInput: z.boolean().optional(),
+  security: z.enum(['any', 'nla', 'nla-ext', 'tls', 'rdp']).optional(),
+  ignoreCert: z.boolean().optional(),
+  serverLayout: z.string().optional(),
+  console: z.boolean().optional(),
+  timezone: z.string().optional(),
 });
 
 const uploadAvatarSchema = z.object({
@@ -46,7 +69,7 @@ export async function updateProfile(req: AuthRequest, res: Response, next: NextF
     const result = await userService.updateProfile(req.user!.userId, data);
     res.json(result);
   } catch (err) {
-    if (err instanceof z.ZodError) return next(new AppError(err.errors[0].message, 400));
+    if (err instanceof z.ZodError) return next(new AppError(err.issues[0].message, 400));
     next(err);
   }
 }
@@ -57,7 +80,7 @@ export async function changePassword(req: AuthRequest, res: Response, next: Next
     const result = await userService.changePassword(req.user!.userId, oldPassword, newPassword);
     res.json(result);
   } catch (err) {
-    if (err instanceof z.ZodError) return next(new AppError(err.errors[0].message, 400));
+    if (err instanceof z.ZodError) return next(new AppError(err.issues[0].message, 400));
     next(err);
   }
 }
@@ -68,7 +91,18 @@ export async function updateSshDefaults(req: AuthRequest, res: Response, next: N
     const result = await userService.updateSshDefaults(req.user!.userId, data);
     res.json(result);
   } catch (err) {
-    if (err instanceof z.ZodError) return next(new AppError(err.errors[0].message, 400));
+    if (err instanceof z.ZodError) return next(new AppError(err.issues[0].message, 400));
+    next(err);
+  }
+}
+
+export async function updateRdpDefaults(req: AuthRequest, res: Response, next: NextFunction) {
+  try {
+    const data = rdpDefaultsSchema.parse(req.body);
+    const result = await userService.updateRdpDefaults(req.user!.userId, data);
+    res.json(result);
+  } catch (err) {
+    if (err instanceof z.ZodError) return next(new AppError(err.issues[0].message, 400));
     next(err);
   }
 }
@@ -79,7 +113,7 @@ export async function uploadAvatar(req: AuthRequest, res: Response, next: NextFu
     const result = await userService.uploadAvatar(req.user!.userId, avatarData);
     res.json(result);
   } catch (err) {
-    if (err instanceof z.ZodError) return next(new AppError(err.errors[0].message, 400));
+    if (err instanceof z.ZodError) return next(new AppError(err.issues[0].message, 400));
     next(err);
   }
 }

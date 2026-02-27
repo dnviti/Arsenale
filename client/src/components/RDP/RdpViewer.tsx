@@ -165,8 +165,9 @@ export default function RdpViewer({ connectionId, tabId, isActive = true, enable
           client.sendKeyEvent(0, keysym);
         };
 
-        // Connect
-        client.connect();
+        // Connect — pass empty string so WebSocketTunnel doesn't append
+        // literal "undefined" to the URL (which corrupts the base64 token)
+        client.connect('');
 
         return () => {
           resizeObserver?.disconnect();

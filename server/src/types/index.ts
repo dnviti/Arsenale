@@ -26,3 +26,26 @@ export interface SftpEntry {
   type: 'file' | 'directory' | 'symlink';
   modifiedAt: string;
 }
+
+export interface RdpSettings {
+  colorDepth?: 8 | 16 | 24;
+  width?: number;
+  height?: number;
+  dpi?: number;
+  resizeMethod?: 'display-update' | 'reconnect';
+  qualityPreset?: 'performance' | 'balanced' | 'quality' | 'custom';
+  enableWallpaper?: boolean;
+  enableTheming?: boolean;
+  enableFontSmoothing?: boolean;
+  enableFullWindowDrag?: boolean;
+  enableDesktopComposition?: boolean;
+  enableMenuAnimations?: boolean;
+  forceLossless?: boolean;
+  disableAudio?: boolean;
+  enableAudioInput?: boolean;
+  security?: 'any' | 'nla' | 'nla-ext' | 'tls' | 'rdp';
+  ignoreCert?: boolean;
+  serverLayout?: string;
+  console?: boolean;
+  timezone?: string;
+}

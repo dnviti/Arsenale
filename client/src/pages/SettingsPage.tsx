@@ -10,6 +10,9 @@ import { getProfile, updateProfile, changePassword, uploadAvatar } from '../api/
 import { useTerminalSettingsStore } from '../store/terminalSettingsStore';
 import type { SshTerminalConfig } from '../constants/terminalThemes';
 import TerminalSettingsSection from '../components/Settings/TerminalSettingsSection';
+import { useRdpSettingsStore } from '../store/rdpSettingsStore';
+import type { RdpSettings } from '../constants/rdpDefaults';
+import RdpSettingsSection from '../components/Settings/RdpSettingsSection';
 
 export default function SettingsPage() {
   const navigate = useNavigate();
@@ -40,6 +43,12 @@ export default function SettingsPage() {
   const [sshError, setSshError] = useState('');
   const [sshSuccess, setSshSuccess] = useState('');
 
+  // RDP defaults
+  const { userDefaults: rdpUserDefaults, fetchDefaults: fetchRdpDefaults, updateDefaults: updateRdpDefaults, loading: rdpLoading } = useRdpSettingsStore();
+  const [rdpConfig, setRdpConfig] = useState<Partial<RdpSettings>>({});
+  const [rdpError, setRdpError] = useState('');
+  const [rdpSuccess, setRdpSuccess] = useState('');
+
   useEffect(() => {
     getProfile().then((profile) => {
       setUsername(profile.username ?? '');
@@ -49,11 +58,16 @@ export default function SettingsPage() {
       setProfileError('Failed to load profile');
     });
     fetchDefaults();
+    fetchRdpDefaults();
   }, []);
 
   useEffect(() => {
     if (userDefaults) setSshConfig(userDefaults);
   }, [userDefaults]);
+
+  useEffect(() => {
+    if (rdpUserDefaults) setRdpConfig(rdpUserDefaults);
+  }, [rdpUserDefaults]);
 
   const handleSaveSshDefaults = async () => {
     setSshError('');
@@ -63,6 +77,17 @@ export default function SettingsPage() {
       setSshSuccess('SSH terminal defaults saved');
     } catch {
       setSshError('Failed to save SSH defaults');
+    }
+  };
+
+  const handleSaveRdpDefaults = async () => {
+    setRdpError('');
+    setRdpSuccess('');
+    try {
+      await updateRdpDefaults(rdpConfig);
+      setRdpSuccess('RDP defaults saved');
+    } catch {
+      setRdpError('Failed to save RDP defaults');
     }
   };
 
@@ -212,6 +237,29 @@ export default function SettingsPage() {
               sx={{ mt: 2 }}
             >
               {sshLoading ? 'Saving...' : 'Save SSH Defaults'}
+            </Button>
+          </CardContent>
+        </Card>
+
+        {/* RDP Defaults Section */}
+        <Card sx={{ mb: 3 }}>
+          <CardContent>
+            <Typography variant="h6" gutterBottom>RDP Defaults</Typography>
+            <Typography variant="body2" color="text.secondary" sx={{ mb: 2 }}>
+              These settings apply to all RDP sessions unless overridden per connection.
+            </Typography>
+
+            {rdpError && <Alert severity="error" sx={{ mb: 2 }}>{rdpError}</Alert>}
+            {rdpSuccess && <Alert severity="success" sx={{ mb: 2 }}>{rdpSuccess}</Alert>}
+
+            <RdpSettingsSection value={rdpConfig} onChange={setRdpConfig} mode="global" />
+            <Button
+              variant="contained"
+              disabled={rdpLoading}
+              onClick={handleSaveRdpDefaults}
+              sx={{ mt: 2 }}
+            >
+              {rdpLoading ? 'Saving...' : 'Save RDP Defaults'}
             </Button>
           </CardContent>
         </Card>
