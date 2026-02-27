@@ -16,8 +16,15 @@ declare global {
   }
 }
 
+export interface TeamMembershipInfo {
+  teamId: string;
+  role: 'TEAM_ADMIN' | 'TEAM_EDITOR' | 'TEAM_VIEWER';
+  tenantId: string;
+}
+
 export interface AuthRequest extends Request {
   user?: AuthPayload;
+  teamMembership?: TeamMembershipInfo;
 }
 
 export interface EncryptedField {

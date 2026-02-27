@@ -3,6 +3,7 @@ import api from './client';
 export interface FolderInput {
   name: string;
   parentId?: string;
+  teamId?: string;
 }
 
 export interface FolderUpdate {
@@ -15,9 +16,17 @@ export interface FolderData {
   name: string;
   parentId: string | null;
   sortOrder: number;
+  teamId?: string | null;
+  teamName?: string | null;
+  scope?: 'private' | 'team';
 }
 
-export async function listFolders(): Promise<FolderData[]> {
+export interface FoldersResponse {
+  personal: FolderData[];
+  team: FolderData[];
+}
+
+export async function listFolders(): Promise<FoldersResponse> {
   const res = await api.get('/folders');
   return res.data;
 }

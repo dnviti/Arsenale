@@ -11,6 +11,7 @@ export interface ConnectionInput {
   password: string;
   description?: string;
   folderId?: string;
+  teamId?: string;
   enableDrive?: boolean;
   sshTerminalConfig?: Partial<SshTerminalConfig>;
   rdpSettings?: Partial<RdpSettings>;
@@ -23,6 +24,10 @@ export interface ConnectionData {
   host: string;
   port: number;
   folderId: string | null;
+  teamId?: string | null;
+  teamName?: string | null;
+  teamRole?: string | null;
+  scope?: 'private' | 'team' | 'shared';
   description: string | null;
   isFavorite: boolean;
   enableDrive: boolean;
@@ -38,6 +43,7 @@ export interface ConnectionData {
 export interface ConnectionsResponse {
   own: ConnectionData[];
   shared: ConnectionData[];
+  team: ConnectionData[];
 }
 
 export async function listConnections(): Promise<ConnectionsResponse> {

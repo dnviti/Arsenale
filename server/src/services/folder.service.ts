@@ -1,20 +1,35 @@
 import prisma from '../lib/prisma';
 import { AppError } from '../middleware/error.middleware';
+import * as permissionService from './permission.service';
 
 export async function createFolder(
   userId: string,
   name: string,
-  parentId?: string
+  parentId?: string,
+  teamId?: string
 ) {
+  if (teamId) {
+    const perm = await permissionService.canManageTeamResource(userId, teamId, 'TEAM_EDITOR');
+    if (!perm.allowed) throw new AppError('Insufficient team role to create folders', 403);
+  }
+
   if (parentId) {
+    // Parent must be in the same scope
     const parent = await prisma.folder.findFirst({
-      where: { id: parentId, userId },
+      where: teamId
+        ? { id: parentId, teamId }
+        : { id: parentId, userId, teamId: null },
     });
     if (!parent) throw new AppError('Parent folder not found', 404);
   }
 
   return prisma.folder.create({
-    data: { name, parentId: parentId || null, userId },
+    data: {
+      name,
+      parentId: parentId || null,
+      userId,
+      teamId: teamId || null,
+    },
   });
 }
 
@@ -23,18 +38,21 @@ export async function updateFolder(
   folderId: string,
   data: { name?: string; parentId?: string | null }
 ) {
-  const folder = await prisma.folder.findFirst({
-    where: { id: folderId, userId },
-  });
-  if (!folder) throw new AppError('Folder not found', 404);
+  const access = await permissionService.canManageFolder(userId, folderId);
+  if (!access.allowed) throw new AppError('Folder not found', 404);
+
+  const folder = access.folder;
 
   // Prevent circular references
   if (data.parentId) {
     if (data.parentId === folderId) {
       throw new AppError('A folder cannot be its own parent', 400);
     }
+    // Parent must be in the same scope
     const parent = await prisma.folder.findFirst({
-      where: { id: data.parentId, userId },
+      where: folder.teamId
+        ? { id: data.parentId, teamId: folder.teamId }
+        : { id: data.parentId, userId, teamId: null },
     });
     if (!parent) throw new AppError('Parent folder not found', 404);
   }
@@ -49,32 +67,68 @@ export async function updateFolder(
 }
 
 export async function deleteFolder(userId: string, folderId: string) {
-  const folder = await prisma.folder.findFirst({
-    where: { id: folderId, userId },
-  });
-  if (!folder) throw new AppError('Folder not found', 404);
+  const access = await permissionService.canManageFolder(userId, folderId);
+  if (!access.allowed) throw new AppError('Folder not found', 404);
 
-  // Move connections to root
-  await prisma.connection.updateMany({
-    where: { folderId, userId },
-    data: { folderId: null },
-  });
+  const folder = access.folder;
 
-  // Move child folders to parent
-  await prisma.folder.updateMany({
-    where: { parentId: folderId, userId },
-    data: { parentId: folder.parentId },
-  });
+  // Move connections and child folders to parent (scoped to same ownership)
+  if (folder.teamId) {
+    await prisma.connection.updateMany({
+      where: { folderId, teamId: folder.teamId },
+      data: { folderId: null },
+    });
+    await prisma.folder.updateMany({
+      where: { parentId: folderId, teamId: folder.teamId },
+      data: { parentId: folder.parentId },
+    });
+  } else {
+    await prisma.connection.updateMany({
+      where: { folderId, userId },
+      data: { folderId: null },
+    });
+    await prisma.folder.updateMany({
+      where: { parentId: folderId, userId },
+      data: { parentId: folder.parentId },
+    });
+  }
 
   await prisma.folder.delete({ where: { id: folderId } });
   return { deleted: true };
 }
 
 export async function getFolderTree(userId: string) {
-  const folders = await prisma.folder.findMany({
-    where: { userId },
+  // Personal folders
+  const personalFolders = await prisma.folder.findMany({
+    where: { userId, teamId: null },
     orderBy: [{ sortOrder: 'asc' }, { name: 'asc' }],
   });
 
-  return folders;
+  // Team folders
+  const teamMemberships = await prisma.teamMember.findMany({
+    where: { userId },
+    select: { teamId: true, team: { select: { name: true } } },
+  });
+
+  let teamFolders: Array<Record<string, unknown>> = [];
+  if (teamMemberships.length > 0) {
+    const teamIds = teamMemberships.map((m) => m.teamId);
+    const teamNameMap = new Map(teamMemberships.map((m) => [m.teamId, m.team.name]));
+
+    const rawFolders = await prisma.folder.findMany({
+      where: { teamId: { in: teamIds } },
+      orderBy: [{ sortOrder: 'asc' }, { name: 'asc' }],
+    });
+
+    teamFolders = rawFolders.map((f) => ({
+      ...f,
+      teamName: teamNameMap.get(f.teamId!) ?? null,
+      scope: 'team' as const,
+    }));
+  }
+
+  return {
+    personal: personalFolders.map((f) => ({ ...f, scope: 'private' as const })),
+    team: teamFolders,
+  };
 }

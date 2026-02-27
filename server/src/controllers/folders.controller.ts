@@ -8,6 +8,7 @@ import { AppError } from '../middleware/error.middleware';
 const createSchema = z.object({
   name: z.string().min(1),
   parentId: z.string().uuid().optional(),
+  teamId: z.string().uuid().optional(),
 });
 
 const updateSchema = z.object({
@@ -17,12 +18,12 @@ const updateSchema = z.object({
 
 export async function create(req: AuthRequest, res: Response, next: NextFunction) {
   try {
-    const { name, parentId } = createSchema.parse(req.body);
-    const result = await folderService.createFolder(req.user!.userId, name, parentId);
+    const { name, parentId, teamId } = createSchema.parse(req.body);
+    const result = await folderService.createFolder(req.user!.userId, name, parentId, teamId);
     auditService.log({
       userId: req.user!.userId, action: 'CREATE_FOLDER',
       targetType: 'Folder', targetId: result.id,
-      details: { name },
+      details: { name, teamId: teamId ?? null },
       ipAddress: req.ip,
     });
     res.status(201).json(result);

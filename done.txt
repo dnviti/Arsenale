@@ -642,3 +642,60 @@
                 nuovi campi su User, Connection, Folder)
     MODIFICATO: server/src/types/index.ts
                (aggiunto tenantId?, tenantRole? a AuthPayload)
+
+
+------------------------------------------------------------------------------
+[x] TENANT-021 — Backend CRUD tenant + onboarding e migrazione utenti
+------------------------------------------------------------------------------
+  Priorita: CRITICA
+  Dipendenze: TENANT-020
+  Fase: 1 (Fondamenta)
+  COMPLETATO: Full tenant CRUD backend — 8 REST endpoints (create/read/update/delete tenant, list/invite/update-role/remove users), Zod-validated controller, tenant.service.ts with transactional operations and last-owner protection, tenant.middleware.ts (requireTenant/requireTenantRole/requireOwnTenant), tenantId+tenantRole in JWT payload and login response, audit logging for all operations
+
+  DESCRIZIONE:
+  Implementare il layer backend completo per la gestione dei tenant:
+  creazione, aggiornamento, eliminazione tenant. Implementare il flusso
+  di onboarding: quando un utente crea un tenant, diventa OWNER.
+  Gli utenti possono essere invitati nel tenant (via email o link).
+  Creare endpoint per listare utenti del tenant e gestirne i ruoli.
+  Utenti esistenti senza tenant possono crearne uno o essere invitati.
+
+  FILE COINVOLTI:
+    CREATO:  server/src/routes/tenant.routes.ts
+    CREATO:  server/src/controllers/tenant.controller.ts
+    CREATO:  server/src/services/tenant.service.ts
+    CREATO:  server/src/middleware/tenant.middleware.ts
+    MODIFICATO: server/src/app.ts (montare tenant routes)
+    MODIFICATO: server/src/services/auth.service.ts (tenantId in JWT + risposta)
+    MODIFICATO: server/src/types/index.ts (AuthPayload + tenantId/tenantRole)
+    MODIFICATO: server/src/middleware/auth.middleware.ts (estrarre tenantId dal JWT)
+
+
+------------------------------------------------------------------------------
+[x] TEAM-022 — Backend CRUD team + gestione membri e vault team
+------------------------------------------------------------------------------
+  Priorita: CRITICA
+  Dipendenze: TENANT-021
+  Fase: 2 (Team Management)
+  COMPLETATO: Full team CRUD backend — 9 REST endpoints (create/list/get/update/delete team, list/add/update-role/remove members), Zod-validated controller with audit logging, team.service.ts with team vault key generation and per-member encryption, team.middleware.ts (requireTeamMember/requireTeamRole with role hierarchy), crypto.service.ts extended with teamVaultStore in-memory cache + team key encrypt/decrypt/session management, resolveTeamKey for automatic cache-or-DB key resolution
+
+  DESCRIZIONE:
+  Implementare il layer backend completo per la gestione dei team
+  all'interno di un tenant. Include CRUD team, aggiunta/rimozione
+  membri, gestione ruoli team-level. Implementare il sistema di vault
+  per team: quando si crea un team, si genera una master key del team.
+  Questa chiave viene cifrata con la master key personale di ogni membro
+  e salvata nella tabella TeamMember. Quando un utente sblocca il suo
+  vault, puo' decifrare le team vault key per accedere alle connessioni
+  del team.
+
+  FILE COINVOLTI:
+    CREATO:  server/src/routes/team.routes.ts
+    CREATO:  server/src/controllers/team.controller.ts
+    CREATO:  server/src/services/team.service.ts
+    CREATO:  server/src/middleware/team.middleware.ts
+    MODIFICATO: server/src/services/crypto.service.ts
+               (teamVaultStore, generateTeamMasterKey, encryptTeamKey, decryptTeamKey,
+                storeTeamVaultSession, getTeamMasterKey, lockTeamVault, lockUserTeamVaults)
+    MODIFICATO: server/src/app.ts (montare team routes su /api/teams)
+    MODIFICATO: server/src/types/index.ts (TeamMembershipInfo, AuthRequest.teamMembership)

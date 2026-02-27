@@ -27,6 +27,7 @@ const createSchema = z.object({
   password: z.string(),
   description: z.string().optional(),
   folderId: z.string().uuid().optional(),
+  teamId: z.string().uuid().optional(),
   enableDrive: z.boolean().optional(),
   sshTerminalConfig: sshTerminalConfigSchema.optional(),
 });
@@ -51,7 +52,7 @@ export async function create(req: AuthRequest, res: Response, next: NextFunction
     auditService.log({
       userId: req.user!.userId, action: 'CREATE_CONNECTION',
       targetType: 'Connection', targetId: result.id,
-      details: { name: data.name, type: data.type, host: data.host },
+      details: { name: data.name, type: data.type, host: data.host, teamId: data.teamId ?? null },
       ipAddress: req.ip,
     });
     res.status(201).json(result);

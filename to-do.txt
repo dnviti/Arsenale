@@ -204,134 +204,7 @@
 
 
 
-------------------------------------------------------------------------------
-[ ] TEAM-022 — Backend CRUD team + gestione membri e vault team
-------------------------------------------------------------------------------
-  Priorita: CRITICA
-  Dipendenze: TENANT-021
-  Fase: 2 (Team Management)
 
-  DESCRIZIONE:
-  Implementare il layer backend completo per la gestione dei team
-  all'interno di un tenant. Include CRUD team, aggiunta/rimozione
-  membri, gestione ruoli team-level. Implementare il sistema di vault
-  per team: quando si crea un team, si genera una master key del team.
-  Questa chiave viene cifrata con la master key personale di ogni membro
-  e salvata nella tabella TeamMember. Quando un utente sblocca il suo
-  vault, puo' decifrare le team vault key per accedere alle connessioni
-  del team.
-
-  DETTAGLI TECNICI:
-  Backend — Layer completo:
-
-    server/src/routes/team.routes.ts:
-      POST   /api/teams                     → Crea team (ADMIN+ nel tenant)
-      GET    /api/teams                     → Lista team dell'utente
-      GET    /api/teams/:id                 → Dettagli team
-      PUT    /api/teams/:id                 → Aggiorna team (TEAM_ADMIN)
-      DELETE /api/teams/:id                 → Elimina team (TEAM_ADMIN o ADMIN tenant)
-      GET    /api/teams/:id/members         → Lista membri
-      POST   /api/teams/:id/members         → Aggiungi membro (userId, role)
-      PUT    /api/teams/:id/members/:userId → Cambia ruolo membro
-      DELETE /api/teams/:id/members/:userId → Rimuovi membro
-
-    server/src/services/team.service.ts:
-      - createTeam(tenantId, creatorUserId, name, description?)
-        a) Crea il team
-        b) Genera una team master key (crypto.randomBytes(32))
-        c) Cifra la team key con la master key dell'utente creatore
-        d) Crea TeamMember con ruolo TEAM_ADMIN e chiave cifrata
-      - addMember(teamId, userId, role, addedByUserId)
-        a) Verifica che entrambi siano nello stesso tenant
-        b) Decifra la team key usando la master key di chi aggiunge
-        c) Ri-cifra con la master key del nuovo membro
-        d) Salva in TeamMember con encryptedTeamVaultKey
-        NOTA: richiede che entrambi i vault siano sbloccati
-      - removeMember(teamId, userId): elimina TeamMember
-      - updateMemberRole(teamId, userId, newRole)
-      - getTeamMasterKey(teamId, userId): decifra la team vault key
-
-    Crypto — Estensioni a crypto.service.ts:
-      - storeTeamVaultSession(teamId, userId, teamKey): cache in-memory
-      - getTeamMasterKey(teamId, userId): ritorna team key dalla cache
-      - Nuova Map in-memory: teamVaultStore<`${teamId}:${userId}`, Buffer>
-
-  Permessi team-level:
-    TEAM_ADMIN:  tutto (gestisci membri, crea/modifica/elimina connessioni)
-    TEAM_EDITOR: crea/modifica/elimina connessioni nel team
-    TEAM_VIEWER: solo visualizza e si connette
-
-  FILE COINVOLTI:
-    CREARE:  server/src/routes/team.routes.ts
-    CREARE:  server/src/controllers/team.controller.ts
-    CREARE:  server/src/services/team.service.ts
-    MODIFICARE: server/src/services/crypto.service.ts
-                (team vault session management, team key encrypt/decrypt)
-    MODIFICARE: server/src/app.ts (montare team routes)
-
-
-------------------------------------------------------------------------------
-[ ] PERM-023 — Estensione ownership connessioni: private, team e permessi
-------------------------------------------------------------------------------
-  Priorita: ALTA
-  Dipendenze: TEAM-022
-  Fase: 2 (Connection Permission Model)
-
-  DESCRIZIONE:
-  Modificare il sistema di proprieta' delle connessioni per supportare
-  tre modalita': private (come oggi), team (visibili ai membri del team),
-  e il nuovo modello di permessi. Una connessione con teamId != null
-  e' una connessione del team: le sue credenziali sono cifrate con la
-  team vault key invece che con la chiave personale dell'utente.
-  Aggiornare tutti i service che leggono/scrivono connessioni per
-  rispettare il nuovo modello di permessi.
-
-  DETTAGLI TECNICI:
-  Modifiche a connection.service.ts:
-
-    createConnection(userId, input):
-      - Se input.teamId fornito:
-        a) Verificare che l'utente sia membro del team con ruolo >= TEAM_EDITOR
-        b) Cifrare credenziali con team vault key (non personal key)
-        c) Impostare userId = utente creatore, teamId = team
-      - Se teamId non fornito: comportamento invariato (connessione privata)
-
-    listConnections(userId):
-      - Aggiungere terza categoria: "team"
-      - Ritornare { own: [...], shared: [...], team: [...] }
-      - team: connessioni dei team di cui l'utente e' membro
-        (query JOIN TeamMember + Connection WHERE teamId IN userTeamIds)
-
-    getConnectionCredentials(userId, connectionId):
-      - Se connessione ha teamId:
-        a) Verificare appartenenza al team
-        b) Decifrare con team vault key
-      - Se shared o propria: comportamento invariato
-
-    updateConnection / deleteConnection:
-      - Per connessioni team: verificare ruolo >= TEAM_EDITOR
-      - Per connessioni proprie: verificare ownership (invariato)
-
-  Modifiche a folder.service.ts:
-    - Supportare cartelle team: folders con teamId
-    - createFolder: se teamId, verificare ruolo >= TEAM_EDITOR
-
-  Nuovo service — permission.service.ts:
-    - canManageConnection(userId, connectionId): owner o team editor+
-    - canViewConnection(userId, connectionId): owner, shared, o team member
-    - canManageTeamResource(userId, teamId, minRole): verifica ruolo
-
-  Modifica risposta API connections:
-    - Aggiungere campo scope: 'private' | 'team' | 'shared'
-    - Aggiungere teamId, teamName per connessioni team
-
-  FILE COINVOLTI:
-    CREARE:  server/src/services/permission.service.ts
-    MODIFICARE: server/src/services/connection.service.ts
-    MODIFICARE: server/src/services/folder.service.ts
-    MODIFICARE: server/src/controllers/connections.controller.ts
-    MODIFICARE: server/src/services/sharing.service.ts
-    MODIFICARE: client/src/api/connections.api.ts (tipi aggiornati)
 
 
 ------------------------------------------------------------------------------
@@ -568,9 +441,9 @@
 
   Fase 6 — Multi-tenant e team:
    23. TENANT-020  Schema multi-tenant (modelli Prisma)                   [COMPLETATO]
-   24. TENANT-021  Backend CRUD tenant + onboarding                          [IN CORSO]
-   25. TEAM-022    Backend CRUD team + vault team
-   26. PERM-023    Ownership connessioni + permessi team
+   24. TENANT-021  Backend CRUD tenant + onboarding                          [COMPLETATO]
+   25. TEAM-022    Backend CRUD team + vault team                                [COMPLETATO]
+   26. PERM-023    Ownership connessioni + permessi team                          [IN CORSO]
    27. DISC-024    Ricerca utenti per condivisione (parallelizzabile con 25)
    28. UI-025      Frontend tenant/team/sidebar
    29. GUARD-026   Middleware sicurezza + test isolamento

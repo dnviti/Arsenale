@@ -7,7 +7,9 @@ export type Folder = FolderData;
 interface ConnectionsState {
   ownConnections: ConnectionData[];
   sharedConnections: ConnectionData[];
+  teamConnections: ConnectionData[];
   folders: Folder[];
+  teamFolders: Folder[];
   loading: boolean;
   fetchConnections: () => Promise<void>;
   fetchFolders: () => Promise<void>;
@@ -18,7 +20,9 @@ interface ConnectionsState {
 export const useConnectionsStore = create<ConnectionsState>((set, get) => ({
   ownConnections: [],
   sharedConnections: [],
+  teamConnections: [],
   folders: [],
+  teamFolders: [],
   loading: false,
 
   fetchConnections: async () => {
@@ -31,7 +35,9 @@ export const useConnectionsStore = create<ConnectionsState>((set, get) => ({
       set({
         ownConnections: connData.own,
         sharedConnections: connData.shared,
-        folders: foldersData,
+        teamConnections: connData.team,
+        folders: foldersData.personal,
+        teamFolders: foldersData.team,
         loading: false,
       });
     } catch {
@@ -41,8 +47,8 @@ export const useConnectionsStore = create<ConnectionsState>((set, get) => ({
 
   fetchFolders: async () => {
     try {
-      const folders = await listFolders();
-      set({ folders });
+      const foldersData = await listFolders();
+      set({ folders: foldersData.personal, teamFolders: foldersData.team });
     } catch {}
   },
 
@@ -53,6 +59,9 @@ export const useConnectionsStore = create<ConnectionsState>((set, get) => ({
         ownConnections: state.ownConnections.map((c) =>
           c.id === result.id ? { ...c, isFavorite: result.isFavorite } : c
         ),
+        teamConnections: state.teamConnections.map((c) =>
+          c.id === result.id ? { ...c, isFavorite: result.isFavorite } : c
+        ),
       }));
     } catch {
       // Silently fail; the star just does not toggle
@@ -60,10 +69,14 @@ export const useConnectionsStore = create<ConnectionsState>((set, get) => ({
   },
 
   moveConnection: async (connectionId, targetFolderId) => {
-    const prev = get().ownConnections;
-    // Optimistic update
+    const prevOwn = get().ownConnections;
+    const prevTeam = get().teamConnections;
+    // Optimistic update (check both own and team)
     set({
-      ownConnections: prev.map((c) =>
+      ownConnections: prevOwn.map((c) =>
+        c.id === connectionId ? { ...c, folderId: targetFolderId } : c
+      ),
+      teamConnections: prevTeam.map((c) =>
         c.id === connectionId ? { ...c, folderId: targetFolderId } : c
       ),
     });
@@ -71,7 +84,7 @@ export const useConnectionsStore = create<ConnectionsState>((set, get) => ({
       await updateConnection(connectionId, { folderId: targetFolderId });
       await get().fetchConnections();
     } catch (err) {
-      set({ ownConnections: prev });
+      set({ ownConnections: prevOwn, teamConnections: prevTeam });
       throw err;
     }
   },

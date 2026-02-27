@@ -3,27 +3,40 @@ import { encrypt, decrypt, getMasterKey } from './crypto.service';
 import { AppError } from '../middleware/error.middleware';
 import { createNotificationAsync } from './notification.service';
 import { emitNotification } from '../socket/notification.handler';
+import { resolveTeamKey } from './team.service';
+import * as permissionService from './permission.service';
 
 export async function shareConnection(
-  ownerUserId: string,
+  actingUserId: string,
   connectionId: string,
   targetEmail: string,
   permission: Permission
 ) {
-  const ownerKey = getMasterKey(ownerUserId);
-  if (!ownerKey) throw new AppError('Vault is locked', 403);
+  const access = await permissionService.canManageConnection(actingUserId, connectionId);
+  if (!access.allowed) throw new AppError('Connection not found', 404);
 
-  const connection = await prisma.connection.findFirst({
-    where: { id: connectionId, userId: ownerUserId },
-  });
-  if (!connection) throw new AppError('Connection not found', 404);
+  const connection = access.connection;
+
+  // For team connections, only TEAM_ADMIN can share
+  if (connection.teamId && access.teamRole !== 'TEAM_ADMIN') {
+    throw new AppError('Only team admins can share team connections', 403);
+  }
 
   const targetUser = await prisma.user.findUnique({
     where: { email: targetEmail },
   });
   if (!targetUser) throw new AppError('User not found', 404);
-  if (targetUser.id === ownerUserId) {
+  if (targetUser.id === actingUserId) {
     throw new AppError('Cannot share with yourself', 400);
+  }
+
+  // Tenant boundary check
+  const actingUser = await prisma.user.findUnique({
+    where: { id: actingUserId },
+    select: { tenantId: true },
+  });
+  if (actingUser?.tenantId && targetUser.tenantId !== actingUser.tenantId) {
+    throw new AppError('Cannot share with users outside your organization', 400);
   }
 
   // Get target user's master key (they must have their vault unlocked)
@@ -35,14 +48,24 @@ export async function shareConnection(
     );
   }
 
-  // Decrypt credentials with owner's key
+  // Decrypt with appropriate key (personal or team)
+  let decryptionKey: Buffer;
+  if (connection.teamId) {
+    decryptionKey = await resolveTeamKey(connection.teamId, actingUserId);
+  } else {
+    const ownerKey = getMasterKey(actingUserId);
+    if (!ownerKey) throw new AppError('Vault is locked', 403);
+    decryptionKey = ownerKey;
+  }
+
+  // Decrypt credentials with source key
   const username = decrypt(
     {
       ciphertext: connection.encryptedUsername,
       iv: connection.usernameIV,
       tag: connection.usernameTag,
     },
-    ownerKey
+    decryptionKey
   );
   const password = decrypt(
     {
@@ -50,10 +73,10 @@ export async function shareConnection(
       iv: connection.passwordIV,
       tag: connection.passwordTag,
     },
-    ownerKey
+    decryptionKey
   );
 
-  // Re-encrypt with target user's key
+  // Re-encrypt with target user's personal key
   const encUsername = encrypt(username, targetKey);
   const encPassword = encrypt(password, targetKey);
 
@@ -67,7 +90,7 @@ export async function shareConnection(
     create: {
       connectionId,
       sharedWithUserId: targetUser.id,
-      sharedByUserId: ownerUserId,
+      sharedByUserId: actingUserId,
       permission,
       encryptedUsername: encUsername.ciphertext,
       usernameIV: encUsername.iv,
@@ -88,12 +111,12 @@ export async function shareConnection(
   });
 
   // Notify target user
-  const owner = await prisma.user.findUnique({
-    where: { id: ownerUserId },
+  const actor = await prisma.user.findUnique({
+    where: { id: actingUserId },
     select: { username: true, email: true },
   });
-  const ownerName = owner?.username || owner?.email || 'Someone';
-  const msg = `${ownerName} shared "${connection.name}" with you (${permission === 'FULL_ACCESS' ? 'Full Access' : 'Read Only'})`;
+  const actorName = actor?.username || actor?.email || 'Someone';
+  const msg = `${actorName} shared "${connection.name}" with you (${permission === 'FULL_ACCESS' ? 'Full Access' : 'Read Only'})`;
 
   createNotificationAsync({
     userId: targetUser.id,
@@ -120,26 +143,31 @@ export async function shareConnection(
 }
 
 export async function unshareConnection(
-  ownerUserId: string,
+  actingUserId: string,
   connectionId: string,
   targetUserId: string
 ) {
-  const connection = await prisma.connection.findFirst({
-    where: { id: connectionId, userId: ownerUserId },
-  });
-  if (!connection) throw new AppError('Connection not found', 404);
+  const access = await permissionService.canManageConnection(actingUserId, connectionId);
+  if (!access.allowed) throw new AppError('Connection not found', 404);
+
+  const connection = access.connection;
+
+  // For team connections, only TEAM_ADMIN can revoke shares
+  if (connection.teamId && access.teamRole !== 'TEAM_ADMIN') {
+    throw new AppError('Only team admins can revoke team connection shares', 403);
+  }
 
   await prisma.sharedConnection.deleteMany({
     where: { connectionId, sharedWithUserId: targetUserId },
   });
 
   // Notify target user
-  const owner = await prisma.user.findUnique({
-    where: { id: ownerUserId },
+  const actor = await prisma.user.findUnique({
+    where: { id: actingUserId },
     select: { username: true, email: true },
   });
-  const ownerName = owner?.username || owner?.email || 'Someone';
-  const msg = `${ownerName} revoked your access to "${connection.name}"`;
+  const actorName = actor?.username || actor?.email || 'Someone';
+  const msg = `${actorName} revoked your access to "${connection.name}"`;
 
   createNotificationAsync({
     userId: targetUserId,
@@ -160,15 +188,20 @@ export async function unshareConnection(
 }
 
 export async function updateSharePermission(
-  ownerUserId: string,
+  actingUserId: string,
   connectionId: string,
   targetUserId: string,
   permission: Permission
 ) {
-  const connection = await prisma.connection.findFirst({
-    where: { id: connectionId, userId: ownerUserId },
-  });
-  if (!connection) throw new AppError('Connection not found', 404);
+  const access = await permissionService.canManageConnection(actingUserId, connectionId);
+  if (!access.allowed) throw new AppError('Connection not found', 404);
+
+  const connection = access.connection;
+
+  // For team connections, only TEAM_ADMIN can update share permissions
+  if (connection.teamId && access.teamRole !== 'TEAM_ADMIN') {
+    throw new AppError('Only team admins can update team connection shares', 403);
+  }
 
   const shared = await prisma.sharedConnection.findFirst({
     where: { connectionId, sharedWithUserId: targetUserId },
@@ -181,13 +214,13 @@ export async function updateSharePermission(
   });
 
   // Notify target user
-  const owner = await prisma.user.findUnique({
-    where: { id: ownerUserId },
+  const actor = await prisma.user.findUnique({
+    where: { id: actingUserId },
     select: { username: true, email: true },
   });
-  const ownerName = owner?.username || owner?.email || 'Someone';
+  const actorName = actor?.username || actor?.email || 'Someone';
   const permLabel = permission === 'FULL_ACCESS' ? 'Full Access' : 'Read Only';
-  const msg = `${ownerName} changed your permission on "${connection.name}" to ${permLabel}`;
+  const msg = `${actorName} changed your permission on "${connection.name}" to ${permLabel}`;
 
   createNotificationAsync({
     userId: targetUserId,
@@ -207,11 +240,16 @@ export async function updateSharePermission(
   return result;
 }
 
-export async function listShares(ownerUserId: string, connectionId: string) {
-  const connection = await prisma.connection.findFirst({
-    where: { id: connectionId, userId: ownerUserId },
-  });
-  if (!connection) throw new AppError('Connection not found', 404);
+export async function listShares(actingUserId: string, connectionId: string) {
+  const access = await permissionService.canManageConnection(actingUserId, connectionId);
+  if (!access.allowed) throw new AppError('Connection not found', 404);
+
+  const connection = access.connection;
+
+  // For team connections, only TEAM_ADMIN can view shares
+  if (connection.teamId && access.teamRole !== 'TEAM_ADMIN') {
+    throw new AppError('Only team admins can view team connection shares', 403);
+  }
 
   const shares = await prisma.sharedConnection.findMany({
     where: { connectionId },

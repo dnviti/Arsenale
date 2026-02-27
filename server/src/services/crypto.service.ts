@@ -11,6 +11,9 @@ const SALT_LENGTH = 32;
 // In-memory vault store: userId -> VaultSession
 const vaultStore = new Map<string, VaultSession>();
 
+// In-memory team vault store: "${teamId}:${userId}" -> decrypted team master key
+const teamVaultStore = new Map<string, { teamKey: Buffer; expiresAt: number }>();
+
 // Cleanup expired sessions every minute
 setInterval(() => {
   const now = Date.now();
@@ -18,6 +21,12 @@ setInterval(() => {
     if (session.expiresAt < now) {
       session.masterKey.fill(0); // zero out the key
       vaultStore.delete(userId);
+    }
+  }
+  for (const [key, session] of teamVaultStore.entries()) {
+    if (session.expiresAt < now) {
+      session.teamKey.fill(0);
+      teamVaultStore.delete(key);
     }
   }
 }, 60_000);
@@ -127,8 +136,69 @@ export function lockVault(userId: string): void {
     session.masterKey.fill(0);
     vaultStore.delete(userId);
   }
+  // Also lock all team vault sessions for this user
+  lockUserTeamVaults(userId);
 }
 
 export function isVaultUnlocked(userId: string): boolean {
   return getVaultSession(userId) !== null;
+}
+
+// Team vault session management
+
+export function generateTeamMasterKey(): Buffer {
+  return crypto.randomBytes(KEY_LENGTH);
+}
+
+export function encryptTeamKey(teamKey: Buffer, userMasterKey: Buffer): EncryptedField {
+  return encrypt(teamKey.toString('hex'), userMasterKey);
+}
+
+export function decryptTeamKey(encryptedField: EncryptedField, userMasterKey: Buffer): Buffer {
+  const hex = decrypt(encryptedField, userMasterKey);
+  return Buffer.from(hex, 'hex');
+}
+
+export function storeTeamVaultSession(teamId: string, userId: string, teamKey: Buffer): void {
+  const ttlMs = config.vaultTtlMinutes * 60 * 1000;
+  const key = `${teamId}:${userId}`;
+  teamVaultStore.set(key, {
+    teamKey: Buffer.from(teamKey), // defensive copy
+    expiresAt: Date.now() + ttlMs,
+  });
+}
+
+export function getTeamMasterKey(teamId: string, userId: string): Buffer | null {
+  const key = `${teamId}:${userId}`;
+  const session = teamVaultStore.get(key);
+  if (!session) return null;
+
+  if (session.expiresAt < Date.now()) {
+    session.teamKey.fill(0);
+    teamVaultStore.delete(key);
+    return null;
+  }
+
+  // Sliding window: reset TTL on every successful access
+  const ttlMs = config.vaultTtlMinutes * 60 * 1000;
+  session.expiresAt = Date.now() + ttlMs;
+  return session.teamKey;
+}
+
+export function lockTeamVault(teamId: string): void {
+  for (const [key, session] of teamVaultStore.entries()) {
+    if (key.startsWith(`${teamId}:`)) {
+      session.teamKey.fill(0);
+      teamVaultStore.delete(key);
+    }
+  }
+}
+
+export function lockUserTeamVaults(userId: string): void {
+  for (const [key, session] of teamVaultStore.entries()) {
+    if (key.endsWith(`:${userId}`)) {
+      session.teamKey.fill(0);
+      teamVaultStore.delete(key);
+    }
+  }
 }
