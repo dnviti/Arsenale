@@ -15,87 +15,141 @@
 ================================================================================
 
 ------------------------------------------------------------------------------
-[~] SSHUI-027 — Personalizzazione terminale SSH (font, temi, opzioni)
+[~] RDPSET-028 — Personalizzazione sessioni RDP (qualita', risoluzione, opzioni)
 ------------------------------------------------------------------------------
   Priorita: MEDIA
   Dipendenze: USER-007 (pagina impostazioni per configurazione globale)
 
   DESCRIZIONE:
-  Permettere la personalizzazione dell'aspetto e del comportamento del
-  terminale SSH. Attualmente tutti i parametri sono hard-coded in
-  SshTerminal.tsx (font 14px Menlo, tema scuro fisso, cursore blu).
-  Due livelli di configurazione:
+  Permettere la personalizzazione della qualita', risoluzione e comportamento
+  delle sessioni RDP. Attualmente tutti i parametri Guacamole sono hard-coded
+  in rdp.service.ts (security: nla, wallpaper: off, font-smoothing: on, ecc.).
+  Due livelli di configurazione, stesso pattern di SSHUI-027:
     - Impostazioni globali: nell'account utente (SettingsPage), salvate
-      nel modello User, si applicano a tutte le connessioni SSH
+      nel modello User (rdpDefaults), si applicano a tutte le connessioni RDP
     - Override per connessione: nel dialog di modifica connessione,
-      salvate nel modello Connection, sovrascrivono i default globali
+      salvate nel modello Connection (rdpSettings), sovrascrivono i default
 
   OPZIONI DI PERSONALIZZAZIONE:
-    - Font family (Menlo, Fira Code, JetBrains Mono, Cascadia Code,
-      Consolas, monospace)
-    - Font size (10–24px, default 14)
-    - Line height (1.0–2.0, default 1.0)
-    - Letter spacing (0–5px, default 0)
-    - Cursor style (block, underline, bar — default block)
-    - Cursor blink (on/off, default on)
-    - Color theme — preset: Default Dark, Dracula, Solarized Dark,
-      Solarized Light, Monokai, Nord, One Dark, Gruvbox, GitHub Dark;
-      oppure personalizzato con color picker per background, foreground,
-      cursor, e 16 colori ANSI
-    - Scrollback lines (100–10000, default 1000)
-    - Bell style (none, sound, visual — default none)
+
+    Display e risoluzione:
+      - Color depth (8 / 16 / 24 bpp — default: auto-negoziato)
+      - Risoluzione fissa width x height in pixel (default: auto/browser)
+      - DPI (default: 96)
+      - Metodo resize: display-update / reconnect (default: display-update)
+
+    Qualita' e performance (preset + personalizzato):
+      - Preset "Performance": niente wallpaper, niente compositing, niente
+        animazioni — banda minima (ideale per connessioni lente)
+      - Preset "Balanced" (default): theming + font smoothing attivi,
+        wallpaper e compositing disattivati
+      - Preset "Quality": tutto attivo (wallpaper, theming, font smoothing,
+        compositing, full window drag, menu animations)
+      - Preset "Custom": controllo granulare su ogni parametro
+      I singoli parametri Guacamole controllati:
+        - enable-wallpaper (default: false)
+        - enable-theming (default: true)
+        - enable-font-smoothing (default: true)
+        - enable-full-window-drag (default: false)
+        - enable-desktop-composition (default: false)
+        - enable-menu-animations (default: false)
+        - force-lossless (default: false)
+
+    Audio:
+      - Abilita audio remoto (disable-audio: default true = disattivato)
+      - Abilita microfono (enable-audio-input: default false)
+
+    Sicurezza:
+      - Tipo sicurezza: any / nla / nla-ext / tls / rdp (default: nla)
+      - Ignora certificato server (ignore-cert: default true)
+
+    Sessione:
+      - Keyboard layout (en-us-qwerty, it-it-qwerty, de-de-qwertz,
+        fr-fr-azerty, es-es-qwerty, pt-br-qwerty, ja-jp-qwerty,
+        ecc. — default: en-us-qwerty)
+      - Sessione console/admin (default: false)
+      - Timezone: forward fuso orario IANA al server (default: non impostato)
 
   DETTAGLI TECNICI:
-  Risoluzione configurazione a runtime (SshTerminal.tsx):
-    1. Partire dai fallback hard-coded (valori attuali)
-    2. Sovrascrivere con i default globali dell'utente (User.sshDefaults)
-    3. Sovrascrivere con gli override della connessione (Connection.sshTerminalConfig)
-    4. Applicare la configurazione risultante a new Terminal(options)
+  Risoluzione configurazione a runtime (rdp.service.ts):
+    1. Partire dai fallback hard-coded (valori attuali in generateGuacamoleToken)
+    2. Sovrascrivere con i default globali dell'utente (User.rdpDefaults)
+    3. Sovrascrivere con gli override della connessione (Connection.rdpSettings)
+    4. Passare la configurazione risultante al token Guacamole
 
   Backend:
-    1. Aggiungere campo sshDefaults Json? al modello User (schema.prisma)
-       - Contiene le preferenze terminale globali dell'utente
+    1. Aggiungere campo rdpDefaults Json? al modello User (schema.prisma)
+       - Contiene le preferenze RDP globali dell'utente
        - Letto/scritto tramite GET/PUT /api/user/profile (estendere)
-    2. Aggiungere campo sshTerminalConfig Json? al modello Connection
+    2. Aggiungere campo rdpSettings Json? al modello Connection
        - Contiene solo i campi sovrascritti (override sparso)
        - Pass-through nel CRUD connessioni (create/update)
+    3. Definire interfaccia RdpSettings in server/src/types/index.ts:
+       - colorDepth?: 8 | 16 | 24
+       - width?: number
+       - height?: number
+       - dpi?: number
+       - resizeMethod?: 'display-update' | 'reconnect'
+       - enableWallpaper?: boolean
+       - enableTheming?: boolean
+       - enableFontSmoothing?: boolean
+       - enableFullWindowDrag?: boolean
+       - enableDesktopComposition?: boolean
+       - enableMenuAnimations?: boolean
+       - forceLossless?: boolean
+       - disableAudio?: boolean
+       - enableAudioInput?: boolean
+       - security?: 'any' | 'nla' | 'nla-ext' | 'tls' | 'rdp'
+       - ignoreCert?: boolean
+       - serverLayout?: string
+       - console?: boolean
+       - timezone?: string
+    4. Modificare generateGuacamoleToken() in rdp.service.ts:
+       - Accettare parametro opzionale rdpSettings: Partial<RdpSettings>
+       - Mappare i campi dell'interfaccia ai parametri Guacamole
+       - Usare i default attuali come fallback per ogni campo
 
   Frontend — Impostazioni globali (account utente):
-    1. Creare client/src/store/terminalSettingsStore.ts (Zustand)
-       - fetchDefaults(): carica da profilo utente
-       - updateDefaults(settings): salva nel profilo utente
-       - getMergedConfig(connection): risolve fallback → globali → override
-    2. Creare client/src/components/Settings/TerminalSettingsSection.tsx
-       - Componente riutilizzabile con tutti i controlli (select, slider,
-         color picker, toggle) per le opzioni terminale
+    1. Creare client/src/components/Settings/RdpSettingsSection.tsx
+       - Componente riutilizzabile con tutti i controlli per le opzioni RDP
+       - Select per preset qualita' (Performance/Balanced/Quality/Custom)
+       - Controlli granulari visibili solo con preset "Custom"
+       - Select per color depth, keyboard layout, security
+       - Input per width/height/dpi
+       - Toggle per audio, microfono, console, ignore-cert
+       - Input per timezone (select con fusi orari comuni o auto-detect)
        - Props: values, onChange, showUseDefaultToggle (per modalita' override)
-    3. Aggiungere sezione "SSH Terminal" in SettingsPage.tsx
-       - Usa TerminalSettingsSection con i default globali
-       - Preview live del terminale con le impostazioni correnti
+    2. Aggiungere sezione "RDP Defaults" in SettingsPage.tsx
+       - Usa RdpSettingsSection con i default globali
 
   Frontend — Override per connessione:
-    4. Aggiungere sezione collassabile "Terminal Appearance" in
-       ConnectionDialog.tsx (visibile solo quando type=SSH)
-       - Usa TerminalSettingsSection con showUseDefaultToggle=true
+    3. Aggiungere sezione collassabile "RDP Settings" in
+       ConnectionDialog.tsx (visibile solo quando type=RDP)
+       - Usa RdpSettingsSection con showUseDefaultToggle=true
        - Ogni campo ha checkbox "Use default" — solo i campi sovrascritti
-         vengono salvati in sshTerminalConfig
-    5. Modificare SshTerminal.tsx:
-       - Importare terminalSettingsStore
-       - Chiamare getMergedConfig(connection) per ottenere configurazione
-       - Passare risultato a new Terminal({ ...mergedConfig })
+         vengono salvati in rdpSettings
+    4. Modificare rdp.handler.ts (POST /sessions/rdp):
+       - Caricare User.rdpDefaults dal database
+       - Caricare Connection.rdpSettings
+       - Merge: system defaults -> user defaults -> connection overrides
+       - Passare risultato a generateGuacamoleToken()
 
   FILE COINVOLTI:
     MODIFICARE: server/prisma/schema.prisma
-                (aggiungere sshDefaults a User, sshTerminalConfig a Connection)
-    CREARE:  client/src/store/terminalSettingsStore.ts
-    CREARE:  client/src/components/Settings/TerminalSettingsSection.tsx
-    MODIFICARE: client/src/components/Terminal/SshTerminal.tsx
-                (leggere configurazione dal store invece di valori hard-coded)
+                (aggiungere rdpDefaults a User, rdpSettings a Connection)
+    MODIFICARE: server/src/types/index.ts
+                (aggiungere interfaccia RdpSettings)
+    MODIFICARE: server/src/services/rdp.service.ts
+                (generateGuacamoleToken accetta RdpSettings, merge con defaults)
+    MODIFICARE: server/src/socket/rdp.handler.ts
+                (caricare user defaults + connection settings, merge, passare a token)
+    CREARE:  client/src/components/Settings/RdpSettingsSection.tsx
     MODIFICARE: client/src/pages/SettingsPage.tsx
-                (aggiungere sezione SSH Terminal)
+                (aggiungere sezione RDP Defaults)
     MODIFICARE: client/src/components/Dialogs/ConnectionDialog.tsx
-                (aggiungere sezione Terminal Appearance per SSH)
+                (aggiungere sezione RDP Settings per type=RDP)
     MODIFICARE: client/src/api/user.api.ts (estendere tipi profilo)
     MODIFICARE: client/src/api/connections.api.ts (estendere ConnectionData)
-    MODIFICARE: server/src/services/user.service.ts (gestire sshDefaults)
-    MODIFICARE: server/src/services/connection.service.ts (pass-through sshTerminalConfig)
+    MODIFICARE: server/src/services/user.service.ts (gestire rdpDefaults)
+    MODIFICARE: server/src/services/connection.service.ts (pass-through rdpSettings)
+
