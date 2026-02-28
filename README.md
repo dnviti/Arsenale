@@ -1,5 +1,9 @@
 # Remote Desktop Manager
 
+[![License: GPL v3](https://img.shields.io/badge/License-GPLv3-blue.svg)](LICENSE)
+[![Verify](https://github.com/dnviti/remote-desktop-manager/actions/workflows/verify.yml/badge.svg)](https://github.com/dnviti/remote-desktop-manager/actions/workflows/verify.yml)
+[![Version](https://img.shields.io/badge/version-1.0.0-green.svg)](CHANGELOG.md)
+
 A web-based application for managing and accessing remote SSH and RDP connections from your browser. Organize connections in folders, share them with team members, and keep credentials encrypted at rest with a personal vault.
 
 ## Features
@@ -174,3 +178,17 @@ Layered architecture: **Routes → Controllers → Services → Prisma ORM**
 - User password → Argon2 → master key → AES-256-GCM encryption of all credentials
 - Master key held in server memory with auto-expiring sessions (configurable TTL)
 - Vault must be unlocked to view or use stored credentials
+
+## Contributing
+
+Contributions are welcome! Please read [CONTRIBUTING.md](CONTRIBUTING.md) for setup instructions, code conventions, commit guidelines, and the PR process.
+
+Before submitting a pull request, make sure the quality gate passes:
+
+```bash
+npm run verify
+```
+
+## License
+
+This project is licensed under the [GNU General Public License v3.0](LICENSE).

@@ -155,3 +155,8 @@ server/src/generated/
 
 # Scratch / test scripts
 test_token*.mjs
+
+# Internal task tracker (not for public consumption)
+to-do.txt
+progressing.txt
+done.txt

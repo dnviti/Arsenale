@@ -1,6 +1,8 @@
 {
   "name": "server",
   "version": "1.0.0",
+  "description": "Express + TypeScript backend for Remote Desktop Manager",
+  "license": "GPL-3.0",
   "private": true,
   "scripts": {
     "dev": "tsx watch src/index.ts",
