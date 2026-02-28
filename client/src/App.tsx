@@ -4,6 +4,8 @@ import RegisterPage from './pages/RegisterPage';
 import DashboardPage from './pages/DashboardPage';
 import ConnectionViewerPage from './pages/ConnectionViewerPage';
 import SettingsPage from './pages/SettingsPage';
+import TenantSettingsPage from './pages/TenantSettingsPage';
+import TeamManagementPage from './pages/TeamManagementPage';
 import AuditLogPage from './pages/AuditLogPage';
 import OAuthCallbackPage from './pages/OAuthCallbackPage';
 import VaultSetupPage from './pages/VaultSetupPage';
@@ -50,6 +52,22 @@ export default function App() {
         element={
           <ProtectedRoute>
             <SettingsPage />
+          </ProtectedRoute>
+        }
+      />
+      <Route
+        path="/settings/tenant"
+        element={
+          <ProtectedRoute>
+            <TenantSettingsPage />
+          </ProtectedRoute>
+        }
+      />
+      <Route
+        path="/settings/teams"
+        element={
+          <ProtectedRoute>
+            <TeamManagementPage />
           </ProtectedRoute>
         }
       />

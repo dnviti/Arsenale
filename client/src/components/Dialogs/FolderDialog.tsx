@@ -11,6 +11,7 @@ interface FolderDialogProps {
   onClose: () => void;
   folder?: FolderData | null;
   parentId?: string | null;
+  teamId?: string | null;
 }
 
 function getDescendantIds(folderId: string, folders: FolderData[]): Set<string> {
@@ -28,7 +29,7 @@ function getDescendantIds(folderId: string, folders: FolderData[]): Set<string> 
   return ids;
 }
 
-export default function FolderDialog({ open, onClose, folder, parentId }: FolderDialogProps) {
+export default function FolderDialog({ open, onClose, folder, parentId, teamId }: FolderDialogProps) {
   const [name, setName] = useState('');
   const [selectedParentId, setSelectedParentId] = useState('');
   const [error, setError] = useState('');
@@ -77,6 +78,7 @@ export default function FolderDialog({ open, onClose, folder, parentId }: Folder
         await createFolder({
           name: name.trim(),
           ...(selectedParentId ? { parentId: selectedParentId } : {}),
+          ...(teamId ? { teamId } : {}),
         });
       }
       await fetchConnections();

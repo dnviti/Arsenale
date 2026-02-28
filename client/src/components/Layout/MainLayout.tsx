@@ -2,7 +2,7 @@ import { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import {
   AppBar, Toolbar, Typography, IconButton, Box, Chip, Menu, MenuItem,
-  Snackbar, Alert, Avatar,
+  Snackbar, Alert, Avatar, Button,
 } from '@mui/material';
 import {
   Lock as LockIcon,
@@ -59,9 +59,11 @@ export default function MainLayout() {
   const [connectionDialogOpen, setConnectionDialogOpen] = useState(false);
   const [editingConnection, setEditingConnection] = useState<ConnectionData | null>(null);
   const [connectionFolderId, setConnectionFolderId] = useState<string | null>(null);
+  const [connectionTeamId, setConnectionTeamId] = useState<string | null>(null);
   const [folderDialogOpen, setFolderDialogOpen] = useState(false);
   const [editingFolder, setEditingFolder] = useState<Folder | null>(null);
   const [newFolderParentId, setNewFolderParentId] = useState<string | null>(null);
+  const [folderTeamId, setFolderTeamId] = useState<string | null>(null);
   const [shareTarget, setShareTarget] = useState<ConnectionData | null>(null);
   const [connectAsTarget, setConnectAsTarget] = useState<ConnectionData | null>(null);
   const [vaultDialogOpen, setVaultDialogOpen] = useState(false);
@@ -74,15 +76,17 @@ export default function MainLayout() {
     setConnectionDialogOpen(true);
   };
 
-  const handleCreateConnection = (folderId?: string) => {
+  const handleCreateConnection = (folderId?: string, teamId?: string) => {
     setEditingConnection(null);
     setConnectionFolderId(folderId || null);
+    setConnectionTeamId(teamId || null);
     setConnectionDialogOpen(true);
   };
 
-  const handleCreateFolder = (parentId?: string) => {
+  const handleCreateFolder = (parentId?: string, teamId?: string) => {
     setEditingFolder(null);
     setNewFolderParentId(parentId || null);
+    setFolderTeamId(teamId || null);
     setFolderDialogOpen(true);
   };
 
@@ -191,6 +195,22 @@ export default function MainLayout() {
             bgcolor: 'background.paper',
           }}
         >
+          {!user?.tenantId && (
+            <Alert
+              severity="info"
+              variant="outlined"
+              sx={{ m: 1, '& .MuiAlert-message': { width: '100%' } }}
+              action={
+                <Button size="small" onClick={() => navigate('/settings/tenant')}>
+                  Get Started
+                </Button>
+              }
+            >
+              <Typography variant="body2">
+                Set up an organization to create teams and collaborate.
+              </Typography>
+            </Alert>
+          )}
           <ConnectionTree
             onEditConnection={handleEditConnection}
             onShareConnection={handleShareConnection}
@@ -210,15 +230,17 @@ export default function MainLayout() {
 
       <ConnectionDialog
         open={connectionDialogOpen}
-        onClose={() => { setConnectionDialogOpen(false); setEditingConnection(null); setConnectionFolderId(null); }}
+        onClose={() => { setConnectionDialogOpen(false); setEditingConnection(null); setConnectionFolderId(null); setConnectionTeamId(null); }}
         connection={editingConnection}
         folderId={connectionFolderId}
+        teamId={connectionTeamId}
       />
       <FolderDialog
         open={folderDialogOpen}
-        onClose={() => { setFolderDialogOpen(false); setEditingFolder(null); setNewFolderParentId(null); }}
+        onClose={() => { setFolderDialogOpen(false); setEditingFolder(null); setNewFolderParentId(null); setFolderTeamId(null); }}
         folder={editingFolder}
         parentId={newFolderParentId}
+        teamId={folderTeamId}
       />
       <ShareDialog
         open={!!shareTarget}

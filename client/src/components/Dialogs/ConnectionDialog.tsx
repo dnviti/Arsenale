@@ -21,9 +21,10 @@ interface ConnectionDialogProps {
   onClose: () => void;
   connection?: ConnectionData | null;
   folderId?: string | null;
+  teamId?: string | null;
 }
 
-export default function ConnectionDialog({ open, onClose, connection, folderId }: ConnectionDialogProps) {
+export default function ConnectionDialog({ open, onClose, connection, folderId, teamId }: ConnectionDialogProps) {
   const [name, setName] = useState('');
   const [type, setType] = useState<'SSH' | 'RDP'>('SSH');
   const [host, setHost] = useState('');
@@ -120,6 +121,7 @@ export default function ConnectionDialog({ open, onClose, connection, folderId }
           description: description || undefined,
           enableDrive,
           ...(folderId ? { folderId } : {}),
+          ...(teamId ? { teamId } : {}),
           ...(type === 'SSH' && Object.keys(sshTerminalConfig).length > 0 && {
             sshTerminalConfig,
           }),

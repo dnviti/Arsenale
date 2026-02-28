@@ -4,7 +4,12 @@ import {
   AppBar, Toolbar, Typography, Box, Card, CardContent, TextField, Button,
   Alert, Avatar, IconButton, Stack,
 } from '@mui/material';
-import { ArrowBack as ArrowBackIcon } from '@mui/icons-material';
+import {
+  ArrowBack as ArrowBackIcon,
+  Business as BusinessIcon,
+  Groups as GroupsIcon,
+  ChevronRight as ChevronRightIcon,
+} from '@mui/icons-material';
 import { useAuthStore } from '../store/authStore';
 import { getProfile, updateProfile, changePassword, uploadAvatar } from '../api/user.api';
 import { useTerminalSettingsStore } from '../store/terminalSettingsStore';
@@ -19,6 +24,7 @@ import LinkedAccountsSection from '../components/Settings/LinkedAccountsSection'
 export default function SettingsPage() {
   const navigate = useNavigate();
   const [searchParams, setSearchParams] = useSearchParams();
+  const user = useAuthStore((s) => s.user);
   const updateUser = useAuthStore((s) => s.updateUser);
   const authLogout = useAuthStore((s) => s.logout);
   const [hasPassword, setHasPassword] = useState(true);
@@ -226,6 +232,42 @@ export default function SettingsPage() {
                 {profileLoading ? 'Saving...' : 'Save Profile'}
               </Button>
             </Box>
+          </CardContent>
+        </Card>
+
+        {/* Organization Section */}
+        <Card sx={{ mb: 3 }}>
+          <CardContent>
+            <Typography variant="h6" gutterBottom>Organization</Typography>
+            <Typography variant="body2" color="text.secondary" sx={{ mb: 2 }}>
+              {user?.tenantId
+                ? 'Manage your organization settings, members, and teams.'
+                : 'Create or join an organization to collaborate with your team.'}
+            </Typography>
+            <Stack spacing={1}>
+              <Button
+                fullWidth
+                variant="outlined"
+                startIcon={<BusinessIcon />}
+                endIcon={<ChevronRightIcon />}
+                onClick={() => navigate('/settings/tenant')}
+                sx={{ justifyContent: 'flex-start', textTransform: 'none' }}
+              >
+                {user?.tenantId ? 'Organization Settings' : 'Set Up Organization'}
+              </Button>
+              {user?.tenantId && (
+                <Button
+                  fullWidth
+                  variant="outlined"
+                  startIcon={<GroupsIcon />}
+                  endIcon={<ChevronRightIcon />}
+                  onClick={() => navigate('/settings/teams')}
+                  sx={{ justifyContent: 'flex-start', textTransform: 'none' }}
+                >
+                  Manage Teams
+                </Button>
+              )}
+            </Stack>
           </CardContent>
         </Card>
 

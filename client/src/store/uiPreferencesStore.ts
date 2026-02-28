@@ -5,17 +5,28 @@ interface UiPreferences {
   rdpFileBrowserOpen: boolean;
   sshSftpBrowserOpen: boolean;
   sshSftpTransferQueueOpen: boolean;
+  sidebarFavoritesOpen: boolean;
+  sidebarRecentsOpen: boolean;
+  sidebarSharedOpen: boolean;
+  sidebarCompact: boolean;
+  sidebarTeamSections: Record<string, boolean>;
 }
 
 interface UiPreferencesState extends UiPreferences {
   set: <K extends keyof UiPreferences>(key: K, value: UiPreferences[K]) => void;
-  toggle: (key: keyof UiPreferences) => void;
+  toggle: (key: keyof Omit<UiPreferences, 'sidebarTeamSections'>) => void;
+  toggleTeamSection: (teamId: string) => void;
 }
 
 const defaults: UiPreferences = {
   rdpFileBrowserOpen: false,
   sshSftpBrowserOpen: false,
   sshSftpTransferQueueOpen: true,
+  sidebarFavoritesOpen: true,
+  sidebarRecentsOpen: true,
+  sidebarSharedOpen: true,
+  sidebarCompact: false,
+  sidebarTeamSections: {},
 };
 
 export const useUiPreferencesStore = create<UiPreferencesState>()(
@@ -23,7 +34,15 @@ export const useUiPreferencesStore = create<UiPreferencesState>()(
     (set) => ({
       ...defaults,
       set: (key, value) => set({ [key]: value }),
-      toggle: (key) => set((state) => ({ [key]: !state[key] })),
+      toggle: (key) =>
+        set((state) => ({ [key]: !state[key] })),
+      toggleTeamSection: (teamId) =>
+        set((state) => ({
+          sidebarTeamSections: {
+            ...state.sidebarTeamSections,
+            [teamId]: !(state.sidebarTeamSections[teamId] ?? true),
+          },
+        })),
     }),
     { name: 'rdm-ui-preferences' },
   ),
