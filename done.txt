@@ -644,6 +644,39 @@
     INSTALLATO: eslint-plugin-security, typescript-eslint
 
 
+------------------------------------------------------------------------------
+[x] OSS-032 — Preparare la repository per pubblicazione open-source
+------------------------------------------------------------------------------
+  Priorita: MEDIA
+  Dipendenze: Nessuna (indipendente dai task funzionali)
+  Fase: Pre-release
+  COMPLETATO: Full OSS preparation — LICENSE (GPL v3), CONTRIBUTING.md, CODE_OF_CONDUCT.md (Contributor Covenant v2.1), SECURITY.md (responsible disclosure + security features overview), CHANGELOG.md (Keep a Changelog v1.0.0), .editorconfig, GitHub issue/PR templates, package.json metadata (license, repository, keywords, author) in root/server/client, README.md badges (license, build status, version) + Contributing/License sections, .gitignore updated to exclude task tracker files
+
+  DESCRIZIONE:
+  Preparare la repository per essere pubblicata come progetto open-source.
+  Include l'aggiunta di tutti i file di governance richiesti dalla community
+  (LICENSE, CONTRIBUTING, CODE_OF_CONDUCT, SECURITY), l'aggiornamento dei
+  metadati nei package.json, la creazione di template GitHub per issue e PR,
+  la revisione del README con badge e screenshot, e la sanitizzazione dei
+  file interni (task tracker) prima della pubblicazione.
+
+  FILE COINVOLTI:
+    CREATO:  LICENSE (GPL v3 full text)
+    CREATO:  CONTRIBUTING.md (prerequisites, dev setup, code conventions, commit guidelines)
+    CREATO:  CODE_OF_CONDUCT.md (Contributor Covenant v2.1)
+    CREATO:  SECURITY.md (responsible disclosure, security features, scope)
+    CREATO:  CHANGELOG.md (Keep a Changelog format, v1.0.0 features)
+    CREATO:  .editorconfig (indent, charset, eol, trim whitespace)
+    CREATO:  .github/ISSUE_TEMPLATE/bug_report.md
+    CREATO:  .github/ISSUE_TEMPLATE/feature_request.md
+    CREATO:  .github/pull_request_template.md
+    MODIFICATO: package.json (license, description, repository, keywords, homepage, bugs, author)
+    MODIFICATO: server/package.json (license, description)
+    MODIFICATO: client/package.json (license, description)
+    MODIFICATO: README.md (badges, Contributing section, License section)
+    MODIFICATO: .gitignore (exclude to-do.txt, progressing.txt, done.txt)
+
+
 ================================================================================
   SEZIONE C — MULTI-TENANT / TEAMS / PERMESSI
 ================================================================================
@@ -811,3 +844,37 @@
     MODIFICATO: client/src/api/sharing.api.ts (target object instead of email string)
     MODIFICATO: client/src/store/authStore.ts (tenantId, tenantRole in User interface)
     MODIFICATO: client/src/components/Layout/MainLayout.tsx (teamId prop to ShareDialog)
+
+
+------------------------------------------------------------------------------
+[x] UI-025 — Frontend: gestione tenant, team e sidebar multi-scope
+------------------------------------------------------------------------------
+  Priorita: ALTA
+  Dipendenze: TENANT-021, TEAM-022, PERM-023
+  Fase: 3 (Frontend)
+  COMPLETATO: Full frontend tenant/team management — TenantSettingsPage with org CRUD, member role management, invite flow, and inline onboarding; TeamManagementPage with team CRUD and member management; Zustand stores (tenantStore, teamStore) with complete async actions; API layers (tenant.api.ts, team.api.ts); InviteDialog and TeamDialog components; ConnectionTree refactored with multi-scope sections (My Connections, per-team via TeamConnectionSection, Shared); treeHelpers.tsx for shared connection/folder UI; role-based conditional controls; routes /settings/tenant and /settings/teams; SettingsPage organization section with conditional links
+
+  DESCRIZIONE:
+  Creare le pagine e i componenti frontend per la gestione completa
+  di tenant e team. Aggiornare la sidebar per mostrare connessioni
+  organizzate per scope: private, team, e shared. Aggiungere sezione
+  nell'area impostazioni per gestire il tenant e i team.
+
+  FILE COINVOLTI:
+    CREATO:  client/src/pages/TenantSettingsPage.tsx
+    CREATO:  client/src/pages/TeamManagementPage.tsx
+    CREATO:  client/src/store/tenantStore.ts
+    CREATO:  client/src/store/teamStore.ts
+    CREATO:  client/src/api/tenant.api.ts
+    CREATO:  client/src/api/team.api.ts
+    CREATO:  client/src/components/Dialogs/TeamDialog.tsx
+    CREATO:  client/src/components/Dialogs/InviteDialog.tsx
+    CREATO:  client/src/components/Sidebar/TeamConnectionSection.tsx
+    CREATO:  client/src/components/Sidebar/treeHelpers.tsx
+    MODIFICATO: client/src/components/Sidebar/ConnectionTree.tsx
+    MODIFICATO: client/src/store/connectionsStore.ts
+    MODIFICATO: client/src/store/authStore.ts
+    MODIFICATO: client/src/api/connections.api.ts
+    MODIFICATO: client/src/App.tsx (nuove rotte)
+    MODIFICATO: client/src/pages/SettingsPage.tsx
+    MODIFICATO: client/src/store/uiPreferencesStore.ts
