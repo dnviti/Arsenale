@@ -15,6 +15,7 @@ import auditRoutes from './routes/audit.routes';
 import notificationRoutes from './routes/notification.routes';
 import tenantRoutes from './routes/tenant.routes';
 import teamRoutes from './routes/team.routes';
+import adminRoutes from './routes/admin.routes';
 import { errorHandler } from './middleware/error.middleware';
 import { initializePassport } from './config/passport';
 
@@ -40,6 +41,7 @@ app.use('/api/audit', auditRoutes);
 app.use('/api/notifications', notificationRoutes);
 app.use('/api/tenants', tenantRoutes);
 app.use('/api/teams', teamRoutes);
+app.use('/api/admin', adminRoutes);
 
 // Health check
 app.get('/api/health', (_req, res) => {

@@ -20,11 +20,25 @@ export const config = {
   userDriveQuota: parseInt(process.env.USER_DRIVE_QUOTA || String(100 * 1024 * 1024), 10),
   sftpMaxFileSize: parseInt(process.env.SFTP_MAX_FILE_SIZE || String(100 * 1024 * 1024), 10),
   sftpChunkSize: parseInt(process.env.SFTP_CHUNK_SIZE || String(64 * 1024), 10),
+  emailProvider: (process.env.EMAIL_PROVIDER || 'smtp') as
+    | 'smtp'
+    | 'sendgrid'
+    | 'ses'
+    | 'resend'
+    | 'mailgun',
   smtpHost: process.env.SMTP_HOST || '',
   smtpPort: parseInt(process.env.SMTP_PORT || '587', 10),
   smtpUser: process.env.SMTP_USER || '',
   smtpPass: process.env.SMTP_PASS || '',
   smtpFrom: process.env.SMTP_FROM || 'noreply@localhost',
+  sendgridApiKey: process.env.SENDGRID_API_KEY || '',
+  sesRegion: process.env.AWS_SES_REGION || 'us-east-1',
+  sesAccessKeyId: process.env.AWS_SES_ACCESS_KEY_ID || '',
+  sesSecretAccessKey: process.env.AWS_SES_SECRET_ACCESS_KEY || '',
+  resendApiKey: process.env.RESEND_API_KEY || '',
+  mailgunApiKey: process.env.MAILGUN_API_KEY || '',
+  mailgunDomain: process.env.MAILGUN_DOMAIN || '',
+  mailgunRegion: (process.env.MAILGUN_REGION || 'us') as 'us' | 'eu',
   clientUrl: process.env.CLIENT_URL || 'http://localhost:3000',
   oauth: {
     google: {

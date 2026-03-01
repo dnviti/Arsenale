@@ -1,0 +1,63 @@
+import { Response, NextFunction } from 'express';
+import { z } from 'zod';
+import { AuthRequest } from '../types';
+import { sendEmail, getEmailStatus } from '../services/email';
+import * as auditService from '../services/audit.service';
+import { AppError } from '../middleware/error.middleware';
+
+const testEmailSchema = z.object({
+  to: z.string().email(),
+});
+
+export async function emailStatus(
+  _req: AuthRequest,
+  res: Response,
+  next: NextFunction,
+) {
+  try {
+    res.json(getEmailStatus());
+  } catch (err) {
+    next(err);
+  }
+}
+
+export async function sendTestEmail(
+  req: AuthRequest,
+  res: Response,
+  next: NextFunction,
+) {
+  try {
+    const { to } = testEmailSchema.parse(req.body);
+    const status = getEmailStatus();
+
+    await sendEmail({
+      to,
+      subject: 'Test Email — Remote Desktop Manager',
+      html: `
+        <h2>Test Email</h2>
+        <p>This is a test email sent from your Remote Desktop Manager instance.</p>
+        <p>Provider: <strong>${status.provider}</strong></p>
+        <p>If you received this email, your email configuration is working correctly.</p>
+      `,
+      text: `Test email from Remote Desktop Manager.\nProvider: ${status.provider}.\nYour email configuration is working correctly.`,
+    });
+
+    auditService.log({
+      userId: req.user!.userId,
+      action: 'EMAIL_TEST_SEND',
+      details: { to, provider: status.provider },
+      ipAddress: req.ip,
+    });
+
+    res.json({ success: true, message: 'Test email sent successfully' });
+  } catch (err) {
+    if (err instanceof z.ZodError)
+      return next(new AppError(err.issues[0].message, 400));
+    next(
+      new AppError(
+        'Failed to send test email. Check your email provider configuration.',
+        500,
+      ),
+    );
+  }
+}

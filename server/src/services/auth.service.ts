@@ -16,7 +16,7 @@ import {
   storeVaultSession,
 } from './crypto.service';
 import { verifyCode as verifyTotpCode } from './totp.service';
-import { sendVerificationEmail } from './email.service';
+import { sendVerificationEmail } from './email';
 
 const BCRYPT_ROUNDS = 12;
 const RESEND_COOLDOWN_MS = 60 * 1000;

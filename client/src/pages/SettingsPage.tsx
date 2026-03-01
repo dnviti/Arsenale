@@ -20,6 +20,7 @@ import type { RdpSettings } from '../constants/rdpDefaults';
 import RdpSettingsSection from '../components/Settings/RdpSettingsSection';
 import TwoFactorSection from '../components/Settings/TwoFactorSection';
 import LinkedAccountsSection from '../components/Settings/LinkedAccountsSection';
+import EmailProviderSection from '../components/Settings/EmailProviderSection';
 
 export default function SettingsPage() {
   const navigate = useNavigate();
@@ -325,6 +326,11 @@ export default function SettingsPage() {
         {/* Linked Accounts */}
         <Box sx={{ mb: 3 }}>
           <LinkedAccountsSection hasPassword={hasPassword} />
+        </Box>
+
+        {/* Email Provider */}
+        <Box sx={{ mb: 3 }}>
+          <EmailProviderSection />
         </Box>
 
         {/* Change Password */}

@@ -245,6 +245,7 @@ enum AuditAction {
   TEAM_ADD_MEMBER
   TEAM_REMOVE_MEMBER
   TEAM_UPDATE_MEMBER_ROLE
+  EMAIL_TEST_SEND
 }
 
 model AuditLog {
