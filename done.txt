@@ -1027,3 +1027,25 @@
     CREATO:     server/src/routes/gateway.routes.ts
     CREATO:     server/src/controllers/gateway.controller.ts
     CREATO:     server/src/services/gateway.service.ts
+
+
+------------------------------------------------------------------------------
+[x] GATE-037 — Routing RDP tramite gateway guacd dinamico
+------------------------------------------------------------------------------
+  Priorita: ALTA
+  Dipendenze: GATE-036 (completato)
+  COMPLETATO: Dynamic guacd routing for RDP connections — permission.service.ts includes gateway relation in canViewConnection(), connection.service.ts passes gatewayId+gateway through getConnection(), rdp.service.ts extended with guacdHost/guacdPort in RdpConnectionParams and token config, rdp.handler.ts resolves gateway and validates GUACD type before passing to token generation. Fully backward compatible: no gateway = default guacd from env vars.
+
+  DESCRIZIONE:
+  Instradare le connessioni RDP attraverso l'istanza guacd specificata nel
+  gateway della connessione, invece di usare l'unica istanza guacd globale.
+  guacamole-lite supporta gia' il routing dinamico: basta includere
+  guacdHost e guacdPort nel token cifrato per ogni connessione.
+  Se nessun gateway e' assegnato, si usa il guacd di default da env vars
+  (comportamento attuale preservato).
+
+  FILE COINVOLTI:
+    MODIFICATO: server/src/services/permission.service.ts (gateway include in canViewConnection)
+    MODIFICATO: server/src/services/connection.service.ts (gatewayId+gateway in getConnection)
+    MODIFICATO: server/src/services/rdp.service.ts (guacdHost/guacdPort in interface + token)
+    MODIFICATO: server/src/socket/rdp.handler.ts (gateway resolution + type validation)

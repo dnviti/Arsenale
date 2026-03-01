@@ -36,37 +36,6 @@
 ================================================================================
 
 
-------------------------------------------------------------------------------
-[ ] GATE-037 — Routing RDP tramite gateway guacd dinamico
-------------------------------------------------------------------------------
-  Priorita: ALTA
-  Dipendenze: GATE-036
-
-  DESCRIZIONE:
-  Instradare le connessioni RDP attraverso l'istanza guacd specificata nel
-  gateway della connessione, invece di usare l'unica istanza guacd globale.
-  guacamole-lite supporta gia' il routing dinamico: basta includere
-  guacdHost e guacdPort nel token cifrato per ogni connessione.
-  Se nessun gateway e' assegnato, si usa il guacd di default da env vars
-  (comportamento attuale preservato).
-
-  DETTAGLI TECNICI:
-  Backend:
-    - rdp.service.ts generateGuacamoleToken(): aggiungere parametri opzionali
-      guacdHost e guacdPort. Se presenti, includerli nell'oggetto connection
-      del token: { connection: { type: 'rdp', guacdHost, guacdPort, settings } }
-    - connection.controller.ts (endpoint sessione RDP): quando la connessione
-      ha un gatewayId, caricare il Gateway e passare host/port del gateway
-      a generateGuacamoleToken()
-    - connection.service.ts: includere relazione gateway nelle query connessioni
-    - Fallback: nessun gateway = guacd da config (GUACD_HOST/GUACD_PORT)
-    - NOTA: guacamole-lite gestisce tutto internamente — un singolo server
-      WebSocket (porta 3002) instrada verso guacd diversi in base al token
-  File coinvolti:
-    MODIFICARE: server/src/services/rdp.service.ts
-    MODIFICARE: server/src/controllers/connection.controller.ts
-    MODIFICARE: server/src/services/connection.service.ts
-
 
 ------------------------------------------------------------------------------
 [ ] GATE-038 — Routing SSH tramite bastion/jump host
@@ -501,7 +470,7 @@
 
   Fase 8 — Multi-backend / Multi-gateway:
    33. GATE-036  Modello Gateway e CRUD backend (Prisma + API)                         [COMPLETATO]
-   34. GATE-037  Routing RDP tramite gateway guacd dinamico
+   34. GATE-037  Routing RDP tramite gateway guacd dinamico                             [COMPLETATO]
    35. GATE-038  Routing SSH tramite bastion/jump host (parallelizzabile con 34)
    36. GATE-039  Frontend gestione gateway e assegnazione connessioni
 

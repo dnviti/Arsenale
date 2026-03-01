@@ -30,6 +30,18 @@ router.post('/rdp', async (req: AuthRequest, res: Response, next: NextFunction) 
       throw new AppError('Not an RDP connection', 400);
     }
 
+    // Resolve gateway for dynamic guacd routing
+    let guacdHost: string | undefined;
+    let guacdPort: number | undefined;
+
+    if (conn.gateway) {
+      if (conn.gateway.type !== 'GUACD') {
+        throw new AppError('Connection gateway must be of type GUACD for RDP connections', 400);
+      }
+      guacdHost = conn.gateway.host;
+      guacdPort = conn.gateway.port;
+    }
+
     let username: string;
     let password: string;
     if (overrideUser && overridePass) {
@@ -63,6 +75,8 @@ router.post('/rdp', async (req: AuthRequest, res: Response, next: NextFunction) 
       enableDrive,
       drivePath,
       rdpSettings: mergedRdp,
+      guacdHost,
+      guacdPort,
     });
 
     res.json({ token, enableDrive });

@@ -45,7 +45,10 @@ export async function canViewConnection(
 ): Promise<ViewConnectionResult> {
   const connection = await prisma.connection.findUnique({
     where: { id: connectionId },
-    include: { team: { select: { tenantId: true } } },
+    include: {
+      team: { select: { tenantId: true } },
+      gateway: { select: { id: true, type: true, host: true, port: true } },
+    },
   });
   if (!connection) {
     return { allowed: false, connection: null, accessType: 'owner' };

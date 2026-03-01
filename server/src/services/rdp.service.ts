@@ -10,6 +10,8 @@ export interface RdpConnectionParams {
   enableDrive?: boolean;
   drivePath?: string;
   rdpSettings?: Partial<RdpSettings>;
+  guacdHost?: string;
+  guacdPort?: number;
 }
 
 /**
@@ -109,6 +111,8 @@ export function generateGuacamoleToken(params: RdpConnectionParams): string {
   const connectionConfig = {
     connection: {
       type: 'rdp',
+      ...(params.guacdHost && { guacdHost: params.guacdHost }),
+      ...(params.guacdPort && { guacdPort: params.guacdPort }),
       settings,
     },
   };
