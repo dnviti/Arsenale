@@ -32,6 +32,7 @@ import type { Folder } from '../../store/connectionsStore';
 import { useNotificationStore } from '../../store/notificationStore';
 import { useThemeStore } from '../../store/themeStore';
 import { useTerminalSettingsStore } from '../../store/terminalSettingsStore';
+import { useTabsStore } from '../../store/tabsStore';
 
 const SIDEBAR_WIDTH = 280;
 
@@ -123,6 +124,7 @@ export default function MainLayout() {
     if (refreshToken) {
       try { await logoutApi(refreshToken); } catch {}
     }
+    await useTabsStore.getState().clearAll();
     authLogout();
   };
 

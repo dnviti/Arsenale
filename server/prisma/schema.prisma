@@ -102,6 +102,7 @@ model User {
   notifications Notification[]
   teamMembers     TeamMember[]
   gatewaysCreated Gateway[]    @relation("GatewayCreator")
+  openTabs        OpenTab[]
 }
 
 enum AuthProvider {
@@ -175,7 +176,8 @@ model Connection {
   team    Team?    @relation(fields: [teamId], references: [id])
   user    User     @relation(fields: [userId], references: [id])
   gateway Gateway? @relation(fields: [gatewayId], references: [id], onDelete: SetNull)
-  shares  SharedConnection[]
+  shares   SharedConnection[]
+  openTabs OpenTab[]
 }
 
 enum ConnectionType {
@@ -336,4 +338,19 @@ model Notification {
 
   @@index([userId, read])
   @@index([userId, createdAt])
+}
+
+model OpenTab {
+  id           String     @id @default(uuid())
+  userId       String
+  connectionId String
+  sortOrder    Int        @default(0)
+  isActive     Boolean    @default(false)
+  createdAt    DateTime   @default(now())
+
+  user       User       @relation(fields: [userId], references: [id], onDelete: Cascade)
+  connection Connection @relation(fields: [connectionId], references: [id], onDelete: Cascade)
+
+  @@unique([userId, connectionId])
+  @@index([userId])
 }

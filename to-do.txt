@@ -18,101 +18,6 @@
 
 
 
-------------------------------------------------------------------------------
-[ ] TABS-047 — Persistenza automatica tab aperti (server-side, cross-device)
-------------------------------------------------------------------------------
-  Priorita: MEDIA
-  Dipendenze: Nessuna
-
-  DESCRIZIONE:
-  I tab aperti vengono persi al reload della pagina o al re-login. Aggiungere
-  la persistenza automatica server-side: quando l'utente ha tab aperti e
-  ricarica la pagina (o effettua il login da un altro dispositivo), tutti i
-  tab precedenti devono essere ripristinati automaticamente. La persistenza
-  e' nel database (non localStorage) per garantire il ripristino cross-device.
-  I tab con credenziali alternative (Connect As) NON devono essere persistiti
-  per ragioni di sicurezza. Al ripristino, i tab vanno validati: se una
-  connessione e' stata eliminata o l'utente ha perso l'accesso, quel tab
-  viene scartato silenziosamente.
-
-  DETTAGLI TECNICI:
-  Backend:
-    - Nuovo modello OpenTab in server/prisma/schema.prisma:
-      model OpenTab {
-        id           String     @id @default(uuid())
-        userId       String
-        connectionId String
-        isActive     Boolean    @default(false)
-        sortOrder    Int        @default(0)
-        createdAt    DateTime   @default(now())
-        user         User       @relation(fields: [userId], references: [id], onDelete: Cascade)
-        connection   Connection @relation(fields: [connectionId], references: [id], onDelete: Cascade)
-        @@unique([userId, connectionId])
-      }
-    - Eseguire migrazione Prisma
-    - Creare server/src/services/tabs.service.ts:
-      - getUserTabs(userId): restituisce i tab dell'utente con i dati della
-        connessione joined (stesso formato di listConnections per la
-        ConnectionData), ordinati per sortOrder
-      - syncTabs(userId, tabs: { connectionId, isActive, sortOrder }[]):
-        operazione atomica — cancella tutti i tab esistenti dell'utente e
-        li ricrea con i nuovi dati (deleteMany + createMany in transazione)
-      - Validare che ogni connectionId esista e l'utente abbia accesso
-        (owner, shared, o team member)
-    - Creare server/src/controllers/tabs.controller.ts:
-      - getTabs: handler per GET, chiama getUserTabs
-      - syncTabs: handler per PUT, valida con Zod (array di
-        { connectionId: z.string().uuid(), isActive: z.boolean(),
-          sortOrder: z.number().int() }, max 50 tab), chiama syncTabs
-    - Creare server/src/routes/tabs.routes.ts:
-      - GET  /api/tabs     — restituisce tab persistiti con dati connessione
-      - PUT  /api/tabs     — sincronizza stato tab completo (replace all)
-      - Proteggere con authenticate middleware
-    - Montare le routes in server/src/app.ts
-  Frontend:
-    - Creare client/src/api/tabs.api.ts:
-      - fetchPersistedTabs(): GET /api/tabs
-      - syncPersistedTabs(tabs): PUT /api/tabs
-    - Modificare client/src/store/tabsStore.ts:
-      - Aggiungere funzione debounced syncToServer() (debounce ~1s) che
-        chiama syncPersistedTabs() con i tab correnti (escludendo quelli
-        con credentials definite). Mappare: connectionId, isActive basato
-        su activeTabId, sortOrder dall'indice nell'array
-      - Chiamare syncToServer() alla fine di openTab(), closeTab(),
-        setActiveTab() (il debounce batcha cambiamenti rapidi)
-      - Aggiungere restoreTabs(connections: ConnectionData[]) che:
-        1. Chiama fetchPersistedTabs() per ottenere i tab dal server
-        2. Per ogni tab persistito, cerca la connessione nell'array
-           connections (own + shared + team)
-        3. Se trovata, crea un nuovo Tab con ID fresco
-           (tab-${connId}-${Date.now()})
-        4. Se non trovata (eliminata o accesso revocato), la salta
-        5. Ripristina l'activeTabId dal tab marcato isActive
-        6. NON chiamare addRecentConnection() durante il restore
-      - Flag 'restored: boolean' (non persistito) per evitare restore
-        multipli
-      - Aggiungere clearAll() action: svuota tabs e chiama syncToServer()
-        per pulire anche il DB
-    - Modificare client/src/components/Layout/MainLayout.tsx (o creare
-      client/src/hooks/useTabRestore.ts):
-      - Dopo il fetch iniziale delle connessioni (fetchConnections in
-        connectionsStore), chiamare restoreTabs() passando tutte le
-        connessioni disponibili (own + shared + team)
-      - Il restore avviene una sola volta per sessione
-    - Modificare client/src/store/authStore.ts:
-      - In logout(): chiamare useTabsStore.getState().clearAll() per
-        svuotare i tab prima del redirect
-  File coinvolti:
-    MODIFICARE: server/prisma/schema.prisma (nuovo modello OpenTab)
-    CREARE:     server/src/services/tabs.service.ts
-    CREARE:     server/src/controllers/tabs.controller.ts
-    CREARE:     server/src/routes/tabs.routes.ts
-    MODIFICARE: server/src/app.ts (montare tabs routes)
-    CREARE:     client/src/api/tabs.api.ts
-    MODIFICARE: client/src/store/tabsStore.ts
-    MODIFICARE: client/src/components/Layout/MainLayout.tsx
-    MODIFICARE: client/src/store/authStore.ts (pulizia tab al logout)
-
 
 ------------------------------------------------------------------------------
 [ ] FOLD-048 — Context menu cartelle: Share Folder e Open All Connections
@@ -1518,7 +1423,7 @@
 
   Fase 8b — UX refactoring:
    37. UI-046    Refactoring Settings page: tabbed category layout              [COMPLETATO]
-   37b. TABS-047  Persistenza automatica tab aperti (server-side, cross-device)
+   37b. TABS-047  Persistenza automatica tab aperti (server-side, cross-device)  [IN CORSO]
    37c. FOLD-048  Context menu cartelle: Share Folder e Open All Connections
 
   Fase 8c — SSH Gateway gestito (container managed):

@@ -15,6 +15,47 @@
 ================================================================================
 
 
+------------------------------------------------------------------------------
+[~] TABS-047 — Persistenza automatica tab aperti (server-side, cross-device)
+------------------------------------------------------------------------------
+  Priorita: MEDIA
+  Dipendenze: Nessuna
+
+  DESCRIZIONE:
+  I tab aperti vengono persi al reload della pagina o al re-login. Aggiungere
+  la persistenza automatica server-side: quando l'utente ha tab aperti e
+  ricarica la pagina (o effettua il login da un altro dispositivo), tutti i
+  tab precedenti devono essere ripristinati automaticamente. La persistenza
+  e' nel database (non localStorage) per garantire il ripristino cross-device.
+  I tab con credenziali alternative (Connect As) NON devono essere persistiti
+  per ragioni di sicurezza. Al ripristino, i tab vanno validati: se una
+  connessione e' stata eliminata o l'utente ha perso l'accesso, quel tab
+  viene scartato silenziosamente.
+
+  DETTAGLI TECNICI:
+  Backend:
+    - Nuovo modello OpenTab in server/prisma/schema.prisma
+    - Creare server/src/services/tabs.service.ts
+    - Creare server/src/controllers/tabs.controller.ts
+    - Creare server/src/routes/tabs.routes.ts
+    - Montare le routes in server/src/app.ts
+  Frontend:
+    - Creare client/src/api/tabs.api.ts
+    - Modificare client/src/store/tabsStore.ts
+    - Modificare client/src/pages/DashboardPage.tsx
+    - Modificare client/src/components/Layout/MainLayout.tsx
+
+  File coinvolti:
+    MODIFICARE: server/prisma/schema.prisma (nuovo modello OpenTab)
+    CREARE:     server/src/services/tabs.service.ts
+    CREARE:     server/src/controllers/tabs.controller.ts
+    CREARE:     server/src/routes/tabs.routes.ts
+    MODIFICARE: server/src/app.ts (montare tabs routes)
+    CREARE:     client/src/api/tabs.api.ts
+    MODIFICARE: client/src/store/tabsStore.ts
+    MODIFICARE: client/src/pages/DashboardPage.tsx
+    MODIFICARE: client/src/components/Layout/MainLayout.tsx
+
 
 
 ================================================================================
