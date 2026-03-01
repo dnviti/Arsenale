@@ -1,3 +1,5 @@
+import { execSync } from 'child_process';
+import path from 'path';
 import http from 'http';
 import app from './app';
 import { config } from './config';
@@ -5,6 +7,23 @@ import { initializePassport } from './config/passport';
 import { setupSocketIO } from './socket';
 import { logger, toGuacamoleLogLevel } from './utils/logger';
 import prisma from './lib/prisma';
+
+async function runDatabaseMigrations() {
+  const serverDir = path.resolve(__dirname, '..');
+  try {
+    logger.info('Running database migrations...');
+    execSync('npx prisma migrate deploy', {
+      cwd: serverDir,
+      stdio: 'pipe',
+      env: { ...process.env },
+    });
+    logger.info('Database migrations applied successfully');
+  } catch (err) {
+    const message = err instanceof Error ? err.message : err;
+    logger.error('Database migration failed:', message);
+    throw err;
+  }
+}
 
 async function runStartupMigrations() {
   // Mark existing users without emailVerified as verified so they aren't locked out
@@ -30,6 +49,7 @@ async function runStartupMigrations() {
 }
 
 async function main() {
+  await runDatabaseMigrations();
   await runStartupMigrations();
   await initializePassport();
 
