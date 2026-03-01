@@ -5,8 +5,9 @@ import { v4 as uuidv4 } from 'uuid';
 import { SFTPWrapper } from 'ssh2';
 import { config } from '../config';
 import { AuthPayload, SftpEntry } from '../types';
-import { createSshConnection, createSftpSession, resizeSshTerminal, SshSession } from '../services/ssh.service';
+import { createSshConnection, createSshConnectionViaBastion, createSftpSession, resizeSshTerminal, SshSession } from '../services/ssh.service';
 import { getConnectionCredentials, getConnection } from '../services/connection.service';
+import { getGatewayCredentials } from '../services/gateway.service';
 
 interface ActiveTransfer {
   stream: NodeJS.ReadableStream | NodeJS.WritableStream;
@@ -103,12 +104,47 @@ export function setupSshHandler(io: Server) {
           password = creds.password;
         }
 
-        const session = await createSshConnection({
-          host: conn.host,
-          port: conn.port,
-          username,
-          password,
-        });
+        let session: SshSession;
+
+        if (conn.gateway) {
+          if (conn.gateway.type !== 'SSH_BASTION') {
+            socket.emit('session:error', {
+              message: 'Connection gateway must be of type SSH_BASTION for SSH connections',
+            });
+            return;
+          }
+
+          if (!user.tenantId) {
+            socket.emit('session:error', { message: 'Tenant context required for gateway routing' });
+            return;
+          }
+
+          const gatewayCreds = await getGatewayCredentials(user.userId, user.tenantId, conn.gateway.id);
+          if (!gatewayCreds.username || !gatewayCreds.password) {
+            socket.emit('session:error', {
+              message: 'Gateway credentials are incomplete. Please configure username and password on the gateway.',
+            });
+            return;
+          }
+
+          session = await createSshConnectionViaBastion({
+            bastionHost: conn.gateway.host,
+            bastionPort: conn.gateway.port,
+            bastionUsername: gatewayCreds.username,
+            bastionPassword: gatewayCreds.password,
+            targetHost: conn.host,
+            targetPort: conn.port,
+            targetUsername: username,
+            targetPassword: password,
+          });
+        } else {
+          session = await createSshConnection({
+            host: conn.host,
+            port: conn.port,
+            username,
+            password,
+          });
+        }
 
         currentSession = session;
         const sessionId = `${user.userId}:${socket.id}`;
@@ -129,6 +165,13 @@ export function setupSshHandler(io: Server) {
           socket.emit('session:error', { message: err.message });
           cleanup(sessionId);
         });
+
+        if (session.bastionClient) {
+          session.bastionClient.on('error', (err) => {
+            socket.emit('session:error', { message: `Bastion error: ${err.message}` });
+            cleanup(sessionId);
+          });
+        }
       } catch (err) {
         const message = err instanceof Error ? err.message : 'Connection failed';
         socket.emit('session:error', { message });
@@ -433,6 +476,9 @@ export function setupSshHandler(io: Server) {
       if (session) {
         session.stream.close();
         session.client.end();
+        if (session.bastionClient) {
+          session.bastionClient.end();
+        }
         activeSessions.delete(sessionId);
       }
       currentSession = null;
