@@ -237,40 +237,6 @@
 
 
 
-------------------------------------------------------------------------------
-[ ] VAULT-057 — Integrazione frontend ConnectionDialog con secret picker
-------------------------------------------------------------------------------
-  Priorita: MEDIA
-  Dipendenze: VAULT-055, VAULT-056
-
-  DESCRIZIONE:
-  Aggiungere al ConnectionDialog la possibilita' di selezionare un secret
-  dal vault come sorgente credenziali invece di inserire manualmente
-  username e password. L'utente puo' scegliere tra "Manual" (inserimento
-  inline come ora) e "From Keychain" (seleziona un secret esistente).
-  Per SSH, il picker mostra secrets LOGIN e SSH_KEY. Per RDP, solo LOGIN.
-  Quando un secret e' selezionato i campi username/password vengono nascosti.
-  Al salvataggio la connessione memorizza credentialSecretId. Il ConnectAsDialog
-  mostra il nome del secret quando la connessione ne usa uno dal vault.
-
-  DETTAGLI TECNICI:
-  Frontend:
-    - ConnectionDialog.tsx: aggiungere credentialMode state ('manual'|'keychain'),
-      selectedSecretId, toggle sopra campi Username/Password, integrazione
-      SecretPicker, gestione edit mode (preseleziona keychain se credentialSecretId),
-      handleSubmit invia credentialSecretId o null
-    - Nuovo SecretPicker.tsx: Autocomplete MUI con search server-side (debounce
-      300ms), filtra per tipo compatibile (LOGIN per RDP, LOGIN+SSH_KEY per SSH),
-      mostra nome/tipo icon/scope badge, chip selezione con rimuovi
-    - connections.api.ts: aggiungere credentialSecretId a ConnectionInput/Update/Data
-    - ConnectAsDialog.tsx: mostrare nome secret quando connessione usa vault
-
-  File coinvolti:
-    MODIFICARE: client/src/components/Dialogs/ConnectionDialog.tsx
-    CREARE:     client/src/components/Keychain/SecretPicker.tsx
-    MODIFICARE: client/src/api/connections.api.ts (credentialSecretId)
-    MODIFICARE: client/src/components/Dialogs/ConnectAsDialog.tsx
-
 
 ------------------------------------------------------------------------------
 [ ] VAULT-058 — External sharing: link temporanei per condivisione esterna
@@ -1622,7 +1588,7 @@
    44. VAULT-054  API routes, controller e sharing secrets  [COMPLETATO]
    45. VAULT-055  Integrazione backend connessioni con vault secrets  [COMPLETATO]
    46. VAULT-056  Frontend pagina Keychain, store e componenti  [COMPLETATO]
-   47. VAULT-057  Integrazione frontend ConnectionDialog con secret picker
+   47. VAULT-057  Integrazione frontend ConnectionDialog con secret picker  [COMPLETATO]
    48. VAULT-058  External sharing: link temporanei condivisione esterna
    49. VAULT-059  Secret versioning UI, scadenza alert, audit migliorato
 

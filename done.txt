@@ -1609,3 +1609,23 @@
     MODIFICATO: client/src/store/uiPreferencesStore.ts (keychainScopeFilter, keychainTypeFilter, keychainSortBy)
     MODIFICATO: client/src/App.tsx (/keychain route in ProtectedRoute)
     MODIFICATO: client/src/components/Layout/MainLayout.tsx (Keychain icon in AppBar)
+
+------------------------------------------------------------------------------
+[x] VAULT-057 — Integrazione frontend ConnectionDialog con secret picker
+------------------------------------------------------------------------------
+  Priorita: MEDIA
+  Dipendenze: VAULT-055, VAULT-056
+  COMPLETATO: Added vault secret picker integration to ConnectionDialog and
+    ConnectAsDialog. Created SecretPicker.tsx component (MUI Autocomplete with
+    300ms debounced server-side search, type-filtered for RDP=LOGIN, SSH=LOGIN+SSH_KEY,
+    scope badges, vault lock awareness). Modified ConnectionDialog.tsx with
+    Manual/Keychain ToggleButtonGroup — keychain mode shows SecretPicker and hides
+    username/password fields; edit mode pre-selects keychain if credentialSecretId
+    exists; submit sends credentialSecretId or clears it. Modified ConnectAsDialog.tsx
+    to show linked secret name chip with type icon in "Use saved credentials" option.
+    No changes needed to connections.api.ts (types already had credentialSecretId).
+
+  FILE COINVOLTI:
+    CREATO:     client/src/components/Keychain/SecretPicker.tsx (Autocomplete, debounced search, type filtering)
+    MODIFICATO: client/src/components/Dialogs/ConnectionDialog.tsx (credential mode toggle, SecretPicker integration)
+    MODIFICATO: client/src/components/Dialogs/ConnectAsDialog.tsx (secret name display in saved credentials option)

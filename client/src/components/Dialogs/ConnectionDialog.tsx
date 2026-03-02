@@ -3,8 +3,9 @@ import {
   Dialog, DialogTitle, DialogContent, DialogActions, Button, TextField,
   FormControl, InputLabel, Select, MenuItem, Box, Alert,
   FormControlLabel, Checkbox, Accordion, AccordionSummary, AccordionDetails, Typography,
+  ToggleButtonGroup, ToggleButton,
 } from '@mui/material';
-import { ExpandMore as ExpandMoreIcon } from '@mui/icons-material';
+import { ExpandMore as ExpandMoreIcon, Keyboard, VpnKey } from '@mui/icons-material';
 import { createConnection, updateConnection, ConnectionInput, ConnectionUpdate, ConnectionData } from '../../api/connections.api';
 import { useConnectionsStore } from '../../store/connectionsStore';
 import type { SshTerminalConfig } from '../../constants/terminalThemes';
@@ -17,6 +18,8 @@ import { useRdpSettingsStore } from '../../store/rdpSettingsStore';
 import RdpSettingsSection from '../Settings/RdpSettingsSection';
 import { useGatewayStore } from '../../store/gatewayStore';
 import { useAuthStore } from '../../store/authStore';
+import SecretPicker from '../Keychain/SecretPicker';
+import { useVaultStore } from '../../store/vaultStore';
 
 interface ConnectionDialogProps {
   open: boolean;
@@ -38,6 +41,8 @@ export default function ConnectionDialog({ open, onClose, connection, folderId, 
   const [sshTerminalConfig, setSshTerminalConfig] = useState<Partial<SshTerminalConfig>>({});
   const [rdpSettings, setRdpSettings] = useState<Partial<RdpSettings>>({});
   const [gatewayId, setGatewayId] = useState('');
+  const [credentialMode, setCredentialMode] = useState<'manual' | 'keychain'>('manual');
+  const [selectedSecretId, setSelectedSecretId] = useState<string | null>(null);
   const [error, setError] = useState('');
   const [loading, setLoading] = useState(false);
   const fetchConnections = useConnectionsStore((s) => s.fetchConnections);
@@ -46,6 +51,7 @@ export default function ConnectionDialog({ open, onClose, connection, folderId, 
   const gateways = useGatewayStore((s) => s.gateways);
   const fetchGateways = useGatewayStore((s) => s.fetchGateways);
   const hasTenant = Boolean(useAuthStore((s) => s.user)?.tenantId);
+  const vaultUnlocked = useVaultStore((s) => s.unlocked);
 
   const isEditMode = Boolean(connection);
 
@@ -67,6 +73,13 @@ export default function ConnectionDialog({ open, onClose, connection, folderId, 
       setRdpSettings(
         (connection.rdpSettings as Partial<RdpSettings>) ?? {}
       );
+      if (connection.credentialSecretId) {
+        setCredentialMode('keychain');
+        setSelectedSecretId(connection.credentialSecretId);
+      } else {
+        setCredentialMode('manual');
+        setSelectedSecretId(null);
+      }
     } else if (open && !connection) {
       setName('');
       setType('SSH');
@@ -79,6 +92,8 @@ export default function ConnectionDialog({ open, onClose, connection, folderId, 
       setGatewayId('');
       setSshTerminalConfig({});
       setRdpSettings({});
+      setCredentialMode('manual');
+      setSelectedSecretId(null);
     }
   }, [open, connection]);
 
@@ -101,7 +116,11 @@ export default function ConnectionDialog({ open, onClose, connection, folderId, 
       setError('Name and host are required');
       return;
     }
-    if (!isEditMode && !username) {
+    if (credentialMode === 'keychain' && !selectedSecretId) {
+      setError('Please select a secret from the keychain');
+      return;
+    }
+    if (credentialMode === 'manual' && !isEditMode && !username) {
       setError('Username is required for new connections');
       return;
     }
@@ -117,6 +136,7 @@ export default function ConnectionDialog({ open, onClose, connection, folderId, 
           description: description || null,
           enableDrive,
           gatewayId: gatewayId || null,
+          credentialSecretId: credentialMode === 'keychain' ? selectedSecretId : null,
           ...(type === 'SSH' && {
             sshTerminalConfig: Object.keys(sshTerminalConfig).length > 0 ? sshTerminalConfig : null,
           }),
@@ -124,8 +144,10 @@ export default function ConnectionDialog({ open, onClose, connection, folderId, 
             rdpSettings: Object.keys(rdpSettings).length > 0 ? rdpSettings : null,
           }),
         };
-        if (username) data.username = username;
-        if (password) data.password = password;
+        if (credentialMode === 'manual') {
+          if (username) data.username = username;
+          if (password) data.password = password;
+        }
         await updateConnection(connection.id, data);
       } else {
         const data: ConnectionInput = {
@@ -133,11 +155,12 @@ export default function ConnectionDialog({ open, onClose, connection, folderId, 
           type,
           host,
           port: parseInt(port, 10),
-          username,
-          password,
           description: description || undefined,
           enableDrive,
           gatewayId: gatewayId || null,
+          ...(credentialMode === 'keychain'
+            ? { credentialSecretId: selectedSecretId! }
+            : { username, password }),
           ...(folderId ? { folderId } : {}),
           ...(teamId ? { teamId } : {}),
           ...(type === 'SSH' && Object.keys(sshTerminalConfig).length > 0 && {
@@ -173,6 +196,8 @@ export default function ConnectionDialog({ open, onClose, connection, folderId, 
     setGatewayId('');
     setSshTerminalConfig({});
     setRdpSettings({});
+    setCredentialMode('manual');
+    setSelectedSecretId(null);
     setError('');
     onClose();
   };
@@ -235,22 +260,52 @@ export default function ConnectionDialog({ open, onClose, connection, folderId, 
               sx={{ width: 120 }}
             />
           </Box>
-          <TextField
-            label="Username"
-            value={username}
-            onChange={(e) => setUsername(e.target.value)}
-            fullWidth
-            required={!isEditMode}
-            placeholder={isEditMode ? 'Leave blank to keep unchanged' : undefined}
-          />
-          <TextField
-            label="Password"
-            value={password}
-            onChange={(e) => setPassword(e.target.value)}
-            type="password"
-            fullWidth
-            placeholder={isEditMode ? 'Leave blank to keep unchanged' : undefined}
-          />
+          <Box>
+            <Typography variant="caption" color="text.secondary" sx={{ mb: 0.5, display: 'block' }}>
+              Credentials
+            </Typography>
+            <ToggleButtonGroup
+              value={credentialMode}
+              exclusive
+              onChange={(_e, val) => { if (val) setCredentialMode(val); }}
+              size="small"
+              fullWidth
+            >
+              <ToggleButton value="manual">
+                <Keyboard fontSize="small" sx={{ mr: 0.5 }} /> Manual
+              </ToggleButton>
+              <ToggleButton value="keychain" disabled={!vaultUnlocked}>
+                <VpnKey fontSize="small" sx={{ mr: 0.5 }} /> From Keychain
+              </ToggleButton>
+            </ToggleButtonGroup>
+          </Box>
+          {credentialMode === 'keychain' ? (
+            <SecretPicker
+              value={selectedSecretId}
+              onChange={(id) => setSelectedSecretId(id)}
+              connectionType={type}
+              error={!selectedSecretId && !!error}
+            />
+          ) : (
+            <>
+              <TextField
+                label="Username"
+                value={username}
+                onChange={(e) => setUsername(e.target.value)}
+                fullWidth
+                required={!isEditMode}
+                placeholder={isEditMode ? 'Leave blank to keep unchanged' : undefined}
+              />
+              <TextField
+                label="Password"
+                value={password}
+                onChange={(e) => setPassword(e.target.value)}
+                type="password"
+                fullWidth
+                placeholder={isEditMode ? 'Leave blank to keep unchanged' : undefined}
+              />
+            </>
+          )}
           <TextField
             label="Description (optional)"
             value={description}
