@@ -1,7 +1,33 @@
+import crypto from 'crypto';
 import dotenv from 'dotenv';
 import path from 'path';
 
 dotenv.config({ path: path.resolve(__dirname, '../../.env') });
+
+function resolveServerEncryptionKey(): Buffer {
+  const envKey = process.env.SERVER_ENCRYPTION_KEY?.trim();
+  if (envKey && envKey.length > 0) {
+    if (!/^[0-9a-fA-F]{64}$/.test(envKey)) {
+      throw new Error(
+        `SERVER_ENCRYPTION_KEY must be exactly 64 hex chars (32 bytes). ` +
+        `Got ${envKey.length} chars. Generate one with: ` +
+        `node -e "console.log(require('crypto').randomBytes(32).toString('hex'))"`,
+      );
+    }
+    return Buffer.from(envKey, 'hex');
+  }
+  if (process.env.NODE_ENV === 'production') {
+    throw new Error(
+      'SERVER_ENCRYPTION_KEY is required in production. Generate one with: ' +
+      'node -e "console.log(require(\'crypto\').randomBytes(32).toString(\'hex\'))"',
+    );
+  }
+  console.warn(
+    '[config] SERVER_ENCRYPTION_KEY not set — auto-generating for development. ' +
+    'SSH key pairs will not survive server restarts.',
+  );
+  return crypto.randomBytes(32);
+}
 
 export const config = {
   port: parseInt(process.env.PORT || '3001', 10),
@@ -12,6 +38,7 @@ export const config = {
   guacdHost: process.env.GUACD_HOST || 'localhost',
   guacdPort: parseInt(process.env.GUACD_PORT || '4822', 10),
   guacamoleSecret: process.env.GUACAMOLE_SECRET || 'dev-guac-secret',
+  serverEncryptionKey: resolveServerEncryptionKey(),
   vaultTtlMinutes: parseInt(process.env.VAULT_TTL_MINUTES || '30', 10),
   nodeEnv: process.env.NODE_ENV || 'development',
   logLevel: (process.env.LOG_LEVEL || 'info') as 'error' | 'warn' | 'info' | 'debug',

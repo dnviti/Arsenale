@@ -1227,6 +1227,24 @@
 
 
 ------------------------------------------------------------------------------
+[x] SSHGW-049 — Container image SSH Gateway gestito (Alpine + OpenSSH)
+------------------------------------------------------------------------------
+  Priorita: ALTA
+  Dipendenze: Nessuna
+  COMPLETATO: Alpine-based SSH gateway container (Dockerfile, entrypoint.sh, sshd_config) with tunnel-only user, pubkey auth, TCP forwarding only, no shell access. CI/CD job in docker-build.yml for GHCR. Services added to all docker-compose files (dev/base/prod). Env vars SSH_GATEWAY_PORT and SSH_AUTHORIZED_KEYS in .env.example.
+
+  FILE COINVOLTI:
+    CREATO:     ssh-gateway/Dockerfile
+    CREATO:     ssh-gateway/entrypoint.sh
+    CREATO:     ssh-gateway/sshd_config
+    MODIFICATO: .github/workflows/docker-build.yml (job build-ssh-gateway)
+    MODIFICATO: docker-compose.dev.yml (servizio ssh-gateway)
+    MODIFICATO: docker-compose.yml (servizio ssh-gateway)
+    MODIFICATO: docker-compose.prod.yml (servizio ssh-gateway)
+    MODIFICATO: .env.example (SSH_GATEWAY_PORT, SSH_AUTHORIZED_KEYS)
+
+
+------------------------------------------------------------------------------
 [x] UI-046 — Refactoring Settings page: tabbed category layout
 ------------------------------------------------------------------------------
   Priorita: MEDIA

@@ -26,9 +26,10 @@ model Tenant {
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 
-  users    User[]
-  teams    Team[]
-  gateways Gateway[]
+  users      User[]
+  teams      Team[]
+  gateways   Gateway[]
+  sshKeyPair SshKeyPair?
 }
 
 model Team {
@@ -222,6 +223,21 @@ model Gateway {
   @@index([tenantId, type, isDefault])
 }
 
+model SshKeyPair {
+  id                  String   @id @default(uuid())
+  tenantId            String   @unique
+  encryptedPrivateKey String
+  privateKeyIV        String
+  privateKeyTag       String
+  publicKey           String
+  fingerprint         String
+  algorithm           String   @default("ed25519")
+  createdAt           DateTime @default(now())
+  updatedAt           DateTime @updatedAt
+
+  tenant Tenant @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+}
+
 model SharedConnection {
   id               String     @id @default(uuid())
   connectionId     String
@@ -303,6 +319,8 @@ enum AuditAction {
   GATEWAY_CREATE
   GATEWAY_UPDATE
   GATEWAY_DELETE
+  SSH_KEY_GENERATE
+  SSH_KEY_ROTATE
   BATCH_SHARE
 }
 

@@ -44,6 +44,15 @@ export interface TestResult {
   error: string | null;
 }
 
+export interface SshKeyPairData {
+  id: string;
+  publicKey: string;
+  fingerprint: string;
+  algorithm: string;
+  createdAt: string;
+  updatedAt: string;
+}
+
 export async function listGateways(): Promise<GatewayData[]> {
   const res = await api.get('/gateways');
   return res.data;
@@ -66,5 +75,25 @@ export async function deleteGateway(id: string): Promise<{ deleted: boolean }> {
 
 export async function testGateway(id: string): Promise<TestResult> {
   const res = await api.post(`/gateways/${id}/test`);
+  return res.data;
+}
+
+export async function getSshKeyPair(): Promise<SshKeyPairData> {
+  const res = await api.get('/gateways/ssh-keypair');
+  return res.data;
+}
+
+export async function generateSshKeyPair(): Promise<SshKeyPairData> {
+  const res = await api.post('/gateways/ssh-keypair');
+  return res.data;
+}
+
+export async function rotateSshKeyPair(): Promise<SshKeyPairData> {
+  const res = await api.post('/gateways/ssh-keypair/rotate');
+  return res.data;
+}
+
+export async function downloadSshPrivateKey(): Promise<string> {
+  const res = await api.get('/gateways/ssh-keypair/private', { responseType: 'text' });
   return res.data;
 }

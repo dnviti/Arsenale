@@ -2,6 +2,7 @@ import { Response, NextFunction } from 'express';
 import { z } from 'zod';
 import { AuthRequest } from '../types';
 import * as gatewayService from '../services/gateway.service';
+import * as sshKeyService from '../services/sshkey.service';
 import * as auditService from '../services/audit.service';
 import { AppError } from '../middleware/error.middleware';
 
@@ -110,6 +111,61 @@ export async function testConnectivity(req: AuthRequest, res: Response, next: Ne
       gatewayId,
     );
     res.json(result);
+  } catch (err) {
+    next(err);
+  }
+}
+
+export async function generateSshKeyPair(req: AuthRequest, res: Response, next: NextFunction) {
+  try {
+    const result = await sshKeyService.generateKeyPair(req.user!.tenantId!);
+    auditService.log({
+      userId: req.user!.userId,
+      action: 'SSH_KEY_GENERATE',
+      targetType: 'SshKeyPair',
+      targetId: result.id,
+      ipAddress: req.ip,
+    });
+    res.status(201).json(result);
+  } catch (err) {
+    next(err);
+  }
+}
+
+export async function getSshPublicKey(req: AuthRequest, res: Response, next: NextFunction) {
+  try {
+    const result = await sshKeyService.getPublicKey(req.user!.tenantId!);
+    if (!result) {
+      return next(new AppError('No SSH key pair found for this tenant', 404));
+    }
+    res.json(result);
+  } catch (err) {
+    next(err);
+  }
+}
+
+export async function rotateSshKeyPair(req: AuthRequest, res: Response, next: NextFunction) {
+  try {
+    const result = await sshKeyService.rotateKeyPair(req.user!.tenantId!);
+    auditService.log({
+      userId: req.user!.userId,
+      action: 'SSH_KEY_ROTATE',
+      targetType: 'SshKeyPair',
+      targetId: result.id,
+      ipAddress: req.ip,
+    });
+    res.json(result);
+  } catch (err) {
+    next(err);
+  }
+}
+
+export async function downloadSshPrivateKey(req: AuthRequest, res: Response, next: NextFunction) {
+  try {
+    const privateKeyBuf = await sshKeyService.getPrivateKey(req.user!.tenantId!);
+    res.setHeader('Content-Type', 'text/plain');
+    res.setHeader('Content-Disposition', 'attachment; filename="tenant_ed25519"');
+    res.send(privateKeyBuf.toString('utf8'));
   } catch (err) {
     next(err);
   }

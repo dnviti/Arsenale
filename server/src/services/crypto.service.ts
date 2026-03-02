@@ -98,6 +98,16 @@ export function decryptMasterKey(
   return Buffer.from(hex, 'hex');
 }
 
+// Server-level encryption (for data the server must decrypt autonomously, e.g. SSH key pairs)
+
+export function encryptWithServerKey(plaintext: string): EncryptedField {
+  return encrypt(plaintext, config.serverEncryptionKey);
+}
+
+export function decryptWithServerKey(field: EncryptedField): string {
+  return decrypt(field, config.serverEncryptionKey);
+}
+
 // Vault session management
 
 export function storeVaultSession(userId: string, masterKey: Buffer): void {

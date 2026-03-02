@@ -1,24 +1,33 @@
 import { create } from 'zustand';
 import {
-  GatewayData, GatewayInput, GatewayUpdate,
+  GatewayData, GatewayInput, GatewayUpdate, SshKeyPairData,
   listGateways, createGateway as createGatewayApi,
   updateGateway as updateGatewayApi, deleteGateway as deleteGatewayApi,
+  getSshKeyPair, generateSshKeyPair as generateSshKeyPairApi,
+  rotateSshKeyPair as rotateSshKeyPairApi,
 } from '../api/gateway.api';
 
 interface GatewayState {
   gateways: GatewayData[];
   loading: boolean;
+  sshKeyPair: SshKeyPairData | null;
+  sshKeyLoading: boolean;
 
   fetchGateways: () => Promise<void>;
   createGateway: (data: GatewayInput) => Promise<GatewayData>;
   updateGateway: (id: string, data: GatewayUpdate) => Promise<void>;
   deleteGateway: (id: string) => Promise<void>;
+  fetchSshKeyPair: () => Promise<void>;
+  generateSshKeyPair: () => Promise<SshKeyPairData>;
+  rotateSshKeyPair: () => Promise<SshKeyPairData>;
   reset: () => void;
 }
 
-export const useGatewayStore = create<GatewayState>((set, get) => ({
+export const useGatewayStore = create<GatewayState>((set) => ({
   gateways: [],
   loading: false,
+  sshKeyPair: null,
+  sshKeyLoading: false,
 
   fetchGateways: async () => {
     set({ loading: true });
@@ -32,7 +41,8 @@ export const useGatewayStore = create<GatewayState>((set, get) => ({
 
   createGateway: async (data) => {
     const gateway = await createGatewayApi(data);
-    await get().fetchGateways();
+    const gateways = await listGateways();
+    set({ gateways });
     return gateway;
   },
 
@@ -50,5 +60,27 @@ export const useGatewayStore = create<GatewayState>((set, get) => ({
     }));
   },
 
-  reset: () => set({ gateways: [], loading: false }),
+  fetchSshKeyPair: async () => {
+    set({ sshKeyLoading: true });
+    try {
+      const sshKeyPair = await getSshKeyPair();
+      set({ sshKeyPair, sshKeyLoading: false });
+    } catch {
+      set({ sshKeyPair: null, sshKeyLoading: false });
+    }
+  },
+
+  generateSshKeyPair: async () => {
+    const sshKeyPair = await generateSshKeyPairApi();
+    set({ sshKeyPair });
+    return sshKeyPair;
+  },
+
+  rotateSshKeyPair: async () => {
+    const sshKeyPair = await rotateSshKeyPairApi();
+    set({ sshKeyPair });
+    return sshKeyPair;
+  },
+
+  reset: () => set({ gateways: [], loading: false, sshKeyPair: null, sshKeyLoading: false }),
 }));
