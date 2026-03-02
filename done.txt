@@ -1470,3 +1470,13 @@
     MODIFICATO: server/src/controllers/audit.controller.ts (LOGIN_FAILURE in VALID_ACTIONS)
     MODIFICATO: client/src/api/audit.api.ts (LOGIN_FAILURE in AuditAction type)
     MODIFICATO: client/src/components/Dialogs/AuditLogDialog.tsx (label, color, filter)
+
+------------------------------------------------------------------------------
+[x] ZT-040 — Lock vault al logout
+------------------------------------------------------------------------------
+  Priorita: ALTA
+  Dipendenze: Nessuna
+  COMPLETATO: Added lockVault(userId) call in auth.service.ts logout() function. After deleting the refresh token, the vault is immediately locked — the master key buffer is zeroed out (fill(0)) and removed from the in-memory store. All team vault sessions for the user are also cleared via lockUserTeamVaults(). This eliminates the 30-minute TTL exposure window where the master key remained in memory after logout.
+
+  FILE COINVOLTI:
+    MODIFICATO: server/src/services/auth.service.ts (import lockVault, call in logout())

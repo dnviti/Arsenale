@@ -61,30 +61,6 @@
 
 
 
-------------------------------------------------------------------------------
-[ ] ZT-040 — Lock vault al logout
-------------------------------------------------------------------------------
-  Priorita: ALTA
-  Dipendenze: Nessuna
-
-  DESCRIZIONE:
-  Bloccare la vault (rimuovere la master key dalla memoria) quando l'utente
-  effettua il logout. Attualmente la funzione logout() cancella solo il
-  refresh token dal DB, ma la master key resta in memoria fino alla scadenza
-  del TTL (default 30 minuti), creando una finestra di esposizione.
-
-  DETTAGLI TECNICI:
-  Backend:
-    - In auth.service.ts logout(): dopo aver cancellato il refresh token,
-      chiamare la funzione di lock vault dal crypto.service.ts
-    - Verificare che deleteVaultSession() o lockVault() azzeri il buffer
-      della master key (fill(0)) prima di rimuoverlo dalla Map
-    - Considerare anche il lock della team vault se presente
-    - Loggare VAULT_LOCK nell'audit (gia' presente nell'enum)
-  File coinvolti:
-    - server/src/services/auth.service.ts (logout function)
-    - server/src/services/crypto.service.ts (importare lockVault)
-
 
 ------------------------------------------------------------------------------
   TIER 2 — Core Zero Trust

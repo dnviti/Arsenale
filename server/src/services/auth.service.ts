@@ -14,6 +14,7 @@ import {
   encryptMasterKey,
   decryptMasterKey,
   storeVaultSession,
+  lockVault,
 } from './crypto.service';
 import { verifyCode as verifyTotpCode } from './totp.service';
 import { sendVerificationEmail } from './email';
@@ -356,6 +357,11 @@ export async function logout(refreshToken: string): Promise<string | null> {
     select: { userId: true },
   });
   await prisma.refreshToken.deleteMany({ where: { token: refreshToken } });
+
+  if (stored?.userId) {
+    lockVault(stored.userId);
+  }
+
   return stored?.userId ?? null;
 }
 
