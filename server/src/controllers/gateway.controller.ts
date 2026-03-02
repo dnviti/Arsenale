@@ -19,6 +19,7 @@ const createSchema = z.object({
   apiPort: z.number().int().min(1).max(65535).optional(),
   monitoringEnabled: z.boolean().optional(),
   monitorIntervalMs: z.number().int().min(1000).max(3600000).optional(),
+  inactivityTimeoutSeconds: z.number().int().min(60).max(86400).optional(),
 });
 
 const rotationPolicySchema = z.object({
@@ -39,6 +40,7 @@ const updateSchema = z.object({
   apiPort: z.number().int().min(1).max(65535).nullable().optional(),
   monitoringEnabled: z.boolean().optional(),
   monitorIntervalMs: z.number().int().min(1000).max(3600000).optional(),
+  inactivityTimeoutSeconds: z.number().int().min(60).max(86400).optional(),
 });
 
 export async function list(req: AuthRequest, res: Response, next: NextFunction) {

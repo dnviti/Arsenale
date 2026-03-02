@@ -213,6 +213,12 @@ export default function SshTerminal({ connectionId, tabId: _tabId, credentials, 
       terminal.write('\r\n\x1b[33mConnection closed.\x1b[0m\r\n');
     });
 
+    socket.on('session:timeout', () => {
+      terminal.write('\r\n\x1b[31mSession expired due to inactivity.\x1b[0m\r\n');
+      setStatus('error');
+      setError('Session expired due to inactivity');
+    });
+
     socket.on('connect_error', (err) => {
       setStatus('error');
       setError(err.message);

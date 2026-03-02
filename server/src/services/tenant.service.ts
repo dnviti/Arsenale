@@ -69,6 +69,7 @@ export async function getTenant(tenantId: string) {
     id: tenant.id,
     name: tenant.name,
     slug: tenant.slug,
+    defaultSessionTimeoutSeconds: tenant.defaultSessionTimeoutSeconds,
     userCount: tenant._count.users,
     teamCount: tenant._count.teams,
     createdAt: tenant.createdAt,
@@ -76,12 +77,15 @@ export async function getTenant(tenantId: string) {
   };
 }
 
-export async function updateTenant(tenantId: string, data: { name?: string }) {
+export async function updateTenant(tenantId: string, data: { name?: string; defaultSessionTimeoutSeconds?: number }) {
   const updateData: Record<string, unknown> = {};
 
   if (data.name !== undefined) {
     updateData.name = data.name;
     updateData.slug = await ensureUniqueSlug(generateSlug(data.name), tenantId);
+  }
+  if (data.defaultSessionTimeoutSeconds !== undefined) {
+    updateData.defaultSessionTimeoutSeconds = data.defaultSessionTimeoutSeconds;
   }
 
   if (Object.keys(updateData).length === 0) {
@@ -97,6 +101,7 @@ export async function updateTenant(tenantId: string, data: { name?: string }) {
     id: tenant.id,
     name: tenant.name,
     slug: tenant.slug,
+    defaultSessionTimeoutSeconds: tenant.defaultSessionTimeoutSeconds,
     updatedAt: tenant.updatedAt,
   };
 }

@@ -123,7 +123,14 @@ export default function RdpViewer({ connectionId, tabId: _tabId, isActive = true
               if (sessionIdRef.current && !heartbeatInterval) {
                 heartbeatInterval = setInterval(() => {
                   if (sessionIdRef.current) {
-                    api.post(`/sessions/rdp/${sessionIdRef.current}/heartbeat`).catch(() => {});
+                    api.post(`/sessions/rdp/${sessionIdRef.current}/heartbeat`).catch((err) => {
+                      if (err?.response?.status === 410) {
+                        setStatus('error');
+                        setError('Session expired due to inactivity. Please reconnect.');
+                        client.disconnect();
+                        if (heartbeatInterval) { clearInterval(heartbeatInterval); heartbeatInterval = null; }
+                      }
+                    });
                   }
                 }, 30_000);
               }

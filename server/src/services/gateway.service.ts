@@ -19,6 +19,7 @@ export interface CreateGatewayInput {
   apiPort?: number;
   monitoringEnabled?: boolean;
   monitorIntervalMs?: number;
+  inactivityTimeoutSeconds?: number;
 }
 
 export interface UpdateGatewayInput {
@@ -33,6 +34,7 @@ export interface UpdateGatewayInput {
   apiPort?: number | null;
   monitoringEnabled?: boolean;
   monitorIntervalMs?: number;
+  inactivityTimeoutSeconds?: number;
 }
 
 // Fields returned for public gateway responses (no credential columns)
@@ -50,6 +52,7 @@ const publicSelect = {
   updatedAt: true,
   encryptedSshKey: true,
   apiPort: true,
+  inactivityTimeoutSeconds: true,
   monitoringEnabled: true,
   monitorIntervalMs: true,
   lastHealthStatus: true,
@@ -146,6 +149,7 @@ export async function createGateway(
         apiPort: input.type === 'MANAGED_SSH' ? (input.apiPort ?? null) : null,
         monitoringEnabled: input.monitoringEnabled ?? true,
         monitorIntervalMs: input.monitorIntervalMs ?? 5000,
+        inactivityTimeoutSeconds: input.inactivityTimeoutSeconds ?? 3600,
         tenantId,
         createdById: userId,
         ...encData,
@@ -182,6 +186,7 @@ export async function updateGateway(
   if (input.apiPort !== undefined) data.apiPort = input.apiPort;
   if (input.monitoringEnabled !== undefined) data.monitoringEnabled = input.monitoringEnabled;
   if (input.monitorIntervalMs !== undefined) data.monitorIntervalMs = input.monitorIntervalMs;
+  if (input.inactivityTimeoutSeconds !== undefined) data.inactivityTimeoutSeconds = input.inactivityTimeoutSeconds;
 
   if (input.username !== undefined || input.password !== undefined || input.sshPrivateKey !== undefined) {
     if (existing.type !== 'SSH_BASTION') {

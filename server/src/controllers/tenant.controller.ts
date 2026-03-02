@@ -13,6 +13,7 @@ const createTenantSchema = z.object({
 
 const updateTenantSchema = z.object({
   name: z.string().min(2).max(100).optional(),
+  defaultSessionTimeoutSeconds: z.number().int().min(60).max(86400).optional(),
 });
 
 const inviteUserSchema = z.object({

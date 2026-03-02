@@ -13,6 +13,7 @@ import { cleanupExpiredShares } from './services/externalShare.service';
 import { checkExpiringSecrets } from './services/secretExpiry.service';
 import { markServerReady } from './services/health.service';
 import * as sessionService from './services/session.service';
+import { initSessionCleanup, checkAndCloseInactiveSessions } from './services/sessionCleanup.service';
 
 async function runDatabaseMigrations() {
   const serverDir = path.resolve(__dirname, '..');
@@ -69,7 +70,10 @@ async function main() {
   const server = http.createServer(app);
 
   // Setup Socket.io for SSH
-  setupSocketIO(server);
+  const io = setupSocketIO(server);
+
+  // Initialize session cleanup with Socket.IO reference
+  initSessionCleanup(io);
 
   // Start scheduled jobs (SSH key rotation cron)
   startKeyRotationJob();
@@ -97,6 +101,15 @@ async function main() {
       if (count > 0) logger.info(`Marked ${count} session(s) as idle`);
     }).catch((err) => {
       logger.error('Failed to mark idle sessions:', err);
+    });
+  }, 60 * 1000);
+
+  // Close inactive sessions every minute
+  setInterval(() => {
+    checkAndCloseInactiveSessions().then((count) => {
+      if (count > 0) logger.info(`Session cleanup: closed ${count} inactive session(s)`);
+    }).catch((err) => {
+      logger.error('Session inactivity cleanup failed:', err);
     });
   }, 60 * 1000);
 
@@ -154,6 +167,7 @@ async function main() {
         try {
           const token = clientConnection.connectionSettings?.token;
           if (token) {
+            // eslint-disable-next-line @typescript-eslint/no-require-imports
             const crypto = require('crypto');
             const hash = crypto.createHash('sha256').update(token).digest('hex');
             sessionService.endSessionByGuacTokenHash(hash).catch((err: unknown) => {

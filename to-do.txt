@@ -247,96 +247,6 @@
 
 
 
-------------------------------------------------------------------------------
-[ ] ORCH-061 — Cleanup sessioni inattive con timeout configurabile
-------------------------------------------------------------------------------
-  Priorita: ALTA
-  Dipendenze: ORCH-060
-
-  DESCRIZIONE:
-  Implementare la chiusura automatica delle sessioni inattive dopo un
-  periodo di timeout configurabile. Il timeout predefinito e' 1 ora (3600
-  secondi) ma puo' essere modificato a livello di gateway o a livello
-  tenant tramite le impostazioni. Un cron job server-side controlla
-  periodicamente le sessioni il cui lastActivityAt supera il timeout e le
-  chiude automaticamente, liberando risorse.
-
-  Per le sessioni SSH, la chiusura implica trovare il socket attivo e
-  disconnetterlo, il che attiva la cleanup chain gia' esistente
-  (stream.close -> client.end -> bastionClient.end). Per le sessioni RDP,
-  non esiste un socket server-side da chiudere (il traffico passa
-  direttamente da guacamole-lite a guacd), quindi la sessione viene solo
-  marcata come CLOSED nel DB. Il client RDP, al prossimo heartbeat, riceve
-  un 404 e mostra un messaggio "Session expired due to inactivity".
-
-  Un nuovo AuditAction SESSION_TIMEOUT registra ogni chiusura automatica
-  con dettagli (durata, ultimo heartbeat). L'admin puo' vedere le sessioni
-  scadute nel log audit e configurare il timeout dalla pagina gateway.
-
-  DETTAGLI TECNICI:
-  Prisma (server/prisma/schema.prisma):
-    - Aggiungere al modello Gateway:
-        inactivityTimeoutSeconds  Int  @default(3600)
-    - Aggiungere al modello Tenant:
-        defaultSessionTimeoutSeconds  Int  @default(3600)
-    - Eseguire migrazione Prisma
-
-  Servizio (server/src/services/sessionCleanup.service.ts):
-    - checkAndCloseInactiveSessions(): Promise<number>
-        1. Query sessioni ACTIVE/IDLE con lastActivityAt scaduto:
-           - Se la sessione ha un gatewayId, usa gateway.inactivityTimeoutSeconds
-           - Altrimenti, usa tenant.defaultSessionTimeoutSeconds
-           - Fallback: 3600 secondi
-        2. Per ogni sessione scaduta:
-           a. Se SSH: cercare il socketId nella mappa Socket.IO del
-              namespace /ssh, chiamare socket.disconnect(true)
-              (attiva la cleanup chain)
-           b. Marcare come CLOSED con endedAt = now()
-           c. Audit log SESSION_TIMEOUT
-        3. Restituire il numero di sessioni chiuse
-    - Accesso a Socket.IO: il server HTTP viene passato al servizio
-      durante l'inizializzazione
-      (pattern: export function initSessionCleanup(io: Server))
-
-  Cron job (server/src/index.ts):
-    - Dopo setupSocketIO(), avviare un setInterval:
-        setInterval(
-          () => sessionCleanupService.checkAndCloseInactiveSessions(),
-          60_000)  // ogni 60 secondi
-    - Loggare il risultato:
-        "Session cleanup: closed N inactive session(s)"
-
-  Integrazione Socket.IO (ssh.handler.ts):
-    - Esportare la mappa dei socket attivi (o fornire un getter):
-        export function getSocketBySocketId(namespace, socketId):
-          Socket | null
-    - Il cleanup service usa questa funzione per forzare la disconnessione
-
-  Gateway controller e routes:
-    - Aggiornare updateSchema Zod per accettare inactivityTimeoutSeconds:
-        z.number().int().min(60).max(86400).optional()  // 1 min - 24 ore
-    - gateway.service.ts: updateGateway() supporta il nuovo campo
-    - Tenant settings: aggiungere endpoint per modificare
-      defaultSessionTimeoutSeconds (OWNER/ADMIN)
-
-  Frontend:
-    - GatewayDialog.tsx: nuovo campo "Session Inactivity Timeout" (slider
-      o input numerico, unita' minuti/ore, default 60 min)
-    - RDP heartbeat handler: se heartbeat restituisce 404 o errore
-      specifico, mostrare dialog "Session expired due to inactivity"
-      e chiudere il tab
-    - Admin Settings (tenant): campo timeout default sessioni
-
-  File coinvolti:
-    MODIFICARE: server/prisma/schema.prisma (Gateway.inactivityTimeoutSeconds,
-                Tenant.defaultSessionTimeoutSeconds)
-    CREARE:     server/src/services/sessionCleanup.service.ts
-    MODIFICARE: server/src/index.ts (avvio cron job cleanup)
-    MODIFICARE: server/src/socket/ssh.handler.ts (export socket getter)
-    MODIFICARE: server/src/controllers/gateway.controller.ts (timeout Zod)
-    MODIFICARE: server/src/services/gateway.service.ts (timeout field)
-    MODIFICARE: client/src/components/gateway/GatewayDialog.tsx (timeout input)
-    MODIFICARE: client/src/components/RdpViewer.tsx (heartbeat 404 handling)
 
 
 ------------------------------------------------------------------------------
@@ -1578,7 +1488,7 @@
 
   Fase 8e — Gateway Orchestration e Auto-Scaling:
    50. ORCH-060  Session tracking persistente e monitoraggio sessioni attive  [COMPLETATO]
-   51. ORCH-061  Cleanup sessioni inattive con timeout configurabile
+   51. ORCH-061  Cleanup sessioni inattive con timeout configurabile  [COMPLETATO]
    52. ORCH-062  Container orchestrator abstraction layer (Docker + K8s)
    53. ORCH-063  Deploy e lifecycle management gateway containers
    54. ORCH-064  Auto-scaling gateway basato su sessioni attive

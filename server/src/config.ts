@@ -117,4 +117,5 @@ export const config = {
   sessionHeartbeatIntervalMs: parseInt(process.env.SESSION_HEARTBEAT_INTERVAL_MS || String(30 * 1000), 10),
   sessionIdleThresholdMinutes: parseInt(process.env.SESSION_IDLE_THRESHOLD_MINUTES || '5', 10),
   sessionCleanupRetentionDays: parseInt(process.env.SESSION_CLEANUP_RETENTION_DAYS || '30', 10),
+  sessionInactivityTimeoutSeconds: parseInt(process.env.SESSION_INACTIVITY_TIMEOUT_SECONDS || '3600', 10),
 };

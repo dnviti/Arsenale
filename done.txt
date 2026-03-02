@@ -1435,6 +1435,44 @@
     CREATO:     client/src/api/sessions.api.ts
 
 
+------------------------------------------------------------------------------
+[x] ORCH-061 — Cleanup sessioni inattive con timeout configurabile
+------------------------------------------------------------------------------
+  Priorita: ALTA
+  Dipendenze: ORCH-060
+  COMPLETATO: Implemented configurable inactivity timeout with 3-tier resolution
+    (gateway > tenant > system fallback). New sessionCleanup.service runs every 60s,
+    force-disconnects expired SSH sockets, marks expired RDP sessions as CLOSED.
+    Gateway dialog and tenant settings expose timeout config. RDP heartbeat detects
+    410 response, SSH terminal handles session:timeout event.
+
+  DESCRIZIONE:
+  Implementare la chiusura automatica delle sessioni inattive dopo un
+  periodo di timeout configurabile. Il timeout predefinito e' 1 ora (3600
+  secondi) ma puo' essere modificato a livello di gateway o a livello
+  tenant tramite le impostazioni. Un cron job server-side controlla
+  periodicamente le sessioni il cui lastActivityAt supera il timeout e le
+  chiude automaticamente, liberando risorse.
+
+  File coinvolti:
+    MODIFICATO: server/prisma/schema.prisma (Gateway.inactivityTimeoutSeconds,
+                Tenant.defaultSessionTimeoutSeconds)
+    CREATO:     server/src/services/sessionCleanup.service.ts
+    MODIFICATO: server/src/index.ts (avvio cron job cleanup)
+    MODIFICATO: server/src/config.ts (sessionInactivityTimeoutSeconds)
+    MODIFICATO: server/src/controllers/gateway.controller.ts (timeout Zod)
+    MODIFICATO: server/src/services/gateway.service.ts (timeout field)
+    MODIFICATO: server/src/controllers/tenant.controller.ts (timeout Zod)
+    MODIFICATO: server/src/services/tenant.service.ts (timeout field)
+    MODIFICATO: client/src/api/gateway.api.ts (inactivityTimeoutSeconds)
+    MODIFICATO: client/src/api/tenant.api.ts (defaultSessionTimeoutSeconds)
+    MODIFICATO: client/src/store/tenantStore.ts (updateTenant type)
+    MODIFICATO: client/src/components/gateway/GatewayDialog.tsx (timeout input)
+    MODIFICATO: client/src/components/Settings/TenantSection.tsx (timeout field)
+    MODIFICATO: client/src/components/RDP/RdpViewer.tsx (heartbeat 410 handling)
+    MODIFICATO: client/src/components/Terminal/SshTerminal.tsx (session:timeout event)
+
+
 ================================================================================
   SEZIONE E — ZERO TRUST HARDENING
 ================================================================================

@@ -42,6 +42,9 @@ export default function TenantSection({ onNavigateToTab }: TenantSectionProps) {
   const [deleting, setDeleting] = useState(false);
   const [removeTarget, setRemoveTarget] = useState<{ id: string; name: string } | null>(null);
   const [error, setError] = useState('');
+  const [sessionTimeout, setSessionTimeout] = useState('');
+  const [savingTimeout, setSavingTimeout] = useState(false);
+  const [timeoutError, setTimeoutError] = useState('');
 
   const tenantRole = user?.tenantRole;
   const isAdmin = tenantRole === 'OWNER' || tenantRole === 'ADMIN';
@@ -54,6 +57,7 @@ export default function TenantSection({ onNavigateToTab }: TenantSectionProps) {
   useEffect(() => {
     if (tenant) {
       setEditName(tenant.name);
+      setSessionTimeout(String(Math.floor(tenant.defaultSessionTimeoutSeconds / 60)));
       fetchUsers();
     }
   }, [tenant, fetchUsers]);
@@ -74,6 +78,26 @@ export default function TenantSection({ onNavigateToTab }: TenantSectionProps) {
       );
     } finally {
       setSavingName(false);
+    }
+  };
+
+  const handleSaveTimeout = async () => {
+    const minutes = parseInt(sessionTimeout, 10);
+    if (isNaN(minutes) || minutes < 1 || minutes > 1440) {
+      setTimeoutError('Must be between 1 and 1440 minutes');
+      return;
+    }
+    setTimeoutError('');
+    setSavingTimeout(true);
+    try {
+      await updateTenant({ defaultSessionTimeoutSeconds: minutes * 60 });
+    } catch (err: unknown) {
+      setTimeoutError(
+        (err as { response?: { data?: { error?: string } } })?.response?.data?.error ||
+        'Failed to update timeout'
+      );
+    } finally {
+      setSavingTimeout(false);
     }
   };
 
@@ -218,6 +242,26 @@ export default function TenantSection({ onNavigateToTab }: TenantSectionProps) {
               <Chip label={`${tenant.userCount} members`} size="small" />
               <Chip label={`${tenant.teamCount} teams`} size="small" />
             </Stack>
+            {isAdmin && (
+              <Box sx={{ display: 'flex', gap: 2, alignItems: 'flex-start', mt: 1 }}>
+                <TextField
+                  label="Default Session Timeout (minutes)"
+                  value={sessionTimeout}
+                  onChange={(e) => { setSessionTimeout(e.target.value); setTimeoutError(''); }}
+                  type="number"
+                  size="small"
+                  fullWidth
+                  error={!!timeoutError}
+                  helperText={timeoutError || 'Idle sessions will be closed after this time (1-1440 min)'}
+                  inputProps={{ min: 1, max: 1440 }}
+                />
+                {parseInt(sessionTimeout, 10) * 60 !== tenant.defaultSessionTimeoutSeconds && (
+                  <Button variant="contained" size="small" onClick={handleSaveTimeout} disabled={savingTimeout} sx={{ mt: 0.5 }}>
+                    {savingTimeout ? 'Saving...' : 'Save'}
+                  </Button>
+                )}
+              </Box>
+            )}
           </Stack>
 
           {isOwner && (

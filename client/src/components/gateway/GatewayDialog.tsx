@@ -25,6 +25,7 @@ export default function GatewayDialog({ open, onClose, gateway }: GatewayDialogP
   const [apiPort, setApiPort] = useState('');
   const [monitoringEnabled, setMonitoringEnabled] = useState(true);
   const [monitorIntervalMs, setMonitorIntervalMs] = useState('5000');
+  const [inactivityTimeout, setInactivityTimeout] = useState('60');
   const [error, setError] = useState('');
   const [loading, setLoading] = useState(false);
   const createGateway = useGatewayStore((s) => s.createGateway);
@@ -46,6 +47,7 @@ export default function GatewayDialog({ open, onClose, gateway }: GatewayDialogP
       setApiPort(gateway.apiPort ? String(gateway.apiPort) : '');
       setMonitoringEnabled(gateway.monitoringEnabled);
       setMonitorIntervalMs(String(gateway.monitorIntervalMs));
+      setInactivityTimeout(String(Math.floor(gateway.inactivityTimeoutSeconds / 60)));
     } else if (open) {
       setName('');
       setType('GUACD');
@@ -59,6 +61,7 @@ export default function GatewayDialog({ open, onClose, gateway }: GatewayDialogP
       setApiPort('');
       setMonitoringEnabled(true);
       setMonitorIntervalMs('5000');
+      setInactivityTimeout('60');
     }
     setError('');
   }, [open, gateway]);
@@ -115,6 +118,8 @@ export default function GatewayDialog({ open, onClose, gateway }: GatewayDialogP
         if (monitoringEnabled !== gateway.monitoringEnabled) data.monitoringEnabled = monitoringEnabled;
         const intervalNum = parseInt(monitorIntervalMs, 10);
         if (intervalNum && intervalNum !== gateway.monitorIntervalMs) data.monitorIntervalMs = intervalNum;
+        const timeoutSec = parseInt(inactivityTimeout, 10) * 60;
+        if (timeoutSec && timeoutSec !== gateway.inactivityTimeoutSeconds) data.inactivityTimeoutSeconds = timeoutSec;
         await updateGateway(gateway.id, data);
       } else {
         const apiPortNum = apiPort ? parseInt(apiPort, 10) : undefined;
@@ -127,6 +132,7 @@ export default function GatewayDialog({ open, onClose, gateway }: GatewayDialogP
           isDefault: isDefault || undefined,
           monitoringEnabled,
           monitorIntervalMs: parseInt(monitorIntervalMs, 10) || 5000,
+          inactivityTimeoutSeconds: (parseInt(inactivityTimeout, 10) || 60) * 60,
           ...(type === 'SSH_BASTION' && username ? { username } : {}),
           ...(type === 'SSH_BASTION' && password ? { password } : {}),
           ...(type === 'SSH_BASTION' && sshPrivateKey ? { sshPrivateKey } : {}),
@@ -157,6 +163,7 @@ export default function GatewayDialog({ open, onClose, gateway }: GatewayDialogP
     setApiPort('');
     setMonitoringEnabled(true);
     setMonitorIntervalMs('5000');
+    setInactivityTimeout('60');
     setError('');
     onClose();
   };
@@ -293,6 +300,15 @@ export default function GatewayDialog({ open, onClose, gateway }: GatewayDialogP
               inputProps={{ min: 1000, max: 3600000 }}
             />
           )}
+          <TextField
+            label="Session Inactivity Timeout (minutes)"
+            value={inactivityTimeout}
+            onChange={(e) => setInactivityTimeout(e.target.value)}
+            type="number"
+            fullWidth
+            helperText="Sessions idle longer than this will be automatically closed (1-1440 min)"
+            inputProps={{ min: 1, max: 1440 }}
+          />
         </Box>
       </DialogContent>
       <DialogActions>

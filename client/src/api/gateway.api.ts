@@ -12,6 +12,7 @@ export interface GatewayData {
   isDefault: boolean;
   hasSshKey: boolean;
   apiPort: number | null;
+  inactivityTimeoutSeconds: number;
   tenantId: string;
   createdById: string;
   createdAt: string;
@@ -37,6 +38,7 @@ export interface GatewayInput {
   apiPort?: number;
   monitoringEnabled?: boolean;
   monitorIntervalMs?: number;
+  inactivityTimeoutSeconds?: number;
 }
 
 export interface GatewayUpdate {
@@ -51,6 +53,7 @@ export interface GatewayUpdate {
   apiPort?: number | null;
   monitoringEnabled?: boolean;
   monitorIntervalMs?: number;
+  inactivityTimeoutSeconds?: number;
 }
 
 export interface TestResult {
