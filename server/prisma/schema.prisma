@@ -87,6 +87,8 @@ model User {
   emailVerified      Boolean     @default(false)
   emailVerifyToken   String?     @unique
   emailVerifyExpiry  DateTime?
+  failedLoginAttempts Int         @default(0)
+  lockedUntil         DateTime?
   tenantId           String?
   tenantRole         TenantRole?
   createdAt          DateTime    @default(now())

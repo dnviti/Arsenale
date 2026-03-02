@@ -110,4 +110,8 @@ export const config = {
   },
   keyRotationCron: process.env.KEY_ROTATION_CRON || '0 2 * * *',
   keyRotationAdvanceDays: parseInt(process.env.KEY_ROTATION_ADVANCE_DAYS || '7', 10),
+  loginRateLimitWindowMs: parseInt(process.env.LOGIN_RATE_LIMIT_WINDOW_MS || String(15 * 60 * 1000), 10),
+  loginRateLimitMaxAttempts: parseInt(process.env.LOGIN_RATE_LIMIT_MAX_ATTEMPTS || '5', 10),
+  accountLockoutThreshold: parseInt(process.env.ACCOUNT_LOCKOUT_THRESHOLD || '10', 10),
+  accountLockoutDurationMs: parseInt(process.env.ACCOUNT_LOCKOUT_DURATION_MS || String(30 * 60 * 1000), 10),
 };

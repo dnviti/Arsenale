@@ -1422,3 +1422,19 @@
   FILE COINVOLTI:
     MODIFICATO: server/src/app.ts (import helmet, app.use(helmet({...})) before routes)
     MODIFICATO: server/package.json (added helmet dependency)
+
+
+------------------------------------------------------------------------------
+[x] ZT-037 — Rate limiting login e account lockout
+------------------------------------------------------------------------------
+  Priorita: ALTA
+  Dipendenze: Nessuna
+  COMPLETATO: Added IP-based rate limiting (express-rate-limit) on /login, /verify-totp, /verify-sms endpoints (5 attempts per 15-min window, configurable via env vars). Added per-account lockout: 10 consecutive failed passwords lock the account for 30 minutes (tracked via failedLoginAttempts/lockedUntil fields in User model). Reset on successful login. All thresholds configurable via environment variables.
+
+  FILE COINVOLTI:
+    CREATO:     server/src/middleware/loginRateLimit.middleware.ts
+    MODIFICATO: server/src/config.ts (loginRateLimit + accountLockout config)
+    MODIFICATO: .env.example (rate limit env vars)
+    MODIFICATO: server/prisma/schema.prisma (User: failedLoginAttempts, lockedUntil)
+    MODIFICATO: server/src/services/auth.service.ts (lockout check + tracking)
+    MODIFICATO: server/src/routes/auth.routes.ts (applied loginRateLimiter middleware)

@@ -123,6 +123,16 @@ export async function login(email: string, password: string) {
     throw new Error('Invalid email or password');
   }
 
+  // Check account lockout
+  if (user.lockedUntil && user.lockedUntil > new Date()) {
+    const remainingMs = user.lockedUntil.getTime() - Date.now();
+    const remainingMin = Math.ceil(remainingMs / 60_000);
+    throw new AppError(
+      `Account is temporarily locked. Try again in ${remainingMin} minute${remainingMin === 1 ? '' : 's'}.`,
+      423,
+    );
+  }
+
   // OAuth-only users cannot use password login
   if (!user.passwordHash) {
     throw new AppError('This account uses social login. Please sign in with your OAuth provider.', 400);
@@ -130,7 +140,21 @@ export async function login(email: string, password: string) {
 
   const valid = await bcrypt.compare(password, user.passwordHash);
   if (!valid) {
+    const newFailedAttempts = user.failedLoginAttempts + 1;
+    const lockout =
+      newFailedAttempts >= config.accountLockoutThreshold
+        ? { lockedUntil: new Date(Date.now() + config.accountLockoutDurationMs), failedLoginAttempts: 0 }
+        : { failedLoginAttempts: newFailedAttempts };
+    await prisma.user.update({ where: { id: user.id }, data: lockout });
     throw new Error('Invalid email or password');
+  }
+
+  // Reset failed login counter on successful password check
+  if (user.failedLoginAttempts > 0 || user.lockedUntil) {
+    await prisma.user.update({
+      where: { id: user.id },
+      data: { failedLoginAttempts: 0, lockedUntil: null },
+    });
   }
 
   if (config.emailVerifyRequired && !user.emailVerified) {

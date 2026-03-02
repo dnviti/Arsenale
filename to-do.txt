@@ -57,30 +57,6 @@
 
 
 
-------------------------------------------------------------------------------
-[ ] ZT-037 — Rate limiting login e account lockout
-------------------------------------------------------------------------------
-  Priorita: ALTA
-  Dipendenze: Nessuna
-
-  DESCRIZIONE:
-  Aggiungere rate limiting sull'endpoint POST /api/auth/login per prevenire
-  attacchi brute-force. Attualmente non c'e' nessun limite ai tentativi
-  di login, permettendo attacchi automatizzati illimitati.
-
-  DETTAGLI TECNICI:
-  Backend:
-    - Creare middleware server/src/middleware/loginRateLimit.middleware.ts
-    - Usare express-rate-limit (gia' pattern esistente in smsRateLimit.middleware.ts)
-    - Limiti: 5 tentativi per 15 minuti per IP (configurabile via env vars)
-    - Window sliding, risposta 429 con Retry-After header
-    - Opzionale: tracciare tentativi falliti per email per lockout account
-      (es. 10 fallimenti consecutivi → lockout 30 minuti)
-    - Applicare il middleware su POST /login in auth.routes.ts
-  File coinvolti:
-    - server/src/middleware/loginRateLimit.middleware.ts (nuovo)
-    - server/src/routes/auth.routes.ts
-
 
 ------------------------------------------------------------------------------
 [ ] ZT-038 — Audit sessioni SSH/RDP (session start/end)
