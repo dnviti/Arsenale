@@ -2,9 +2,12 @@ import { useState, useEffect } from 'react';
 import {
   Dialog, DialogTitle, DialogContent, DialogActions, Button, TextField, Box, Alert,
   FormControl, InputLabel, Select, MenuItem, FormControlLabel, Checkbox,
+  Accordion, AccordionSummary, AccordionDetails, Typography, Switch, Stack,
 } from '@mui/material';
+import { ExpandMore as ExpandMoreIcon, Save as SaveIcon } from '@mui/icons-material';
 import { useGatewayStore } from '../../store/gatewayStore';
 import type { GatewayData } from '../../api/gateway.api';
+import SessionTimeoutConfig from '../orchestration/SessionTimeoutConfig';
 
 interface GatewayDialogProps {
   open: boolean;
@@ -26,10 +29,17 @@ export default function GatewayDialog({ open, onClose, gateway }: GatewayDialogP
   const [monitoringEnabled, setMonitoringEnabled] = useState(true);
   const [monitorIntervalMs, setMonitorIntervalMs] = useState('5000');
   const [inactivityTimeout, setInactivityTimeout] = useState('60');
+  const [autoScaleEnabled, setAutoScaleEnabled] = useState(false);
+  const [minReplicasVal, setMinReplicasVal] = useState('0');
+  const [maxReplicasVal, setMaxReplicasVal] = useState('5');
+  const [sessPerInstance, setSessPerInstance] = useState('10');
+  const [cooldownVal, setCooldownVal] = useState('300');
   const [error, setError] = useState('');
   const [loading, setLoading] = useState(false);
+  const [scalingSaving, setScalingSaving] = useState(false);
   const createGateway = useGatewayStore((s) => s.createGateway);
   const updateGateway = useGatewayStore((s) => s.updateGateway);
+  const updateScalingConfig = useGatewayStore((s) => s.updateScalingConfig);
 
   const isEditMode = Boolean(gateway);
 
@@ -48,6 +58,11 @@ export default function GatewayDialog({ open, onClose, gateway }: GatewayDialogP
       setMonitoringEnabled(gateway.monitoringEnabled);
       setMonitorIntervalMs(String(gateway.monitorIntervalMs));
       setInactivityTimeout(String(Math.floor(gateway.inactivityTimeoutSeconds / 60)));
+      setAutoScaleEnabled(gateway.autoScale);
+      setMinReplicasVal(String(gateway.minReplicas));
+      setMaxReplicasVal(String(gateway.maxReplicas));
+      setSessPerInstance(String(gateway.sessionsPerInstance));
+      setCooldownVal(String(gateway.scaleDownCooldownSeconds));
     } else if (open) {
       setName('');
       setType('GUACD');
@@ -62,6 +77,11 @@ export default function GatewayDialog({ open, onClose, gateway }: GatewayDialogP
       setMonitoringEnabled(true);
       setMonitorIntervalMs('5000');
       setInactivityTimeout('60');
+      setAutoScaleEnabled(false);
+      setMinReplicasVal('0');
+      setMaxReplicasVal('5');
+      setSessPerInstance('10');
+      setCooldownVal('300');
     }
     setError('');
   }, [open, gateway]);
@@ -164,6 +184,11 @@ export default function GatewayDialog({ open, onClose, gateway }: GatewayDialogP
     setMonitoringEnabled(true);
     setMonitorIntervalMs('5000');
     setInactivityTimeout('60');
+    setAutoScaleEnabled(false);
+    setMinReplicasVal('0');
+    setMaxReplicasVal('5');
+    setSessPerInstance('10');
+    setCooldownVal('300');
     setError('');
     onClose();
   };
@@ -300,15 +325,95 @@ export default function GatewayDialog({ open, onClose, gateway }: GatewayDialogP
               inputProps={{ min: 1000, max: 3600000 }}
             />
           )}
-          <TextField
-            label="Session Inactivity Timeout (minutes)"
-            value={inactivityTimeout}
-            onChange={(e) => setInactivityTimeout(e.target.value)}
-            type="number"
-            fullWidth
-            helperText="Sessions idle longer than this will be automatically closed (1-1440 min)"
-            inputProps={{ min: 1, max: 1440 }}
-          />
+          <SessionTimeoutConfig value={inactivityTimeout} onChange={setInactivityTimeout} />
+
+          {/* Auto-Scaling Configuration (edit mode, managed gateway types only) */}
+          {isEditMode && gateway?.isManaged && (type === 'MANAGED_SSH' || type === 'GUACD') && (
+            <Accordion sx={{ mt: 1 }}>
+              <AccordionSummary expandIcon={<ExpandMoreIcon />}>
+                <Typography variant="subtitle2">Auto-Scaling Configuration</Typography>
+              </AccordionSummary>
+              <AccordionDetails>
+                <Stack spacing={2}>
+                  <FormControlLabel
+                    control={
+                      <Switch
+                        checked={autoScaleEnabled}
+                        onChange={(_, v) => setAutoScaleEnabled(v)}
+                        size="small"
+                      />
+                    }
+                    label="Enable Auto-Scale"
+                  />
+                  {autoScaleEnabled && (
+                    <Stack direction="row" spacing={2} flexWrap="wrap">
+                      <TextField
+                        label="Min Replicas"
+                        type="number"
+                        size="small"
+                        value={minReplicasVal}
+                        onChange={(e) => setMinReplicasVal(e.target.value)}
+                        inputProps={{ min: 0, max: 20 }}
+                        sx={{ width: 120 }}
+                      />
+                      <TextField
+                        label="Max Replicas"
+                        type="number"
+                        size="small"
+                        value={maxReplicasVal}
+                        onChange={(e) => setMaxReplicasVal(e.target.value)}
+                        inputProps={{ min: 1, max: 20 }}
+                        sx={{ width: 120 }}
+                      />
+                      <TextField
+                        label="Sessions/Instance"
+                        type="number"
+                        size="small"
+                        value={sessPerInstance}
+                        onChange={(e) => setSessPerInstance(e.target.value)}
+                        inputProps={{ min: 1, max: 100 }}
+                        sx={{ width: 150 }}
+                      />
+                      <TextField
+                        label="Cooldown (s)"
+                        type="number"
+                        size="small"
+                        value={cooldownVal}
+                        onChange={(e) => setCooldownVal(e.target.value)}
+                        inputProps={{ min: 60, max: 3600 }}
+                        sx={{ width: 120 }}
+                      />
+                    </Stack>
+                  )}
+                  <Button
+                    variant="outlined"
+                    size="small"
+                    startIcon={<SaveIcon />}
+                    disabled={scalingSaving}
+                    onClick={async () => {
+                      setScalingSaving(true);
+                      try {
+                        await updateScalingConfig(gateway!.id, {
+                          autoScale: autoScaleEnabled,
+                          minReplicas: Number(minReplicasVal),
+                          maxReplicas: Number(maxReplicasVal),
+                          sessionsPerInstance: Number(sessPerInstance),
+                          scaleDownCooldownSeconds: Number(cooldownVal),
+                        });
+                      } catch (err) {
+                        setError((err as Error).message);
+                      } finally {
+                        setScalingSaving(false);
+                      }
+                    }}
+                    sx={{ alignSelf: 'flex-start' }}
+                  >
+                    {scalingSaving ? 'Saving...' : 'Save Scaling Config'}
+                  </Button>
+                </Stack>
+              </AccordionDetails>
+            </Accordion>
+          )}
         </Box>
       </DialogContent>
       <DialogActions>

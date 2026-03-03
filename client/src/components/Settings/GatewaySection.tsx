@@ -398,10 +398,18 @@ export default function GatewaySection({ onNavigateToTab }: GatewaySectionProps)
                 return (
                   <TableRow key={gw.id}>
                     <TableCell>
-                      <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
+                      <Box sx={{ display: 'flex', alignItems: 'center', gap: 1, flexWrap: 'wrap' }}>
                         <Typography variant="body2">{gw.name}</Typography>
                         {gw.isDefault && (
                           <Chip label="Default" size="small" color="primary" variant="outlined" />
+                        )}
+                        {gw.isManaged && (
+                          <Chip label="Managed" size="small" color="secondary" variant="outlined" />
+                        )}
+                        {gw.isManaged && (
+                          <Typography variant="caption" color="text.secondary">
+                            {gw.runningInstances}/{gw.totalInstances} instances
+                          </Typography>
                         )}
                       </Box>
                       {gw.description && (

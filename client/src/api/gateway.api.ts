@@ -23,6 +23,16 @@ export interface GatewayData {
   lastCheckedAt: string | null;
   lastLatencyMs: number | null;
   lastError: string | null;
+  isManaged: boolean;
+  desiredReplicas: number;
+  autoScale: boolean;
+  minReplicas: number;
+  maxReplicas: number;
+  sessionsPerInstance: number;
+  scaleDownCooldownSeconds: number;
+  lastScaleAction: string | null;
+  totalInstances: number;
+  runningInstances: number;
 }
 
 export interface GatewayInput {
@@ -137,5 +147,140 @@ export async function pushKeyToGateway(id: string): Promise<{ ok: boolean; error
 
 export async function downloadSshPrivateKey(): Promise<string> {
   const res = await api.get('/gateways/ssh-keypair/private', { responseType: 'text' });
+  return res.data;
+}
+
+// ---------- Session Monitoring ----------
+
+export interface ActiveSessionData {
+  id: string;
+  userId: string;
+  username: string | null;
+  email: string;
+  connectionId: string;
+  connectionName: string;
+  connectionHost: string;
+  connectionPort: number;
+  gatewayId: string | null;
+  gatewayName: string | null;
+  protocol: 'SSH' | 'RDP';
+  status: 'ACTIVE' | 'IDLE' | 'CLOSED';
+  startedAt: string;
+  lastActivityAt: string;
+  endedAt: string | null;
+  durationFormatted: string;
+}
+
+export async function listActiveSessions(params?: {
+  protocol?: 'SSH' | 'RDP';
+  gatewayId?: string;
+}): Promise<ActiveSessionData[]> {
+  const res = await api.get('/sessions/active', { params });
+  return res.data;
+}
+
+export async function getSessionCount(): Promise<{ count: number }> {
+  const res = await api.get('/sessions/count');
+  return res.data;
+}
+
+export async function getSessionCountByGateway(): Promise<
+  Array<{ gatewayId: string; gatewayName: string; count: number }>
+> {
+  const res = await api.get('/sessions/count/gateway');
+  return res.data;
+}
+
+export async function terminateSession(sessionId: string): Promise<{ ok: boolean }> {
+  const res = await api.post(`/sessions/${sessionId}/terminate`);
+  return res.data;
+}
+
+// ---------- Managed Gateway Lifecycle ----------
+
+export interface ManagedInstanceData {
+  id: string;
+  gatewayId: string;
+  containerId: string;
+  containerName: string;
+  host: string;
+  port: number;
+  status: 'PROVISIONING' | 'RUNNING' | 'STOPPED' | 'ERROR' | 'REMOVING';
+  orchestratorType: string;
+  healthStatus: string | null;
+  lastHealthCheck: string | null;
+  errorMessage: string | null;
+  consecutiveFailures: number;
+  createdAt: string;
+  updatedAt: string;
+}
+
+export async function deployGateway(id: string): Promise<{
+  instanceId: string; containerId: string; host: string; port: number;
+}> {
+  const res = await api.post(`/gateways/${id}/deploy`);
+  return res.data;
+}
+
+export async function undeployGateway(id: string): Promise<{ undeployed: boolean }> {
+  const res = await api.delete(`/gateways/${id}/deploy`);
+  return res.data;
+}
+
+export async function scaleGateway(id: string, replicas: number): Promise<{
+  deployed: number; removed: number;
+}> {
+  const res = await api.post(`/gateways/${id}/scale`, { replicas });
+  return res.data;
+}
+
+export async function listGatewayInstances(id: string): Promise<ManagedInstanceData[]> {
+  const res = await api.get(`/gateways/${id}/instances`);
+  return res.data;
+}
+
+export async function restartGatewayInstance(
+  gatewayId: string,
+  instanceId: string,
+): Promise<{ restarted: boolean }> {
+  const res = await api.post(`/gateways/${gatewayId}/instances/${instanceId}/restart`);
+  return res.data;
+}
+
+// ---------- Auto-Scaling Configuration ----------
+
+export interface ScalingStatusData {
+  gatewayId: string;
+  autoScale: boolean;
+  minReplicas: number;
+  maxReplicas: number;
+  sessionsPerInstance: number;
+  scaleDownCooldownSeconds: number;
+  currentReplicas: number;
+  activeSessions: number;
+  targetReplicas: number;
+  lastScaleAction: string | null;
+  cooldownRemaining: number;
+  recommendation: 'scale-up' | 'scale-down' | 'stable';
+}
+
+export interface ScalingConfigInput {
+  autoScale?: boolean;
+  minReplicas?: number;
+  maxReplicas?: number;
+  sessionsPerInstance?: number;
+  scaleDownCooldownSeconds?: number;
+}
+
+export async function getScalingStatus(id: string): Promise<ScalingStatusData> {
+  const res = await api.get(`/gateways/${id}/scaling`);
+  return res.data;
+}
+
+export async function updateScalingConfig(
+  id: string,
+  config: ScalingConfigInput,
+): Promise<ScalingConfigInput & { id: string; lastScaleAction: string | null }> {
+  const res = await api.put(`/gateways/${id}/scaling`, config);
   return res.data;
 }

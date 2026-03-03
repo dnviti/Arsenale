@@ -8,6 +8,21 @@ import {
   pushKeyToGateway as pushKeyToGatewayApi,
   type RotateKeyPairResponse,
   type GatewayHealthEvent,
+  type ActiveSessionData,
+  type ManagedInstanceData,
+  type ScalingStatusData,
+  type ScalingConfigInput,
+  listActiveSessions as listActiveSessionsApi,
+  getSessionCount as getSessionCountApi,
+  getSessionCountByGateway as getSessionCountByGatewayApi,
+  terminateSession as terminateSessionApi,
+  deployGateway as deployGatewayApi,
+  undeployGateway as undeployGatewayApi,
+  scaleGateway as scaleGatewayApi,
+  listGatewayInstances as listGatewayInstancesApi,
+  restartGatewayInstance as restartGatewayInstanceApi,
+  getScalingStatus as getScalingStatusApi,
+  updateScalingConfig as updateScalingConfigApi,
 } from '../api/gateway.api';
 
 interface GatewayState {
@@ -16,23 +31,60 @@ interface GatewayState {
   sshKeyPair: SshKeyPairData | null;
   sshKeyLoading: boolean;
 
+  // Orchestration state
+  activeSessions: ActiveSessionData[];
+  sessionCount: number;
+  sessionCountByGateway: Array<{ gatewayId: string; gatewayName: string; count: number }>;
+  scalingStatus: Record<string, ScalingStatusData>;
+  instances: Record<string, ManagedInstanceData[]>;
+  sessionsLoading: boolean;
+
+  // Gateway CRUD actions
   fetchGateways: () => Promise<void>;
   createGateway: (data: GatewayInput) => Promise<GatewayData>;
   updateGateway: (id: string, data: GatewayUpdate) => Promise<void>;
   deleteGateway: (id: string) => Promise<void>;
   applyHealthUpdate: (event: GatewayHealthEvent) => void;
+
+  // SSH key actions
   fetchSshKeyPair: () => Promise<void>;
   generateSshKeyPair: () => Promise<SshKeyPairData>;
   rotateSshKeyPair: () => Promise<RotateKeyPairResponse>;
   pushKeyToGateway: (id: string) => Promise<{ ok: boolean; error?: string }>;
+
+  // Session monitoring actions
+  fetchActiveSessions: (filters?: { protocol?: 'SSH' | 'RDP'; gatewayId?: string }) => Promise<void>;
+  fetchSessionCount: () => Promise<void>;
+  fetchSessionCountByGateway: () => Promise<void>;
+  terminateSession: (sessionId: string) => Promise<void>;
+
+  // Managed gateway lifecycle actions
+  fetchScalingStatus: (gatewayId: string) => Promise<void>;
+  fetchInstances: (gatewayId: string) => Promise<void>;
+  deployGateway: (id: string) => Promise<void>;
+  undeployGateway: (id: string) => Promise<void>;
+  scaleGateway: (id: string, replicas: number) => Promise<void>;
+  updateScalingConfig: (id: string, config: ScalingConfigInput) => Promise<void>;
+  restartInstance: (gatewayId: string, instanceId: string) => Promise<void>;
+
   reset: () => void;
 }
+
+const initialOrchestrationState = {
+  activeSessions: [] as ActiveSessionData[],
+  sessionCount: 0,
+  sessionCountByGateway: [] as Array<{ gatewayId: string; gatewayName: string; count: number }>,
+  scalingStatus: {} as Record<string, ScalingStatusData>,
+  instances: {} as Record<string, ManagedInstanceData[]>,
+  sessionsLoading: false,
+};
 
 export const useGatewayStore = create<GatewayState>((set) => ({
   gateways: [],
   loading: false,
   sshKeyPair: null,
   sshKeyLoading: false,
+  ...initialOrchestrationState,
 
   fetchGateways: async () => {
     set({ loading: true });
@@ -108,5 +160,102 @@ export const useGatewayStore = create<GatewayState>((set) => ({
     return await pushKeyToGatewayApi(id);
   },
 
-  reset: () => set({ gateways: [], loading: false, sshKeyPair: null, sshKeyLoading: false }),
+  // ---------- Session monitoring ----------
+
+  fetchActiveSessions: async (filters) => {
+    set({ sessionsLoading: true });
+    try {
+      const activeSessions = await listActiveSessionsApi(filters);
+      set({ activeSessions, sessionsLoading: false });
+    } catch {
+      set({ sessionsLoading: false });
+    }
+  },
+
+  fetchSessionCount: async () => {
+    try {
+      const { count } = await getSessionCountApi();
+      set({ sessionCount: count });
+    } catch {
+      // ignore
+    }
+  },
+
+  fetchSessionCountByGateway: async () => {
+    try {
+      const sessionCountByGateway = await getSessionCountByGatewayApi();
+      set({ sessionCountByGateway });
+    } catch {
+      // ignore
+    }
+  },
+
+  terminateSession: async (sessionId) => {
+    await terminateSessionApi(sessionId);
+    set((state) => ({
+      activeSessions: state.activeSessions.filter((s) => s.id !== sessionId),
+      sessionCount: Math.max(0, state.sessionCount - 1),
+    }));
+  },
+
+  // ---------- Managed gateway lifecycle ----------
+
+  fetchScalingStatus: async (gatewayId) => {
+    try {
+      const status = await getScalingStatusApi(gatewayId);
+      set((state) => ({
+        scalingStatus: { ...state.scalingStatus, [gatewayId]: status },
+      }));
+    } catch {
+      // ignore
+    }
+  },
+
+  fetchInstances: async (gatewayId) => {
+    try {
+      const instanceList = await listGatewayInstancesApi(gatewayId);
+      set((state) => ({
+        instances: { ...state.instances, [gatewayId]: instanceList },
+      }));
+    } catch {
+      // ignore
+    }
+  },
+
+  deployGateway: async (id) => {
+    await deployGatewayApi(id);
+    const gateways = await listGateways();
+    set({ gateways });
+  },
+
+  undeployGateway: async (id) => {
+    await undeployGatewayApi(id);
+    const gateways = await listGateways();
+    set({ gateways });
+  },
+
+  scaleGateway: async (id, replicas) => {
+    await scaleGatewayApi(id, replicas);
+    const gateways = await listGateways();
+    set({ gateways });
+  },
+
+  updateScalingConfig: async (id, config) => {
+    await updateScalingConfigApi(id, config);
+    const gateways = await listGateways();
+    set({ gateways });
+  },
+
+  restartInstance: async (gatewayId, instanceId) => {
+    await restartGatewayInstanceApi(gatewayId, instanceId);
+    const instanceList = await listGatewayInstancesApi(gatewayId);
+    set((state) => ({
+      instances: { ...state.instances, [gatewayId]: instanceList },
+    }));
+  },
+
+  reset: () => set({
+    gateways: [], loading: false, sshKeyPair: null, sshKeyLoading: false,
+    ...initialOrchestrationState,
+  }),
 }));

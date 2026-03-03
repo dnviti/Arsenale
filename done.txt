@@ -1542,6 +1542,28 @@
     MODIFICATO: server/src/services/managedGateway.service.ts (MAX_REPLICAS 10→20)
 
 
+------------------------------------------------------------------------------
+[x] ORCH-065 — Frontend: dashboard sessioni attive, scaling controls,
+               monitoring
+------------------------------------------------------------------------------
+  Priorita: MEDIA
+  Dipendenze: ORCH-060, ORCH-063, ORCH-064
+  COMPLETATO: Added Orchestration tab (OWNER/ADMIN only) to SettingsDialog with two sub-tabs: Active Sessions dashboard (metric cards, filterable session table with 10s auto-refresh polling, terminate session) and Gateway Scaling (per-gateway accordion with deploy/undeploy, replicas slider, auto-scale config, scaling status display, instance list with restart). Extended gateway.api.ts with 4 new interfaces and 11 API functions, gatewayStore.ts with 6 state fields and 11 actions, uiPreferencesStore.ts with 3 orchestration prefs. Added Managed badge and instance count to GatewaySection table. Added auto-scaling config Accordion to GatewayDialog for managed gateways.
+
+  File coinvolti:
+    MODIFICATO: client/src/api/gateway.api.ts (interfaces, API functions, GatewayData fields)
+    MODIFICATO: client/src/store/gatewayStore.ts (session/scaling state and actions)
+    MODIFICATO: client/src/store/uiPreferencesStore.ts (orchestration prefs)
+    CREATO:     client/src/components/orchestration/SessionDashboard.tsx
+    CREATO:     client/src/components/orchestration/GatewayInstanceList.tsx
+    CREATO:     client/src/components/orchestration/ScalingControls.tsx
+    CREATO:     client/src/components/orchestration/SessionTimeoutConfig.tsx
+    CREATO:     client/src/components/orchestration/OrchestrationSection.tsx
+    MODIFICATO: client/src/components/gateway/GatewayDialog.tsx (scaling config, timeout component)
+    MODIFICATO: client/src/components/Settings/GatewaySection.tsx (Managed badge, instance count)
+    MODIFICATO: client/src/components/Dialogs/SettingsDialog.tsx (Orchestration tab)
+
+
 ================================================================================
   SEZIONE E — ZERO TRUST HARDENING
 ================================================================================

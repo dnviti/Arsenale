@@ -14,11 +14,14 @@ interface UiPreferences {
   keychainScopeFilter: string;
   keychainTypeFilter: string;
   keychainSortBy: string;
+  orchestrationDashboardTab: string;
+  orchestrationAutoRefresh: boolean;
+  orchestrationRefreshInterval: number;
 }
 
 interface UiPreferencesState extends UiPreferences {
   set: <K extends keyof UiPreferences>(key: K, value: UiPreferences[K]) => void;
-  toggle: (key: keyof Omit<UiPreferences, 'sidebarTeamSections' | 'settingsActiveTab' | 'keychainScopeFilter' | 'keychainTypeFilter' | 'keychainSortBy'>) => void;
+  toggle: (key: keyof Omit<UiPreferences, 'sidebarTeamSections' | 'settingsActiveTab' | 'keychainScopeFilter' | 'keychainTypeFilter' | 'keychainSortBy' | 'orchestrationDashboardTab' | 'orchestrationRefreshInterval'>) => void;
   toggleTeamSection: (teamId: string) => void;
 }
 
@@ -35,6 +38,9 @@ const defaults: UiPreferences = {
   keychainScopeFilter: 'ALL',
   keychainTypeFilter: 'ALL',
   keychainSortBy: 'name',
+  orchestrationDashboardTab: 'sessions',
+  orchestrationAutoRefresh: true,
+  orchestrationRefreshInterval: 10000,
 };
 
 export const useUiPreferencesStore = create<UiPreferencesState>()(

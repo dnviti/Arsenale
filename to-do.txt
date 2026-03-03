@@ -254,124 +254,6 @@
 
 
 
-------------------------------------------------------------------------------
-[ ] ORCH-065 — Frontend: dashboard sessioni attive, scaling controls,
-               monitoring
-------------------------------------------------------------------------------
-  Priorita: MEDIA
-  Dipendenze: ORCH-060, ORCH-063, ORCH-064
-
-  DESCRIZIONE:
-  Creare l'interfaccia frontend completa per il monitoraggio delle sessioni
-  attive, il controllo dello scaling dei gateway managed, e la
-  visualizzazione dello stato dei container. Include una sezione dashboard
-  nella pagina Settings con conteggio sessioni in tempo reale, dettaglio
-  per gateway con lista istanze managed e stato di salute, controlli per
-  lo scaling manuale e la configurazione dell'auto-scaling, e la
-  configurazione del timeout inattivita' per gateway.
-
-  La dashboard usa polling periodico (ogni 10 secondi) per aggiornare i
-  conteggi sessioni e lo stato dei container. Le preferenze di layout
-  (pannelli aperti/chiusi, tab selezionato) sono persistite in
-  uiPreferencesStore.
-
-  DETTAGLI TECNICI:
-  API layer (client/src/api/gateway.api.ts — estendere):
-    - Nuove interfacce:
-        ActiveSessionData: { id, userId, userEmail, connectionName,
-          protocol, status, startedAt, lastActivityAt, gatewayName? }
-        ManagedInstanceData: { id, containerId, containerName, host,
-          port, status, healthStatus, lastHealthCheck, createdAt }
-        ScalingStatusData: { currentReplicas, desiredReplicas,
-          activeSessions, sessionsPerInstance, autoScale,
-          lastScaleAction, recommendation }
-        ScalingConfigInput: { autoScale, minReplicas, maxReplicas,
-          sessionsPerInstance, scaleDownCooldownSeconds }
-    - Nuove funzioni:
-        getActiveSessions(): GET /api/sessions/active
-        getActiveSessionCount(): GET /api/sessions/count
-        getGatewayInstances(id): GET /api/gateways/:id/instances
-        deployGateway(id): POST /api/gateways/:id/deploy
-        undeployGateway(id): DELETE /api/gateways/:id/deploy
-        scaleGateway(id, replicas): POST /api/gateways/:id/scale
-        getScalingStatus(id): GET /api/gateways/:id/scaling
-        updateScalingConfig(id, config): PUT /api/gateways/:id/scaling
-        restartInstance(gatewayId, instanceId):
-          POST /api/gateways/:id/instances/:instanceId/restart
-
-  GatewayData interface — aggiungere:
-    - isManaged, desiredReplicas, autoScale, minReplicas, maxReplicas,
-      sessionsPerInstance, scaleDownCooldownSeconds,
-      inactivityTimeoutSeconds
-
-  Store (client/src/store/gatewayStore.ts — estendere):
-    - Nuovo stato:
-        activeSessions: ActiveSessionData[]
-        sessionCount: Record<string, number>  // gatewayId -> count
-        scalingStatus: Record<string, ScalingStatusData>
-        sessionsLoading: boolean
-    - Nuove azioni:
-        fetchActiveSessions, fetchSessionCount, fetchScalingStatus,
-        deployGateway, undeployGateway, scaleGateway,
-        updateScalingConfig, restartInstance
-
-  Componenti UI:
-    - SessionDashboard.tsx
-      (nuova sezione in Settings > Administration):
-        - Riga superiore: card metriche (Total Active Sessions,
-          SSH Sessions, RDP Sessions, Managed Gateways)
-        - Tabella sessioni attive: user, connection, protocol, gateway,
-          status (chip colorato), started, last activity, duration
-        - Filtri: protocol, status, gateway
-        - Refresh button + auto-refresh toggle (10s polling)
-    - GatewayInstanceList.tsx (sotto-componente di GatewayList):
-        - Per gateway managed: lista istanze con containerId (troncato),
-          status (chip colorato: verde RUNNING, rosso ERROR, giallo
-          PROVISIONING), health indicator, createdAt
-        - Azione per istanza: Restart, View Logs (dialog con output)
-    - ScalingControls.tsx
-      (sotto-componente di GatewayDialog o inline):
-        - Toggle "Managed Gateway" (isManaged)
-        - Quando isManaged=true:
-          - Slider "Replicas" (0-10) per scaling manuale
-          - Bottone "Deploy" / "Undeploy"
-        - Toggle "Auto-Scale"
-        - Quando autoScale=true:
-          - Input minReplicas, maxReplicas
-          - Input sessionsPerInstance (soglia)
-          - Input cooldown (minuti)
-          - Status badge: "Stable" / "Scaling Up" / "Scaling Down"
-          - Testo: "Currently N sessions across M instances
-            (N/M per instance, threshold: T)"
-    - SessionTimeoutConfig.tsx (in GatewayDialog):
-        - Input numerico "Inactivity Timeout" con unita' (minuti)
-        - Default: 60 min
-        - Range: 1 min - 1440 min (24h)
-
-  uiPreferencesStore — nuove keys:
-    - orchestrationDashboardTab: 'sessions' | 'gateways'
-    - orchestrationAutoRefresh: boolean (default true)
-    - orchestrationRefreshInterval: number (default 10000)
-
-  Routing:
-    - Aggiungere tab "Orchestration" nella pagina Settings (stessa
-      struttura tabbed di UI-046)
-    - Visibile solo a OWNER/ADMIN del tenant
-    - Sotto-tab: "Active Sessions" | "Gateway Scaling"
-
-  File coinvolti:
-    MODIFICARE: client/src/api/gateway.api.ts (interfacce e funzioni)
-    MODIFICARE: client/src/store/gatewayStore.ts (sessions, scaling)
-    CREARE:     client/src/components/orchestration/SessionDashboard.tsx
-    CREARE:     client/src/components/orchestration/GatewayInstanceList.tsx
-    CREARE:     client/src/components/orchestration/ScalingControls.tsx
-    CREARE:     client/src/components/orchestration/SessionTimeoutConfig.tsx
-    MODIFICARE: client/src/components/gateway/GatewayDialog.tsx (managed
-                toggle, scaling config, timeout)
-    MODIFICARE: client/src/components/gateway/GatewayList.tsx (instance
-                list, managed badge)
-    MODIFICARE: client/src/store/uiPreferencesStore.ts (orchestration prefs)
-    MODIFICARE: client/src/pages/SettingsPage.tsx (Orchestration tab)
 
 
 ================================================================================
@@ -1050,7 +932,7 @@
    52. ORCH-062  Container orchestrator abstraction layer (Docker + K8s)  [COMPLETATO]
    53. ORCH-063  Deploy e lifecycle management gateway containers  [COMPLETATO]
    54. ORCH-064  Auto-scaling gateway basato su sessioni attive  [COMPLETATO]
-   55. ORCH-065  Frontend dashboard sessioni, scaling controls, monitoring
+   55. ORCH-065  Frontend dashboard sessioni, scaling controls, monitoring  [COMPLETATO]
 
   Fase 9 — Zero Trust hardening (Tier 1, priorita' alta):
    56. ZT-036   Security headers (helmet middleware)
