@@ -12,6 +12,9 @@ import {
   type ManagedInstanceData,
   type ScalingStatusData,
   type ScalingConfigInput,
+  type GatewayTemplateData,
+  type GatewayTemplateInput,
+  type GatewayTemplateUpdate,
   listActiveSessions as listActiveSessionsApi,
   getSessionCount as getSessionCountApi,
   getSessionCountByGateway as getSessionCountByGatewayApi,
@@ -23,6 +26,11 @@ import {
   restartGatewayInstance as restartGatewayInstanceApi,
   getScalingStatus as getScalingStatusApi,
   updateScalingConfig as updateScalingConfigApi,
+  listGatewayTemplates as listGatewayTemplatesApi,
+  createGatewayTemplate as createGatewayTemplateApi,
+  updateGatewayTemplate as updateGatewayTemplateApi,
+  deleteGatewayTemplate as deleteGatewayTemplateApi,
+  deployFromTemplate as deployFromTemplateApi,
 } from '../api/gateway.api';
 
 interface GatewayState {
@@ -67,6 +75,15 @@ interface GatewayState {
   updateScalingConfig: (id: string, config: ScalingConfigInput) => Promise<void>;
   restartInstance: (gatewayId: string, instanceId: string) => Promise<void>;
 
+  // Template state & actions
+  templates: GatewayTemplateData[];
+  templatesLoading: boolean;
+  fetchTemplates: () => Promise<void>;
+  createTemplate: (data: GatewayTemplateInput) => Promise<GatewayTemplateData>;
+  updateTemplate: (id: string, data: GatewayTemplateUpdate) => Promise<void>;
+  deleteTemplate: (id: string) => Promise<void>;
+  deployFromTemplate: (templateId: string) => Promise<GatewayData>;
+
   reset: () => void;
 }
 
@@ -77,6 +94,8 @@ const initialOrchestrationState = {
   scalingStatus: {} as Record<string, ScalingStatusData>,
   instances: {} as Record<string, ManagedInstanceData[]>,
   sessionsLoading: false,
+  templates: [] as GatewayTemplateData[],
+  templatesLoading: false,
 };
 
 export const useGatewayStore = create<GatewayState>((set) => ({
@@ -252,6 +271,49 @@ export const useGatewayStore = create<GatewayState>((set) => ({
     set((state) => ({
       instances: { ...state.instances, [gatewayId]: instanceList },
     }));
+  },
+
+  // ---------- Gateway templates ----------
+
+  fetchTemplates: async () => {
+    set({ templatesLoading: true });
+    try {
+      const templates = await listGatewayTemplatesApi();
+      set({ templates, templatesLoading: false });
+    } catch {
+      set({ templatesLoading: false });
+    }
+  },
+
+  createTemplate: async (data) => {
+    const template = await createGatewayTemplateApi(data);
+    const templates = await listGatewayTemplatesApi();
+    set({ templates });
+    return template;
+  },
+
+  updateTemplate: async (id, data) => {
+    const updated = await updateGatewayTemplateApi(id, data);
+    set((state) => ({
+      templates: state.templates.map((t) => (t.id === id ? updated : t)),
+    }));
+  },
+
+  deleteTemplate: async (id) => {
+    await deleteGatewayTemplateApi(id);
+    set((state) => ({
+      templates: state.templates.filter((t) => t.id !== id),
+    }));
+  },
+
+  deployFromTemplate: async (templateId) => {
+    const gateway = await deployFromTemplateApi(templateId);
+    const [gateways, templates] = await Promise.all([
+      listGateways(),
+      listGatewayTemplatesApi(),
+    ]);
+    set({ gateways, templates });
+    return gateway;
   },
 
   reset: () => set({

@@ -33,6 +33,9 @@ export interface ContainerConfig {
   healthcheck?: ContainerHealthcheck;
   network?: string;
   restartPolicy?: 'no' | 'always' | 'unless-stopped' | 'on-failure';
+  /** Kubernetes namespace override. When set, the K8s provider deploys into
+   *  this namespace (creating it if needed) instead of the global default. */
+  namespace?: string;
 }
 
 export interface ContainerInfo {

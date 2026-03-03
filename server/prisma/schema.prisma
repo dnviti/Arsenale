@@ -32,6 +32,7 @@ model Tenant {
   users              User[]
   teams              Team[]
   gateways           Gateway[]
+  gatewayTemplates   GatewayTemplate[]
   sshKeyPair         SshKeyPair?
   vaultSecrets       VaultSecret[]
   tenantVaultMembers TenantVaultMember[]
@@ -112,6 +113,7 @@ model User {
   notifications Notification[]
   teamMembers            TeamMember[]
   gatewaysCreated        Gateway[]              @relation("GatewayCreator")
+  gatewayTemplatesCreated GatewayTemplate[]     @relation("GatewayTemplateCreator")
   openTabs               OpenTab[]
   vaultSecrets           VaultSecret[]          @relation("VaultSecretOwner")
   secretVersionChanges   VaultSecretVersion[]   @relation("SecretVersionChanger")
@@ -259,6 +261,8 @@ model Gateway {
   sshKeyTag          String?
   apiPort            Int?
 
+  templateId       String?
+
   isManaged        Boolean @default(false)
   desiredReplicas  Int     @default(1)
 
@@ -281,14 +285,43 @@ model Gateway {
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 
-  tenant         Tenant          @relation(fields: [tenantId], references: [id])
-  createdBy      User            @relation("GatewayCreator", fields: [createdById], references: [id])
+  tenant         Tenant           @relation(fields: [tenantId], references: [id])
+  createdBy      User             @relation("GatewayCreator", fields: [createdById], references: [id])
+  template       GatewayTemplate? @relation(fields: [templateId], references: [id], onDelete: SetNull)
   connections        Connection[]
   activeSessions     ActiveSession[]
   managedInstances   ManagedGatewayInstance[]
 
   @@index([tenantId])
   @@index([tenantId, type, isDefault])
+}
+
+model GatewayTemplate {
+  id                       String      @id @default(uuid())
+  name                     String
+  type                     GatewayType
+  host                     String
+  port                     Int
+  description              String?
+  apiPort                  Int?
+  autoScale                Boolean     @default(false)
+  minReplicas              Int         @default(1)
+  maxReplicas              Int         @default(5)
+  sessionsPerInstance      Int         @default(10)
+  scaleDownCooldownSeconds Int         @default(300)
+  monitoringEnabled        Boolean     @default(true)
+  monitorIntervalMs        Int         @default(5000)
+  inactivityTimeoutSeconds Int         @default(3600)
+  tenantId                 String
+  createdById              String
+  createdAt                DateTime    @default(now())
+  updatedAt                DateTime    @updatedAt
+
+  tenant    Tenant    @relation(fields: [tenantId], references: [id])
+  createdBy User      @relation("GatewayTemplateCreator", fields: [createdById], references: [id])
+  gateways  Gateway[]
+
+  @@index([tenantId])
 }
 
 model SshKeyPair {
@@ -433,6 +466,10 @@ enum AuditAction {
   TENANT_VAULT_INIT
   TENANT_VAULT_KEY_DISTRIBUTE
   TENANT_MFA_POLICY_UPDATE
+  GATEWAY_TEMPLATE_CREATE
+  GATEWAY_TEMPLATE_UPDATE
+  GATEWAY_TEMPLATE_DELETE
+  GATEWAY_TEMPLATE_DEPLOY
 }
 
 model AuditLog {

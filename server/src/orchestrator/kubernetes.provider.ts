@@ -11,11 +11,30 @@ import {
   ContainerPortMapping,
 } from './types';
 
+/**
+ * Parse a composite container ID that may contain a namespace prefix.
+ * Format: "namespace/name" or just "name" (falls back to defaultNs).
+ */
+function parseId(
+  compositeId: string,
+  defaultNs: string,
+): { namespace: string; name: string } {
+  const slashIdx = compositeId.indexOf('/');
+  if (slashIdx > 0) {
+    return {
+      namespace: compositeId.slice(0, slashIdx),
+      name: compositeId.slice(slashIdx + 1),
+    };
+  }
+  return { namespace: defaultNs, name: compositeId };
+}
+
 export class KubernetesProvider implements IOrchestratorProvider {
   readonly type = OrchestratorType.KUBERNETES;
   private appsApi: k8s.AppsV1Api;
   private coreApi: k8s.CoreV1Api;
-  private namespace: string;
+  private defaultNamespace: string;
+  private ensuredNamespaces = new Set<string>();
 
   constructor() {
     const kc = new k8s.KubeConfig();
@@ -26,7 +45,7 @@ export class KubernetesProvider implements IOrchestratorProvider {
     }
     this.appsApi = kc.makeApiClient(k8s.AppsV1Api);
     this.coreApi = kc.makeApiClient(k8s.CoreV1Api);
-    this.namespace = config.orchestratorK8sNamespace;
+    this.defaultNamespace = config.orchestratorK8sNamespace;
   }
 
   async isAvailable(): Promise<boolean> {
@@ -38,10 +57,51 @@ export class KubernetesProvider implements IOrchestratorProvider {
     }
   }
 
+  /**
+   * Ensure a Kubernetes namespace exists, creating it if necessary.
+   * Results are cached in-memory to avoid repeated API calls.
+   */
+  private async ensureNamespace(ns: string): Promise<void> {
+    if (this.ensuredNamespaces.has(ns)) return;
+    try {
+      await this.coreApi.readNamespace({ name: ns });
+      this.ensuredNamespaces.add(ns);
+    } catch {
+      try {
+        await this.coreApi.createNamespace({
+          body: {
+            apiVersion: 'v1',
+            kind: 'Namespace',
+            metadata: {
+              name: ns,
+              labels: {
+                'app.kubernetes.io/managed-by': 'rdm',
+              },
+            },
+          },
+        });
+        logger.info(`[orchestrator:k8s] Created namespace "${ns}"`);
+        this.ensuredNamespaces.add(ns);
+      } catch (createErr) {
+        // Race condition: another process may have created it
+        const msg = (createErr as Error).message;
+        if (msg.includes('AlreadyExists') || msg.includes('already exists')) {
+          this.ensuredNamespaces.add(ns);
+        } else {
+          throw createErr;
+        }
+      }
+    }
+  }
+
   async deployContainer(
     containerConfig: ContainerConfig,
   ): Promise<ContainerInfo> {
     const name = containerConfig.name;
+    const ns = containerConfig.namespace ?? this.defaultNamespace;
+
+    await this.ensureNamespace(ns);
+
     const labels: Record<string, string> = {
       'app.kubernetes.io/managed-by': 'rdm',
       'app.kubernetes.io/name': name,
@@ -61,7 +121,7 @@ export class KubernetesProvider implements IOrchestratorProvider {
     const deployment: k8s.V1Deployment = {
       apiVersion: 'apps/v1',
       kind: 'Deployment',
-      metadata: { name, namespace: this.namespace, labels },
+      metadata: { name, namespace: ns, labels },
       spec: {
         replicas: 1,
         selector: { matchLabels: { 'app.kubernetes.io/name': name } },
@@ -85,7 +145,7 @@ export class KubernetesProvider implements IOrchestratorProvider {
     const service: k8s.V1Service = {
       apiVersion: 'v1',
       kind: 'Service',
-      metadata: { name, namespace: this.namespace, labels },
+      metadata: { name, namespace: ns, labels },
       spec: {
         selector: { 'app.kubernetes.io/name': name },
         ports: containerConfig.ports.map((p) => ({
@@ -99,16 +159,20 @@ export class KubernetesProvider implements IOrchestratorProvider {
 
     try {
       await this.appsApi.createNamespacedDeployment({
-        namespace: this.namespace,
+        namespace: ns,
         body: deployment,
       });
       await this.coreApi.createNamespacedService({
-        namespace: this.namespace,
+        namespace: ns,
         body: service,
       });
 
+      // Encode namespace into the container ID so subsequent operations
+      // (remove, restart, status, etc.) know which namespace to target.
+      const compositeId = `${ns}/${name}`;
+
       return {
-        id: name,
+        id: compositeId,
         name,
         status: ContainerStatus.RUNNING,
         image: containerConfig.image,
@@ -126,24 +190,25 @@ export class KubernetesProvider implements IOrchestratorProvider {
   }
 
   async removeContainer(deploymentName: string): Promise<void> {
+    const { namespace: ns, name } = parseId(deploymentName, this.defaultNamespace);
     try {
       await this.appsApi.deleteNamespacedDeployment({
-        name: deploymentName,
-        namespace: this.namespace,
+        name,
+        namespace: ns,
       });
     } catch (err) {
       logger.warn(
-        `[orchestrator:k8s] Failed to delete deployment ${deploymentName}: ${(err as Error).message}`,
+        `[orchestrator:k8s] Failed to delete deployment ${name} in ${ns}: ${(err as Error).message}`,
       );
     }
     try {
       await this.coreApi.deleteNamespacedService({
-        name: deploymentName,
-        namespace: this.namespace,
+        name,
+        namespace: ns,
       });
     } catch (err) {
       logger.warn(
-        `[orchestrator:k8s] Failed to delete service ${deploymentName}: ${(err as Error).message}`,
+        `[orchestrator:k8s] Failed to delete service ${name} in ${ns}: ${(err as Error).message}`,
       );
     }
   }
@@ -156,8 +221,8 @@ export class KubernetesProvider implements IOrchestratorProvider {
       .join(',');
 
     try {
-      const res = await this.appsApi.listNamespacedDeployment({
-        namespace: this.namespace,
+      // List across all namespaces managed by RDM to support per-tenant isolation
+      const res = await this.appsApi.listDeploymentForAllNamespaces({
         labelSelector,
       });
 
@@ -171,10 +236,11 @@ export class KubernetesProvider implements IOrchestratorProvider {
   }
 
   async getContainerStatus(deploymentName: string): Promise<ContainerInfo> {
+    const { namespace: ns, name } = parseId(deploymentName, this.defaultNamespace);
     try {
       const res = await this.appsApi.readNamespacedDeployment({
-        name: deploymentName,
-        namespace: this.namespace,
+        name,
+        namespace: ns,
       });
       return this.deploymentToContainerInfo(res);
     } catch (err) {
@@ -186,10 +252,11 @@ export class KubernetesProvider implements IOrchestratorProvider {
   }
 
   async restartContainer(deploymentName: string): Promise<void> {
+    const { namespace: ns, name } = parseId(deploymentName, this.defaultNamespace);
     try {
       await this.appsApi.patchNamespacedDeployment({
-        name: deploymentName,
-        namespace: this.namespace,
+        name,
+        namespace: ns,
         body: {
           spec: {
             template: {
@@ -215,10 +282,11 @@ export class KubernetesProvider implements IOrchestratorProvider {
     deploymentName: string,
     env: Record<string, string>,
   ): Promise<void> {
+    const { namespace: ns, name } = parseId(deploymentName, this.defaultNamespace);
     try {
       const current = await this.appsApi.readNamespacedDeployment({
-        name: deploymentName,
-        namespace: this.namespace,
+        name,
+        namespace: ns,
       });
 
       const containers = current.spec?.template?.spec?.containers ?? [];
@@ -237,12 +305,12 @@ export class KubernetesProvider implements IOrchestratorProvider {
       }
 
       containers[0].env = Array.from(envMap.entries()).map(
-        ([name, value]) => ({ name, value }),
+        ([envName, value]) => ({ name: envName, value }),
       );
 
       await this.appsApi.replaceNamespacedDeployment({
-        name: deploymentName,
-        namespace: this.namespace,
+        name,
+        namespace: ns,
         body: current,
       });
     } catch (err) {
@@ -258,10 +326,11 @@ export class KubernetesProvider implements IOrchestratorProvider {
     deploymentName: string,
     tail = 100,
   ): Promise<string> {
+    const { namespace: ns, name } = parseId(deploymentName, this.defaultNamespace);
     try {
       const pods = await this.coreApi.listNamespacedPod({
-        namespace: this.namespace,
-        labelSelector: `app.kubernetes.io/name=${deploymentName}`,
+        namespace: ns,
+        labelSelector: `app.kubernetes.io/name=${name}`,
       });
 
       if (!pods.items || pods.items.length === 0) {
@@ -271,7 +340,7 @@ export class KubernetesProvider implements IOrchestratorProvider {
       const podName = pods.items[0].metadata?.name ?? '';
       const res = await this.coreApi.readNamespacedPodLog({
         name: podName,
-        namespace: this.namespace,
+        namespace: ns,
         tailLines: tail,
       });
 
@@ -287,7 +356,8 @@ export class KubernetesProvider implements IOrchestratorProvider {
   // ---- Private helpers ----
 
   private deploymentToContainerInfo(d: k8s.V1Deployment): ContainerInfo {
-    const name = d.metadata?.name ?? 'unknown';
+    const dName = d.metadata?.name ?? 'unknown';
+    const dNamespace = d.metadata?.namespace ?? this.defaultNamespace;
     const labels = d.metadata?.labels ?? {};
     const container = d.spec?.template?.spec?.containers?.[0];
     const image = container?.image ?? 'unknown';
@@ -304,9 +374,11 @@ export class KubernetesProvider implements IOrchestratorProvider {
     else if (replicas > 0) status = ContainerStatus.RESTARTING;
     else status = ContainerStatus.STOPPED;
 
+    const compositeId = `${dNamespace}/${dName}`;
+
     return {
-      id: name,
-      name,
+      id: compositeId,
+      name: dName,
       status,
       image,
       createdAt: d.metadata?.creationTimestamp

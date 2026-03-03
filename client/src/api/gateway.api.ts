@@ -31,6 +31,7 @@ export interface GatewayData {
   sessionsPerInstance: number;
   scaleDownCooldownSeconds: number;
   lastScaleAction: string | null;
+  templateId: string | null;
   totalInstances: number;
   runningInstances: number;
 }
@@ -282,5 +283,74 @@ export async function updateScalingConfig(
   config: ScalingConfigInput,
 ): Promise<ScalingConfigInput & { id: string; lastScaleAction: string | null }> {
   const res = await api.put(`/gateways/${id}/scaling`, config);
+  return res.data;
+}
+
+// ---------- Gateway Templates ----------
+
+export interface GatewayTemplateData {
+  id: string;
+  name: string;
+  type: 'GUACD' | 'SSH_BASTION' | 'MANAGED_SSH';
+  host: string;
+  port: number;
+  description: string | null;
+  apiPort: number | null;
+  autoScale: boolean;
+  minReplicas: number;
+  maxReplicas: number;
+  sessionsPerInstance: number;
+  scaleDownCooldownSeconds: number;
+  monitoringEnabled: boolean;
+  monitorIntervalMs: number;
+  inactivityTimeoutSeconds: number;
+  tenantId: string;
+  createdById: string;
+  createdAt: string;
+  updatedAt: string;
+  _count: { gateways: number };
+}
+
+export interface GatewayTemplateInput {
+  name: string;
+  type: 'GUACD' | 'SSH_BASTION' | 'MANAGED_SSH';
+  host: string;
+  port: number;
+  description?: string;
+  apiPort?: number;
+  autoScale?: boolean;
+  minReplicas?: number;
+  maxReplicas?: number;
+  sessionsPerInstance?: number;
+  scaleDownCooldownSeconds?: number;
+  monitoringEnabled?: boolean;
+  monitorIntervalMs?: number;
+  inactivityTimeoutSeconds?: number;
+}
+
+export type GatewayTemplateUpdate = Partial<GatewayTemplateInput>;
+
+export async function listGatewayTemplates(): Promise<GatewayTemplateData[]> {
+  const res = await api.get('/gateways/templates');
+  return res.data;
+}
+
+export async function createGatewayTemplate(data: GatewayTemplateInput): Promise<GatewayTemplateData> {
+  const res = await api.post('/gateways/templates', data);
+  return res.data;
+}
+
+export async function updateGatewayTemplate(id: string, data: GatewayTemplateUpdate): Promise<GatewayTemplateData> {
+  const res = await api.put(`/gateways/templates/${id}`, data);
+  return res.data;
+}
+
+export async function deleteGatewayTemplate(id: string): Promise<{ deleted: boolean }> {
+  const res = await api.delete(`/gateways/templates/${id}`);
+  return res.data;
+}
+
+export async function deployFromTemplate(templateId: string): Promise<GatewayData> {
+  const res = await api.post(`/gateways/templates/${templateId}/deploy`);
   return res.data;
 }

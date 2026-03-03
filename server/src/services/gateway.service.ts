@@ -69,6 +69,7 @@ const publicSelect = {
   sessionsPerInstance: true,
   scaleDownCooldownSeconds: true,
   lastScaleAction: true,
+  templateId: true,
 } as const;
 
 function requireMasterKey(userId: string): Buffer {

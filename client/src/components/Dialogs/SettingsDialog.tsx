@@ -13,7 +13,6 @@ import {
   Groups as GroupsIcon,
   Router as RouterIcon,
   AdminPanelSettings as AdminPanelSettingsIcon,
-  Hub as HubIcon,
 } from '@mui/icons-material';
 import { useAuthStore } from '../../store/authStore';
 import { getProfile } from '../../api/user.api';
@@ -27,7 +26,6 @@ import LinkedAccountsSection from '../Settings/LinkedAccountsSection';
 import TenantSection from '../Settings/TenantSection';
 import TeamSection from '../Settings/TeamSection';
 import GatewaySection from '../Settings/GatewaySection';
-import OrchestrationSection from '../orchestration/OrchestrationSection';
 import EmailProviderSection from '../Settings/EmailProviderSection';
 
 const SlideUp = forwardRef(function SlideUp(
@@ -55,10 +53,6 @@ const TENANT_TABS: TabDef[] = [
   { id: 'gateways', label: 'Gateways', icon: <RouterIcon /> },
 ];
 
-const ORCHESTRATION_TAB: TabDef = {
-  id: 'orchestration', label: 'Orchestration', icon: <HubIcon />,
-};
-
 const ADMIN_TAB: TabDef = {
   id: 'administration', label: 'Administration', icon: <AdminPanelSettingsIcon />,
 };
@@ -80,7 +74,6 @@ export default function SettingsDialog({ open, onClose, initialTab, linkedProvid
   const tabs = useMemo(() => {
     const t = [...BASE_TABS];
     if (hasTenant) t.push(...TENANT_TABS);
-    if (isAdmin) t.push(ORCHESTRATION_TAB);
     if (isAdmin) t.push(ADMIN_TAB);
     return t;
   }, [hasTenant, isAdmin]);
@@ -202,9 +195,6 @@ export default function SettingsDialog({ open, onClose, initialTab, linkedProvid
           )}
           {resolvedTab === 'gateways' && (
             <GatewaySection onNavigateToTab={setActiveTab} />
-          )}
-          {resolvedTab === 'orchestration' && (
-            <OrchestrationSection onNavigateToTab={setActiveTab} />
           )}
           {resolvedTab === 'administration' && <EmailProviderSection />}
         </Box>

@@ -35,13 +35,16 @@ function buildContainerConfig(
   publicKey?: string,
 ): ContainerConfig {
   const suffix = `${gateway.id.slice(0, 8)}-${instanceIndex}`;
+  const tenantSlug = gateway.tenantId.slice(0, 8);
   const slug = gateway.name.toLowerCase().replace(/[^a-z0-9]/g, '-').replace(/-+/g, '-');
-  const baseName = `rdm-gw-${slug}-${suffix}`;
+  const baseName = `rdm-gw-${tenantSlug}-${slug}-${suffix}`;
+  const k8sNamespace = `rdm-${gateway.tenantId}`;
 
   if (gateway.type === 'MANAGED_SSH') {
     return {
       image: config.orchestratorSshGatewayImage,
       name: baseName,
+      namespace: k8sNamespace,
       env: {
         ...(publicKey ? { SSH_AUTHORIZED_KEYS: publicKey } : {}),
       },
@@ -61,6 +64,7 @@ function buildContainerConfig(
   return {
     image: config.orchestratorGuacdImage,
     name: baseName,
+    namespace: k8sNamespace,
     env: {},
     ports: [{ container: 4822 }],
     labels: {
@@ -135,10 +139,20 @@ export async function deployGatewayInstance(
     throw new AppError(`Container deployment failed: ${(err as Error).message}`, 500);
   }
 
-  // Determine host and port from container info
-  const host = containerInfo.ports[0]?.host
-    ? 'localhost'
-    : (config.dockerNetwork ? containerConfig.name : 'localhost');
+  // Determine host and port from container info.
+  // K8s: service name is the container name (DNS-resolvable within the cluster).
+  // Docker with custom network: container name is DNS-resolvable.
+  // Docker with port mapping: use localhost.
+  let host: string;
+  if (orchestrator.type === OrchestratorType.KUBERNETES) {
+    host = containerConfig.name;
+  } else if (containerInfo.ports[0]?.host) {
+    host = 'localhost';
+  } else if (config.dockerNetwork) {
+    host = containerConfig.name;
+  } else {
+    host = 'localhost';
+  }
   const port = containerInfo.ports[0]?.host ?? containerInfo.ports[0]?.container ?? gateway.port;
 
   const instance = await prisma.managedGatewayInstance.create({

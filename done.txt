@@ -1585,6 +1585,49 @@
     MODIFICATO: .github/workflows/docker-build.yml
 
 
+------------------------------------------------------------------------------
+[x] GATE-078 — Unificare UI Orchestration in Gateways + sistema template gateway
+------------------------------------------------------------------------------
+  Priorita: ALTA
+  Dipendenze: ORCH-062, ORCH-063, ORCH-065
+  COMPLETATO: Unified Orchestration tab into Gateways with 3 sub-tabs (Gateways, Active Sessions, Templates). Added GatewayTemplate Prisma model + CRUD + deploy-from-template backend. Created GatewayTemplateDialog and GatewayTemplateSection frontend components. Gateway rows are expandable to show ScalingControls + GatewayInstanceList inline. Removed Orchestration tab from SettingsDialog. Added tenant ID prefix to auto-generated gateway/container names. Implemented per-tenant Kubernetes namespaces (rdm-{tenantId}). Added auto-resolve hostname from container name when template host is blank. Created full Docker dev environment (Dockerfile.dev, docker-compose.dev.yml rewrite) with shared rdm-dev network for gateway container reachability. Fixed infinite re-render loop in GatewayInstanceList and missing Fragment key in GatewaySection.
+
+  DESCRIZIONE:
+  Attualmente la gestione dei gateway e l'orchestrazione (scaling, sessioni,
+  istanze) vivono in due tab separati del SettingsDialog: "Gateways" e
+  "Orchestration". Questo task unifica tutto sotto il tab "Gateways",
+  eliminando il tab "Orchestration" separato. I controlli di deploy/scaling
+  manuale e automatico saranno integrati direttamente nella lista gateway.
+  Le istanze deployate avranno un nome generato automaticamente.
+
+  In aggiunta, viene introdotto il concetto di "Gateway Template": template
+  riutilizzabili che preimpostano tipo, host, porta e configurazione di
+  scaling. Un template puo' essere deployato con un click per creare un
+  gateway gestito, riducendo la configurazione ripetitiva.
+
+  FILE COINVOLTI:
+    CREATO:     server/src/services/gatewayTemplate.service.ts
+    CREATO:     client/src/components/gateway/GatewayTemplateSection.tsx
+    CREATO:     client/src/components/gateway/GatewayTemplateDialog.tsx
+    CREATO:     Dockerfile.dev
+    MODIFICATO: server/prisma/schema.prisma
+    MODIFICATO: server/src/controllers/gateway.controller.ts
+    MODIFICATO: server/src/routes/gateway.routes.ts
+    MODIFICATO: server/src/services/managedGateway.service.ts
+    MODIFICATO: server/src/orchestrator/types.ts
+    MODIFICATO: server/src/orchestrator/kubernetes.provider.ts
+    MODIFICATO: client/src/api/gateway.api.ts
+    MODIFICATO: client/src/store/gatewayStore.ts
+    MODIFICATO: client/src/components/Settings/GatewaySection.tsx
+    MODIFICATO: client/src/components/Dialogs/SettingsDialog.tsx
+    MODIFICATO: client/src/store/uiPreferencesStore.ts
+    MODIFICATO: client/src/components/orchestration/GatewayInstanceList.tsx
+    MODIFICATO: client/vite.config.ts
+    MODIFICATO: docker-compose.dev.yml
+    MODIFICATO: package.json
+    MODIFICATO: .env.example
+
+
 ================================================================================
   SEZIONE E — ZERO TRUST HARDENING
 ================================================================================

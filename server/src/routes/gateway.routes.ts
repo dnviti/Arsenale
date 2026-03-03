@@ -19,6 +19,13 @@ router.post('/ssh-keypair/rotate', requireTenantRole('ADMIN'), gatewayController
 router.patch('/ssh-keypair/rotation', requireTenantRole('ADMIN'), gatewayController.updateRotationPolicy);
 router.get('/ssh-keypair/rotation', requireTenantRole('ADMIN'), gatewayController.getRotationStatus);
 
+// Gateway templates (must be before /:id routes)
+router.get('/templates', requireTenantRole('ADMIN'), gatewayController.listTemplates);
+router.post('/templates', requireTenantRole('ADMIN'), gatewayController.createTemplate);
+router.put('/templates/:templateId', requireTenantRole('ADMIN'), gatewayController.updateTemplate);
+router.delete('/templates/:templateId', requireTenantRole('ADMIN'), gatewayController.deleteTemplate);
+router.post('/templates/:templateId/deploy', requireTenantRole('ADMIN'), gatewayController.deployFromTemplate);
+
 router.put('/:id', requireTenantRole('ADMIN'), gatewayController.update);
 router.delete('/:id', requireTenantRole('ADMIN'), gatewayController.remove);
 router.post('/:id/test', gatewayController.testConnectivity);

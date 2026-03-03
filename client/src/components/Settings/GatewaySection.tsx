@@ -1,9 +1,10 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, Fragment } from 'react';
 import {
   Box, Button, Alert, CircularProgress, Table, TableBody, TableCell,
   TableContainer, TableHead, TableRow, Chip, Dialog, DialogTitle,
   DialogContent, DialogContentText, DialogActions, Typography, IconButton,
   Paper, TextField, Tooltip, Accordion, AccordionSummary, AccordionDetails,
+  Tabs, Tab, Collapse,
 } from '@mui/material';
 import {
   Add as AddIcon, Delete as DeleteIcon, Edit as EditIcon,
@@ -11,12 +12,19 @@ import {
   ContentCopy as CopyIcon, Download as DownloadIcon,
   Refresh as RotateIcon, ExpandMore as ExpandMoreIcon,
   Publish as PushKeyIcon,
+  KeyboardArrowDown as ExpandRowIcon,
+  KeyboardArrowUp as CollapseRowIcon,
 } from '@mui/icons-material';
 import { useAuthStore } from '../../store/authStore';
 import { useGatewayStore } from '../../store/gatewayStore';
+import { useUiPreferencesStore } from '../../store/uiPreferencesStore';
 import { testGateway, downloadSshPrivateKey } from '../../api/gateway.api';
 import type { GatewayData } from '../../api/gateway.api';
 import GatewayDialog from '../gateway/GatewayDialog';
+import SessionDashboard from '../orchestration/SessionDashboard';
+import ScalingControls from '../orchestration/ScalingControls';
+import GatewayInstanceList from '../orchestration/GatewayInstanceList';
+import GatewayTemplateSection from '../gateway/GatewayTemplateSection';
 
 interface TestState {
   gatewayId: string;
@@ -52,6 +60,9 @@ export default function GatewaySection({ onNavigateToTab }: GatewaySectionProps)
   const pushKeyToGatewayAction = useGatewayStore((s) => s.pushKeyToGateway);
   const applyHealthUpdate = useGatewayStore((s) => s.applyHealthUpdate);
 
+  const subTab = useUiPreferencesStore((s) => s.gatewayActiveSubTab);
+  const setSubTab = useUiPreferencesStore((s) => s.set);
+
   const [dialogOpen, setDialogOpen] = useState(false);
   const [editingGateway, setEditingGateway] = useState<GatewayData | null>(null);
   const [deleteTarget, setDeleteTarget] = useState<GatewayData | null>(null);
@@ -63,6 +74,7 @@ export default function GatewaySection({ onNavigateToTab }: GatewaySectionProps)
   const [rotateConfirmOpen, setRotateConfirmOpen] = useState(false);
   const [rotatePushInfo, setRotatePushInfo] = useState<string | null>(null);
   const [copied, setCopied] = useState(false);
+  const [expandedRows, setExpandedRows] = useState<Set<string>>(new Set());
 
   const hasTenant = Boolean(user?.tenantId);
   const isAdmin = user?.tenantRole === 'OWNER' || user?.tenantRole === 'ADMIN';
@@ -73,6 +85,18 @@ export default function GatewaySection({ onNavigateToTab }: GatewaySectionProps)
       if (isAdmin) fetchSshKeyPair();
     }
   }, [fetchGateways, fetchSshKeyPair, hasTenant, isAdmin]);
+
+  const toggleRow = (id: string) => {
+    setExpandedRows((prev) => {
+      const next = new Set(prev);
+      if (next.has(id)) next.delete(id);
+      else next.add(id);
+      return next;
+    });
+  };
+
+  const canExpand = (gw: GatewayData) =>
+    gw.type === 'MANAGED_SSH' || gw.type === 'GUACD';
 
   const handleEdit = (gw: GatewayData) => {
     setEditingGateway(gw);
@@ -230,273 +254,324 @@ export default function GatewaySection({ onNavigateToTab }: GatewaySectionProps)
 
   return (
     <>
-      {/* SSH Key Pair Section (Admin only) */}
-      {isAdmin && (
-        <Paper variant="outlined" sx={{ p: 2, mb: 3 }}>
+      {/* Sub-tabs */}
+      <Tabs
+        value={subTab}
+        onChange={(_, v) => setSubTab('gatewayActiveSubTab', v)}
+        sx={{ borderBottom: 1, borderColor: 'divider', mb: 3 }}
+      >
+        <Tab label="Gateways" value="gateways" sx={{ textTransform: 'none' }} />
+        {isAdmin && <Tab label="Active Sessions" value="sessions" sx={{ textTransform: 'none' }} />}
+        {isAdmin && <Tab label="Templates" value="templates" sx={{ textTransform: 'none' }} />}
+      </Tabs>
+
+      {/* Gateways sub-tab */}
+      {subTab === 'gateways' && (
+        <>
+          {/* SSH Key Pair Section (Admin only) */}
+          {isAdmin && (
+            <Paper variant="outlined" sx={{ p: 2, mb: 3 }}>
+              <Box sx={{ display: 'flex', alignItems: 'center', mb: 2 }}>
+                <KeyIcon sx={{ mr: 1, color: 'text.secondary' }} />
+                <Typography variant="h6" sx={{ flexGrow: 1 }}>SSH Key Pair</Typography>
+              </Box>
+
+              {sshKeyLoading ? (
+                <Box sx={{ display: 'flex', justifyContent: 'center', py: 3 }}>
+                  <CircularProgress size={24} />
+                </Box>
+              ) : !sshKeyPair ? (
+                <Box sx={{ textAlign: 'center', py: 3 }}>
+                  <Typography variant="body2" color="text.secondary" sx={{ mb: 2 }}>
+                    No SSH key pair generated. Generate one to use Managed SSH gateways.
+                  </Typography>
+                  <Button
+                    variant="contained"
+                    startIcon={<KeyIcon />}
+                    onClick={handleGenerateKeyPair}
+                    disabled={keyActionLoading}
+                  >
+                    {keyActionLoading ? 'Generating...' : 'Generate Key Pair'}
+                  </Button>
+                </Box>
+              ) : (
+                <Box>
+                  <Box sx={{ display: 'flex', gap: 2, mb: 2, flexWrap: 'wrap' }}>
+                    <Chip label={`Algorithm: ${sshKeyPair.algorithm.toUpperCase()}`} size="small" variant="outlined" />
+                    <Chip label={sshKeyPair.fingerprint} size="small" variant="outlined" />
+                    <Chip
+                      label={`Created: ${new Date(sshKeyPair.createdAt).toLocaleDateString()}`}
+                      size="small"
+                      variant="outlined"
+                    />
+                  </Box>
+
+                  <TextField
+                    label="Public Key"
+                    value={sshKeyPair.publicKey}
+                    fullWidth
+                    multiline
+                    minRows={1}
+                    maxRows={3}
+                    slotProps={{ input: { readOnly: true } }}
+                    sx={{ mb: 2, '& .MuiInputBase-input': { fontFamily: 'monospace', fontSize: '0.75rem' } }}
+                  />
+
+                  <Box sx={{ display: 'flex', gap: 1, flexWrap: 'wrap', mb: 2 }}>
+                    <Tooltip title={copied ? 'Copied!' : 'Copy public key'}>
+                      <Button
+                        size="small"
+                        variant="outlined"
+                        startIcon={<CopyIcon />}
+                        onClick={handleCopyPublicKey}
+                      >
+                        {copied ? 'Copied' : 'Copy Public Key'}
+                      </Button>
+                    </Tooltip>
+                    <Button
+                      size="small"
+                      variant="outlined"
+                      startIcon={<DownloadIcon />}
+                      onClick={handleDownloadPublicKey}
+                    >
+                      Download Public Key
+                    </Button>
+                    <Button
+                      size="small"
+                      variant="outlined"
+                      startIcon={<DownloadIcon />}
+                      onClick={handleDownloadPrivateKey}
+                    >
+                      Download Private Key
+                    </Button>
+                    <Button
+                      size="small"
+                      variant="outlined"
+                      color="warning"
+                      startIcon={<RotateIcon />}
+                      onClick={() => setRotateConfirmOpen(true)}
+                      disabled={keyActionLoading}
+                    >
+                      {keyActionLoading ? 'Rotating...' : 'Rotate Key Pair'}
+                    </Button>
+                  </Box>
+
+                  <Accordion disableGutters elevation={0} sx={{ border: 1, borderColor: 'divider' }}>
+                    <AccordionSummary expandIcon={<ExpandMoreIcon />}>
+                      <Typography variant="body2">How to use this key</Typography>
+                    </AccordionSummary>
+                    <AccordionDetails>
+                      <Typography variant="body2" color="text.secondary">
+                        For Managed SSH gateways with an API port configured, click the{' '}
+                        <strong>Push Key</strong> button on the gateway row to deploy the public key
+                        automatically. Alternatively, copy this public key and add it to the{' '}
+                        <code>SSH_AUTHORIZED_KEYS</code> environment variable of your SSH gateway
+                        container, or mount it as <code>/config/authorized_keys</code>.
+                        The server will use the corresponding private key to authenticate automatically.
+                      </Typography>
+                    </AccordionDetails>
+                  </Accordion>
+                </Box>
+              )}
+            </Paper>
+          )}
+
+          {error && <Alert severity="error" sx={{ mb: 2 }} onClose={() => setError('')}>{error}</Alert>}
+          {rotatePushInfo && (
+            <Alert
+              severity={rotatePushInfo.includes('Failed') ? 'warning' : 'success'}
+              sx={{ mb: 2 }}
+              onClose={() => setRotatePushInfo(null)}
+            >
+              {rotatePushInfo}
+            </Alert>
+          )}
+
+          {/* Gateways Table Section */}
           <Box sx={{ display: 'flex', alignItems: 'center', mb: 2 }}>
-            <KeyIcon sx={{ mr: 1, color: 'text.secondary' }} />
-            <Typography variant="h6" sx={{ flexGrow: 1 }}>SSH Key Pair</Typography>
+            <Typography variant="h6" sx={{ flexGrow: 1 }}>Gateways</Typography>
+            <Button
+              variant="outlined"
+              startIcon={<AddIcon />}
+              onClick={() => { setEditingGateway(null); setDialogOpen(true); }}
+            >
+              New Gateway
+            </Button>
           </Box>
 
-          {sshKeyLoading ? (
-            <Box sx={{ display: 'flex', justifyContent: 'center', py: 3 }}>
-              <CircularProgress size={24} />
+          {loading ? (
+            <Box sx={{ display: 'flex', justifyContent: 'center', py: 6 }}>
+              <CircularProgress />
             </Box>
-          ) : !sshKeyPair ? (
-            <Box sx={{ textAlign: 'center', py: 3 }}>
-              <Typography variant="body2" color="text.secondary" sx={{ mb: 2 }}>
-                No SSH key pair generated. Generate one to use Managed SSH gateways.
+          ) : gateways.length === 0 ? (
+            <Box sx={{ textAlign: 'center', py: 6 }}>
+              <RouterIcon sx={{ fontSize: 64, color: 'text.disabled', mb: 2 }} />
+              <Typography variant="h6" gutterBottom>No Gateways Yet</Typography>
+              <Typography variant="body2" color="text.secondary" sx={{ mb: 3 }}>
+                Add a gateway to route connections through GUACD or SSH bastion hosts.
               </Typography>
               <Button
                 variant="contained"
-                startIcon={<KeyIcon />}
-                onClick={handleGenerateKeyPair}
-                disabled={keyActionLoading}
+                startIcon={<AddIcon />}
+                onClick={() => { setEditingGateway(null); setDialogOpen(true); }}
               >
-                {keyActionLoading ? 'Generating...' : 'Generate Key Pair'}
+                Add Gateway
               </Button>
             </Box>
           ) : (
-            <Box>
-              <Box sx={{ display: 'flex', gap: 2, mb: 2, flexWrap: 'wrap' }}>
-                <Chip label={`Algorithm: ${sshKeyPair.algorithm.toUpperCase()}`} size="small" variant="outlined" />
-                <Chip label={sshKeyPair.fingerprint} size="small" variant="outlined" />
-                <Chip
-                  label={`Created: ${new Date(sshKeyPair.createdAt).toLocaleDateString()}`}
-                  size="small"
-                  variant="outlined"
-                />
-              </Box>
-
-              <TextField
-                label="Public Key"
-                value={sshKeyPair.publicKey}
-                fullWidth
-                multiline
-                minRows={1}
-                maxRows={3}
-                slotProps={{ input: { readOnly: true } }}
-                sx={{ mb: 2, '& .MuiInputBase-input': { fontFamily: 'monospace', fontSize: '0.75rem' } }}
-              />
-
-              <Box sx={{ display: 'flex', gap: 1, flexWrap: 'wrap', mb: 2 }}>
-                <Tooltip title={copied ? 'Copied!' : 'Copy public key'}>
-                  <Button
-                    size="small"
-                    variant="outlined"
-                    startIcon={<CopyIcon />}
-                    onClick={handleCopyPublicKey}
-                  >
-                    {copied ? 'Copied' : 'Copy Public Key'}
-                  </Button>
-                </Tooltip>
-                <Button
-                  size="small"
-                  variant="outlined"
-                  startIcon={<DownloadIcon />}
-                  onClick={handleDownloadPublicKey}
-                >
-                  Download Public Key
-                </Button>
-                <Button
-                  size="small"
-                  variant="outlined"
-                  startIcon={<DownloadIcon />}
-                  onClick={handleDownloadPrivateKey}
-                >
-                  Download Private Key
-                </Button>
-                <Button
-                  size="small"
-                  variant="outlined"
-                  color="warning"
-                  startIcon={<RotateIcon />}
-                  onClick={() => setRotateConfirmOpen(true)}
-                  disabled={keyActionLoading}
-                >
-                  {keyActionLoading ? 'Rotating...' : 'Rotate Key Pair'}
-                </Button>
-              </Box>
-
-              <Accordion disableGutters elevation={0} sx={{ border: 1, borderColor: 'divider' }}>
-                <AccordionSummary expandIcon={<ExpandMoreIcon />}>
-                  <Typography variant="body2">How to use this key</Typography>
-                </AccordionSummary>
-                <AccordionDetails>
-                  <Typography variant="body2" color="text.secondary">
-                    For Managed SSH gateways with an API port configured, click the{' '}
-                    <strong>Push Key</strong> button on the gateway row to deploy the public key
-                    automatically. Alternatively, copy this public key and add it to the{' '}
-                    <code>SSH_AUTHORIZED_KEYS</code> environment variable of your SSH gateway
-                    container, or mount it as <code>/config/authorized_keys</code>.
-                    The server will use the corresponding private key to authenticate automatically.
-                  </Typography>
-                </AccordionDetails>
-              </Accordion>
-            </Box>
-          )}
-        </Paper>
-      )}
-
-      {error && <Alert severity="error" sx={{ mb: 2 }} onClose={() => setError('')}>{error}</Alert>}
-      {rotatePushInfo && (
-        <Alert
-          severity={rotatePushInfo.includes('Failed') ? 'warning' : 'success'}
-          sx={{ mb: 2 }}
-          onClose={() => setRotatePushInfo(null)}
-        >
-          {rotatePushInfo}
-        </Alert>
-      )}
-
-      {/* Gateways Table Section */}
-      <Box sx={{ display: 'flex', alignItems: 'center', mb: 2 }}>
-        <Typography variant="h6" sx={{ flexGrow: 1 }}>Gateways</Typography>
-        <Button
-          variant="outlined"
-          startIcon={<AddIcon />}
-          onClick={() => { setEditingGateway(null); setDialogOpen(true); }}
-        >
-          New Gateway
-        </Button>
-      </Box>
-
-      {loading ? (
-        <Box sx={{ display: 'flex', justifyContent: 'center', py: 6 }}>
-          <CircularProgress />
-        </Box>
-      ) : gateways.length === 0 ? (
-        <Box sx={{ textAlign: 'center', py: 6 }}>
-          <RouterIcon sx={{ fontSize: 64, color: 'text.disabled', mb: 2 }} />
-          <Typography variant="h6" gutterBottom>No Gateways Yet</Typography>
-          <Typography variant="body2" color="text.secondary" sx={{ mb: 3 }}>
-            Add a gateway to route connections through GUACD or SSH bastion hosts.
-          </Typography>
-          <Button
-            variant="contained"
-            startIcon={<AddIcon />}
-            onClick={() => { setEditingGateway(null); setDialogOpen(true); }}
-          >
-            Add Gateway
-          </Button>
-        </Box>
-      ) : (
-        <TableContainer>
-          <Table>
-            <TableHead>
-              <TableRow>
-                <TableCell>Name</TableCell>
-                <TableCell>Type</TableCell>
-                <TableCell>Host</TableCell>
-                <TableCell>Status</TableCell>
-                <TableCell align="right">Actions</TableCell>
-              </TableRow>
-            </TableHead>
-            <TableBody>
-              {gateways.map((gw) => {
-                const test = testStates[gw.id];
-                return (
-                  <TableRow key={gw.id}>
-                    <TableCell>
-                      <Box sx={{ display: 'flex', alignItems: 'center', gap: 1, flexWrap: 'wrap' }}>
-                        <Typography variant="body2">{gw.name}</Typography>
-                        {gw.isDefault && (
-                          <Chip label="Default" size="small" color="primary" variant="outlined" />
-                        )}
-                        {gw.isManaged && (
-                          <Chip label="Managed" size="small" color="secondary" variant="outlined" />
-                        )}
-                        {gw.isManaged && (
-                          <Typography variant="caption" color="text.secondary">
-                            {gw.runningInstances}/{gw.totalInstances} instances
-                          </Typography>
-                        )}
-                      </Box>
-                      {gw.description && (
-                        <Typography variant="caption" color="text.secondary">
-                          {gw.description}
-                        </Typography>
-                      )}
-                    </TableCell>
-                    <TableCell>
-                      <Chip
-                        label={gw.type === 'GUACD' ? 'GUACD' : gw.type === 'MANAGED_SSH' ? 'Managed SSH' : 'SSH Bastion'}
-                        size="small"
-                        color={gw.type === 'GUACD' ? 'info' : gw.type === 'MANAGED_SSH' ? 'success' : 'warning'}
-                        variant="outlined"
-                      />
-                    </TableCell>
-                    <TableCell>
-                      <Typography variant="body2">{gw.host}:{gw.port}</Typography>
-                    </TableCell>
-                    <TableCell>
-                      {test?.loading ? (
-                        <CircularProgress size={16} />
-                      ) : gw.lastHealthStatus === 'REACHABLE' ? (
-                        <Tooltip title={gw.lastCheckedAt ? `Last checked: ${new Date(gw.lastCheckedAt).toLocaleTimeString()}` : ''}>
-                          <Chip
-                            label={`Reachable${gw.lastLatencyMs != null ? ` (${gw.lastLatencyMs}ms)` : ''}`}
-                            size="small"
-                            color="success"
-                          />
-                        </Tooltip>
-                      ) : gw.lastHealthStatus === 'UNREACHABLE' ? (
-                        <Tooltip title={gw.lastCheckedAt ? `Last checked: ${new Date(gw.lastCheckedAt).toLocaleTimeString()}` : ''}>
-                          <Chip
-                            label={gw.lastError || 'Unreachable'}
-                            size="small"
-                            color="error"
-                          />
-                        </Tooltip>
-                      ) : (
-                        <Typography variant="caption" color="text.secondary">
-                          {gw.monitoringEnabled ? 'Checking...' : 'Not monitored'}
-                        </Typography>
-                      )}
-                    </TableCell>
-                    <TableCell align="right">
-                      <IconButton size="small" onClick={() => handleTest(gw)} title="Test connectivity">
-                        <TestIcon fontSize="small" />
-                      </IconButton>
-                      {gw.type === 'MANAGED_SSH' && gw.apiPort && (
-                        <Tooltip title={
-                          pushStates[gw.id]?.result?.ok ? 'Key pushed successfully' :
-                          pushStates[gw.id]?.result?.error ? pushStates[gw.id].result!.error :
-                          'Push SSH key to gateway'
-                        }>
-                          <span>
-                            <IconButton
-                              size="small"
-                              onClick={() => handlePushKey(gw)}
-                              disabled={pushStates[gw.id]?.loading || !sshKeyPair}
-                              color={
-                                pushStates[gw.id]?.result?.ok ? 'success' :
-                                pushStates[gw.id]?.result?.error ? 'error' : 'default'
-                              }
-                            >
-                              {pushStates[gw.id]?.loading ? (
-                                <CircularProgress size={16} />
-                              ) : (
-                                <PushKeyIcon fontSize="small" />
-                              )}
-                            </IconButton>
-                          </span>
-                        </Tooltip>
-                      )}
-                      <IconButton size="small" onClick={() => handleEdit(gw)} title="Edit">
-                        <EditIcon fontSize="small" />
-                      </IconButton>
-                      <IconButton size="small" color="error" onClick={() => setDeleteTarget(gw)} title="Delete">
-                        <DeleteIcon fontSize="small" />
-                      </IconButton>
-                    </TableCell>
+            <TableContainer>
+              <Table>
+                <TableHead>
+                  <TableRow>
+                    <TableCell sx={{ width: 40 }} />
+                    <TableCell>Name</TableCell>
+                    <TableCell>Type</TableCell>
+                    <TableCell>Host</TableCell>
+                    <TableCell>Status</TableCell>
+                    <TableCell align="right">Actions</TableCell>
                   </TableRow>
-                );
-              })}
-            </TableBody>
-          </Table>
-        </TableContainer>
+                </TableHead>
+                <TableBody>
+                  {gateways.map((gw) => {
+                    const test = testStates[gw.id];
+                    const isExpanded = expandedRows.has(gw.id);
+                    const expandable = canExpand(gw);
+                    return (
+                      <Fragment key={gw.id}>
+                        <TableRow>
+                          <TableCell sx={{ p: 0, pl: 1 }}>
+                            {expandable && (
+                              <IconButton size="small" onClick={() => toggleRow(gw.id)}>
+                                {isExpanded ? <CollapseRowIcon /> : <ExpandRowIcon />}
+                              </IconButton>
+                            )}
+                          </TableCell>
+                          <TableCell>
+                            <Box sx={{ display: 'flex', alignItems: 'center', gap: 1, flexWrap: 'wrap' }}>
+                              <Typography variant="body2">{gw.name}</Typography>
+                              {gw.isDefault && (
+                                <Chip label="Default" size="small" color="primary" variant="outlined" />
+                              )}
+                              {gw.isManaged && (
+                                <Chip label="Managed" size="small" color="secondary" variant="outlined" />
+                              )}
+                              {gw.isManaged && (
+                                <Typography variant="caption" color="text.secondary">
+                                  {gw.runningInstances}/{gw.totalInstances} instances
+                                </Typography>
+                              )}
+                            </Box>
+                            {gw.description && (
+                              <Typography variant="caption" color="text.secondary">
+                                {gw.description}
+                              </Typography>
+                            )}
+                          </TableCell>
+                          <TableCell>
+                            <Chip
+                              label={gw.type === 'GUACD' ? 'GUACD' : gw.type === 'MANAGED_SSH' ? 'Managed SSH' : 'SSH Bastion'}
+                              size="small"
+                              color={gw.type === 'GUACD' ? 'info' : gw.type === 'MANAGED_SSH' ? 'success' : 'warning'}
+                              variant="outlined"
+                            />
+                          </TableCell>
+                          <TableCell>
+                            <Typography variant="body2">{gw.host}:{gw.port}</Typography>
+                          </TableCell>
+                          <TableCell>
+                            {test?.loading ? (
+                              <CircularProgress size={16} />
+                            ) : gw.lastHealthStatus === 'REACHABLE' ? (
+                              <Tooltip title={gw.lastCheckedAt ? `Last checked: ${new Date(gw.lastCheckedAt).toLocaleTimeString()}` : ''}>
+                                <Chip
+                                  label={`Reachable${gw.lastLatencyMs != null ? ` (${gw.lastLatencyMs}ms)` : ''}`}
+                                  size="small"
+                                  color="success"
+                                />
+                              </Tooltip>
+                            ) : gw.lastHealthStatus === 'UNREACHABLE' ? (
+                              <Tooltip title={gw.lastCheckedAt ? `Last checked: ${new Date(gw.lastCheckedAt).toLocaleTimeString()}` : ''}>
+                                <Chip
+                                  label={gw.lastError || 'Unreachable'}
+                                  size="small"
+                                  color="error"
+                                />
+                              </Tooltip>
+                            ) : (
+                              <Typography variant="caption" color="text.secondary">
+                                {gw.monitoringEnabled ? 'Checking...' : 'Not monitored'}
+                              </Typography>
+                            )}
+                          </TableCell>
+                          <TableCell align="right">
+                            <IconButton size="small" onClick={() => handleTest(gw)} title="Test connectivity">
+                              <TestIcon fontSize="small" />
+                            </IconButton>
+                            {gw.type === 'MANAGED_SSH' && gw.apiPort && (
+                              <Tooltip title={
+                                pushStates[gw.id]?.result?.ok ? 'Key pushed successfully' :
+                                pushStates[gw.id]?.result?.error ? pushStates[gw.id].result!.error :
+                                'Push SSH key to gateway'
+                              }>
+                                <span>
+                                  <IconButton
+                                    size="small"
+                                    onClick={() => handlePushKey(gw)}
+                                    disabled={pushStates[gw.id]?.loading || !sshKeyPair}
+                                    color={
+                                      pushStates[gw.id]?.result?.ok ? 'success' :
+                                      pushStates[gw.id]?.result?.error ? 'error' : 'default'
+                                    }
+                                  >
+                                    {pushStates[gw.id]?.loading ? (
+                                      <CircularProgress size={16} />
+                                    ) : (
+                                      <PushKeyIcon fontSize="small" />
+                                    )}
+                                  </IconButton>
+                                </span>
+                              </Tooltip>
+                            )}
+                            <IconButton size="small" onClick={() => handleEdit(gw)} title="Edit">
+                              <EditIcon fontSize="small" />
+                            </IconButton>
+                            <IconButton size="small" color="error" onClick={() => setDeleteTarget(gw)} title="Delete">
+                              <DeleteIcon fontSize="small" />
+                            </IconButton>
+                          </TableCell>
+                        </TableRow>
+                        {expandable && (
+                          <TableRow>
+                            <TableCell colSpan={6} sx={{ p: 0, borderBottom: isExpanded ? undefined : 'none' }}>
+                              <Collapse in={isExpanded} timeout="auto" unmountOnExit>
+                                <Box sx={{ p: 2 }}>
+                                  <ScalingControls gatewayId={gw.id} gateway={gw} />
+                                  {gw.isManaged && gw.totalInstances > 0 && (
+                                    <Box sx={{ mt: 2 }}>
+                                      <Typography variant="subtitle2" gutterBottom>Instances</Typography>
+                                      <GatewayInstanceList gatewayId={gw.id} />
+                                    </Box>
+                                  )}
+                                </Box>
+                              </Collapse>
+                            </TableCell>
+                          </TableRow>
+                        )}
+                      </Fragment>
+                    );
+                  })}
+                </TableBody>
+              </Table>
+            </TableContainer>
+          )}
+        </>
       )}
+
+      {/* Active Sessions sub-tab */}
+      {subTab === 'sessions' && isAdmin && <SessionDashboard />}
+
+      {/* Templates sub-tab */}
+      {subTab === 'templates' && isAdmin && <GatewayTemplateSection />}
 
       <GatewayDialog
         open={dialogOpen}

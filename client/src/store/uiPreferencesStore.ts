@@ -17,11 +17,12 @@ interface UiPreferences {
   orchestrationDashboardTab: string;
   orchestrationAutoRefresh: boolean;
   orchestrationRefreshInterval: number;
+  gatewayActiveSubTab: string;
 }
 
 interface UiPreferencesState extends UiPreferences {
   set: <K extends keyof UiPreferences>(key: K, value: UiPreferences[K]) => void;
-  toggle: (key: keyof Omit<UiPreferences, 'sidebarTeamSections' | 'settingsActiveTab' | 'keychainScopeFilter' | 'keychainTypeFilter' | 'keychainSortBy' | 'orchestrationDashboardTab' | 'orchestrationRefreshInterval'>) => void;
+  toggle: (key: keyof Omit<UiPreferences, 'sidebarTeamSections' | 'settingsActiveTab' | 'keychainScopeFilter' | 'keychainTypeFilter' | 'keychainSortBy' | 'orchestrationDashboardTab' | 'orchestrationRefreshInterval' | 'gatewayActiveSubTab'>) => void;
   toggleTeamSection: (teamId: string) => void;
 }
 
@@ -41,6 +42,7 @@ const defaults: UiPreferences = {
   orchestrationDashboardTab: 'sessions',
   orchestrationAutoRefresh: true,
   orchestrationRefreshInterval: 10000,
+  gatewayActiveSubTab: 'gateways',
 };
 
 export const useUiPreferencesStore = create<UiPreferencesState>()(

@@ -5,6 +5,7 @@ import * as gatewayService from '../services/gateway.service';
 import * as sshKeyService from '../services/sshkey.service';
 import * as managedGatewayService from '../services/managedGateway.service';
 import * as autoscalerService from '../services/autoscaler.service';
+import * as gatewayTemplateService from '../services/gatewayTemplate.service';
 import * as auditService from '../services/audit.service';
 import { AppError } from '../middleware/error.middleware';
 import prisma from '../lib/prisma';
@@ -51,6 +52,25 @@ const rotationPolicySchema = z.object({
   rotationIntervalDays: z.number().int().min(1).max(365).optional(),
   expiresAt: z.string().datetime().nullable().optional(),
 });
+
+const createTemplateSchema = z.object({
+  name: z.string().min(1).max(100),
+  type: z.enum(['GUACD', 'SSH_BASTION', 'MANAGED_SSH']),
+  host: z.string().default(''),
+  port: z.number().int().min(1).max(65535),
+  description: z.string().max(500).optional(),
+  apiPort: z.number().int().min(1).max(65535).optional(),
+  autoScale: z.boolean().optional(),
+  minReplicas: z.number().int().min(0).max(20).optional(),
+  maxReplicas: z.number().int().min(1).max(20).optional(),
+  sessionsPerInstance: z.number().int().min(1).max(100).optional(),
+  scaleDownCooldownSeconds: z.number().int().min(60).max(3600).optional(),
+  monitoringEnabled: z.boolean().optional(),
+  monitorIntervalMs: z.number().int().min(1000).max(3600000).optional(),
+  inactivityTimeoutSeconds: z.number().int().min(60).max(86400).optional(),
+});
+
+const updateTemplateSchema = createTemplateSchema.partial();
 
 const updateSchema = z.object({
   name: z.string().min(1).max(100).optional(),
@@ -517,6 +537,106 @@ export async function updateScalingConfig(req: AuthRequest, res: Response, next:
     res.json(updated);
   } catch (err) {
     if (err instanceof z.ZodError) return next(new AppError(err.issues[0].message, 400));
+    next(err);
+  }
+}
+
+// ---------------------------------------------------------------------------
+// Gateway Templates
+// ---------------------------------------------------------------------------
+
+export async function listTemplates(req: AuthRequest, res: Response, next: NextFunction) {
+  try {
+    const result = await gatewayTemplateService.listTemplates(req.user!.tenantId!);
+    res.json(result);
+  } catch (err) {
+    next(err);
+  }
+}
+
+export async function createTemplate(req: AuthRequest, res: Response, next: NextFunction) {
+  try {
+    const data = createTemplateSchema.parse(req.body);
+    const result = await gatewayTemplateService.createTemplate(
+      req.user!.userId,
+      req.user!.tenantId!,
+      data,
+    );
+    auditService.log({
+      userId: req.user!.userId,
+      action: 'GATEWAY_TEMPLATE_CREATE',
+      targetType: 'GatewayTemplate',
+      targetId: result.id,
+      details: { name: result.name, type: result.type },
+      ipAddress: req.ip,
+    });
+    res.status(201).json(result);
+  } catch (err) {
+    if (err instanceof z.ZodError) return next(new AppError(err.issues[0].message, 400));
+    next(err);
+  }
+}
+
+export async function updateTemplate(req: AuthRequest, res: Response, next: NextFunction) {
+  try {
+    const templateId = req.params.templateId as string;
+    const data = updateTemplateSchema.parse(req.body);
+    const result = await gatewayTemplateService.updateTemplate(
+      req.user!.userId,
+      req.user!.tenantId!,
+      templateId,
+      data,
+    );
+    auditService.log({
+      userId: req.user!.userId,
+      action: 'GATEWAY_TEMPLATE_UPDATE',
+      targetType: 'GatewayTemplate',
+      targetId: templateId,
+      details: data,
+      ipAddress: req.ip,
+    });
+    res.json(result);
+  } catch (err) {
+    if (err instanceof z.ZodError) return next(new AppError(err.issues[0].message, 400));
+    next(err);
+  }
+}
+
+export async function deleteTemplate(req: AuthRequest, res: Response, next: NextFunction) {
+  try {
+    const templateId = req.params.templateId as string;
+    await gatewayTemplateService.deleteTemplate(req.user!.tenantId!, templateId);
+    auditService.log({
+      userId: req.user!.userId,
+      action: 'GATEWAY_TEMPLATE_DELETE',
+      targetType: 'GatewayTemplate',
+      targetId: templateId,
+      ipAddress: req.ip,
+    });
+    res.json({ deleted: true });
+  } catch (err) {
+    next(err);
+  }
+}
+
+export async function deployFromTemplate(req: AuthRequest, res: Response, next: NextFunction) {
+  try {
+    const templateId = req.params.templateId as string;
+    const result = await gatewayTemplateService.deployFromTemplate(
+      req.user!.userId,
+      req.user!.tenantId!,
+      templateId,
+    );
+    auditService.log({
+      userId: req.user!.userId,
+      action: 'GATEWAY_TEMPLATE_DEPLOY',
+      targetType: 'GatewayTemplate',
+      targetId: templateId,
+      details: { gatewayId: result.id, gatewayName: result.name },
+      ipAddress: req.ip,
+    });
+    res.status(201).json(result);
+  } catch (err) {
     next(err);
   }
 }

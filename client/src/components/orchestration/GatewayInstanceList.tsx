@@ -5,8 +5,11 @@ import {
 } from '@mui/material';
 import { RestartAlt as RestartIcon } from '@mui/icons-material';
 import { useGatewayStore } from '../../store/gatewayStore';
+import type { ManagedInstanceData } from '../../api/gateway.api';
 
 type InstanceStatus = 'PROVISIONING' | 'RUNNING' | 'STOPPED' | 'ERROR' | 'REMOVING';
+
+const EMPTY_INSTANCES: ManagedInstanceData[] = [];
 
 const statusColor: Record<InstanceStatus, 'warning' | 'success' | 'default' | 'error'> = {
   PROVISIONING: 'warning',
@@ -21,7 +24,7 @@ interface GatewayInstanceListProps {
 }
 
 export default function GatewayInstanceList({ gatewayId }: GatewayInstanceListProps) {
-  const instances = useGatewayStore((s) => s.instances[gatewayId] ?? []);
+  const instances = useGatewayStore((s) => s.instances[gatewayId] ?? EMPTY_INSTANCES);
   const fetchInstances = useGatewayStore((s) => s.fetchInstances);
   const restartInstance = useGatewayStore((s) => s.restartInstance);
 
