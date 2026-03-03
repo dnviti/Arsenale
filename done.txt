@@ -1519,6 +1519,29 @@
     MODIFICATO: server/src/index.ts (health check + reconcile cron jobs)
 
 
+------------------------------------------------------------------------------
+[x] ORCH-064 — Auto-scaling gateway basato su sessioni attive
+------------------------------------------------------------------------------
+  Priorita: MEDIA
+  Dipendenze: ORCH-060 (completato), ORCH-063 (completato)
+  COMPLETATO: Auto-scaling for managed gateways — new autoscaler.service.ts with evaluateScaling() (30s cron) that calculates target replicas from ceil(activeSessions/sessionsPerInstance) clamped to min/max, scales up immediately via scaleGateway(), scales down with configurable cooldown (LIFO instance removal). New GET/PUT /gateways/:id/scaling endpoints with Zod validation. 6 new Gateway schema fields (autoScale, minReplicas, maxReplicas, sessionsPerInstance, scaleDownCooldownSeconds, lastScaleAction). New audit actions GATEWAY_SCALE_UP/GATEWAY_SCALE_DOWN. MAX_REPLICAS increased to 20.
+
+  DESCRIZIONE:
+  Implementare l'auto-scaling dei gateway managed basato sul conteggio
+  delle sessioni attive. Ogni gateway puo' abilitare l'auto-scaling con
+  una policy configurabile: numero minimo e massimo di repliche, e soglia
+  "sessioni per istanza" che determina quando scalare.
+
+  FILE COINVOLTI:
+    MODIFICATO: server/prisma/schema.prisma (Gateway scaling fields, AuditAction values)
+    CREATO:     server/src/services/autoscaler.service.ts
+    MODIFICATO: server/src/index.ts (cron job autoscaler)
+    MODIFICATO: server/src/controllers/gateway.controller.ts (scaling endpoints, Zod schemas)
+    MODIFICATO: server/src/routes/gateway.routes.ts (scaling routes)
+    MODIFICATO: server/src/services/gateway.service.ts (publicSelect scaling fields)
+    MODIFICATO: server/src/services/managedGateway.service.ts (MAX_REPLICAS 10→20)
+
+
 ================================================================================
   SEZIONE E — ZERO TRUST HARDENING
 ================================================================================

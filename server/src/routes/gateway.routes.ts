@@ -31,4 +31,8 @@ router.post('/:id/scale', requireTenantRole('ADMIN'), gatewayController.scale);
 router.get('/:id/instances', requireTenantRole('ADMIN'), gatewayController.listInstances);
 router.post('/:id/instances/:instanceId/restart', requireTenantRole('ADMIN'), gatewayController.restartInstance);
 
+// Auto-scaling configuration
+router.get('/:id/scaling', requireTenantRole('ADMIN'), gatewayController.getScalingStatus);
+router.put('/:id/scaling', requireTenantRole('ADMIN'), gatewayController.updateScalingConfig);
+
 export default router;

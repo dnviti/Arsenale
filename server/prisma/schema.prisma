@@ -261,6 +261,13 @@ model Gateway {
   isManaged        Boolean @default(false)
   desiredReplicas  Int     @default(1)
 
+  autoScale                Boolean  @default(false)
+  minReplicas              Int      @default(1)
+  maxReplicas              Int      @default(5)
+  sessionsPerInstance      Int      @default(10)
+  scaleDownCooldownSeconds Int      @default(300)
+  lastScaleAction          DateTime?
+
   inactivityTimeoutSeconds Int @default(3600)
 
   monitoringEnabled   Boolean             @default(true)
@@ -405,6 +412,8 @@ enum AuditAction {
   GATEWAY_DEPLOY
   GATEWAY_UNDEPLOY
   GATEWAY_SCALE
+  GATEWAY_SCALE_UP
+  GATEWAY_SCALE_DOWN
   GATEWAY_RESTART
   GATEWAY_HEALTH_CHECK
   BATCH_SHARE

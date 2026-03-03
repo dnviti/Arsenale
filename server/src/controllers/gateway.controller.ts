@@ -4,6 +4,7 @@ import { AuthRequest } from '../types';
 import * as gatewayService from '../services/gateway.service';
 import * as sshKeyService from '../services/sshkey.service';
 import * as managedGatewayService from '../services/managedGateway.service';
+import * as autoscalerService from '../services/autoscaler.service';
 import * as auditService from '../services/audit.service';
 import { AppError } from '../middleware/error.middleware';
 import prisma from '../lib/prisma';
@@ -26,8 +27,24 @@ const createSchema = z.object({
 });
 
 const scaleSchema = z.object({
-  replicas: z.number().int().min(0).max(10),
+  replicas: z.number().int().min(0).max(20),
 });
+
+const scalingConfigSchema = z.object({
+  autoScale: z.boolean().optional(),
+  minReplicas: z.number().int().min(0).max(20).optional(),
+  maxReplicas: z.number().int().min(1).max(20).optional(),
+  sessionsPerInstance: z.number().int().min(1).max(100).optional(),
+  scaleDownCooldownSeconds: z.number().int().min(60).max(3600).optional(),
+}).refine(
+  (data) => {
+    if (data.minReplicas !== undefined && data.maxReplicas !== undefined) {
+      return data.minReplicas <= data.maxReplicas;
+    }
+    return true;
+  },
+  { message: 'minReplicas must be less than or equal to maxReplicas' },
+);
 
 const rotationPolicySchema = z.object({
   autoRotateEnabled: z.boolean().optional(),
@@ -417,6 +434,89 @@ export async function restartInstance(req: AuthRequest, res: Response, next: Nex
 
     res.json({ restarted: true });
   } catch (err) {
+    next(err);
+  }
+}
+
+// ---------------------------------------------------------------------------
+// Auto-Scaling
+// ---------------------------------------------------------------------------
+
+export async function getScalingStatus(req: AuthRequest, res: Response, next: NextFunction) {
+  try {
+    const gatewayId = req.params.id as string;
+
+    const gateway = await prisma.gateway.findFirst({
+      where: { id: gatewayId, tenantId: req.user!.tenantId! },
+    });
+    if (!gateway) return next(new AppError('Gateway not found', 404));
+
+    const status = await autoscalerService.getScalingStatus(gatewayId);
+    res.json(status);
+  } catch (err) {
+    next(err);
+  }
+}
+
+export async function updateScalingConfig(req: AuthRequest, res: Response, next: NextFunction) {
+  try {
+    const gatewayId = req.params.id as string;
+
+    const gateway = await prisma.gateway.findFirst({
+      where: { id: gatewayId, tenantId: req.user!.tenantId! },
+    });
+    if (!gateway) return next(new AppError('Gateway not found', 404));
+
+    if (!gateway.isManaged) {
+      return next(new AppError('Auto-scaling is only available for managed gateways', 400));
+    }
+
+    const data = scalingConfigSchema.parse(req.body);
+
+    // Cross-validate against existing values when only one of min/max is provided
+    if (data.minReplicas !== undefined && data.maxReplicas === undefined) {
+      if (data.minReplicas > gateway.maxReplicas) {
+        return next(new AppError('minReplicas cannot exceed current maxReplicas', 400));
+      }
+    }
+    if (data.maxReplicas !== undefined && data.minReplicas === undefined) {
+      if (data.maxReplicas < gateway.minReplicas) {
+        return next(new AppError('maxReplicas cannot be less than current minReplicas', 400));
+      }
+    }
+
+    const updated = await prisma.gateway.update({
+      where: { id: gatewayId },
+      data: {
+        ...(data.autoScale !== undefined && { autoScale: data.autoScale }),
+        ...(data.minReplicas !== undefined && { minReplicas: data.minReplicas }),
+        ...(data.maxReplicas !== undefined && { maxReplicas: data.maxReplicas }),
+        ...(data.sessionsPerInstance !== undefined && { sessionsPerInstance: data.sessionsPerInstance }),
+        ...(data.scaleDownCooldownSeconds !== undefined && { scaleDownCooldownSeconds: data.scaleDownCooldownSeconds }),
+      },
+      select: {
+        id: true,
+        autoScale: true,
+        minReplicas: true,
+        maxReplicas: true,
+        sessionsPerInstance: true,
+        scaleDownCooldownSeconds: true,
+        lastScaleAction: true,
+      },
+    });
+
+    auditService.log({
+      userId: req.user!.userId,
+      action: 'GATEWAY_UPDATE',
+      targetType: 'Gateway',
+      targetId: gatewayId,
+      details: { scalingConfig: data },
+      ipAddress: req.ip,
+    });
+
+    res.json(updated);
+  } catch (err) {
+    if (err instanceof z.ZodError) return next(new AppError(err.issues[0].message, 400));
     next(err);
   }
 }

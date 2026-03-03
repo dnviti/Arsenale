@@ -63,6 +63,12 @@ const publicSelect = {
   lastError: true,
   isManaged: true,
   desiredReplicas: true,
+  autoScale: true,
+  minReplicas: true,
+  maxReplicas: true,
+  sessionsPerInstance: true,
+  scaleDownCooldownSeconds: true,
+  lastScaleAction: true,
 } as const;
 
 function requireMasterKey(userId: string): Buffer {

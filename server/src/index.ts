@@ -16,6 +16,7 @@ import * as sessionService from './services/session.service';
 import { initSessionCleanup, checkAndCloseInactiveSessions } from './services/sessionCleanup.service';
 import { detectOrchestrator, OrchestratorType } from './orchestrator';
 import * as managedGatewayService from './services/managedGateway.service';
+import * as autoscalerService from './services/autoscaler.service';
 
 async function runDatabaseMigrations() {
   const serverDir = path.resolve(__dirname, '..');
@@ -101,7 +102,13 @@ async function main() {
       });
     }, 5 * 60 * 1000);
 
-    logger.info('[managed-gateway] Health check (30s) and reconciliation (5m) scheduled');
+    setInterval(() => {
+      autoscalerService.evaluateScaling().catch((err) => {
+        logger.error('Auto-scaling evaluation failed:', err);
+      });
+    }, 30 * 1000);
+
+    logger.info('[managed-gateway] Health check (30s), reconciliation (5m), and auto-scaling (30s) scheduled');
   }
 
   // Cleanup expired external shares every hour

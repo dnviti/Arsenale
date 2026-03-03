@@ -253,119 +253,6 @@
 
 
 
-------------------------------------------------------------------------------
-[ ] ORCH-064 — Auto-scaling gateway basato su sessioni attive
-------------------------------------------------------------------------------
-  Priorita: MEDIA
-  Dipendenze: ORCH-060, ORCH-063
-
-  DESCRIZIONE:
-  Implementare l'auto-scaling dei gateway managed basato sul conteggio
-  delle sessioni attive. Ogni gateway puo' abilitare l'auto-scaling con
-  una policy configurabile: numero minimo e massimo di repliche, e soglia
-  "sessioni per istanza" che determina quando scalare. Il sistema valuta
-  periodicamente il rapporto sessioni/istanze e scala up o down di
-  conseguenza.
-
-  Lo scale-up e' immediato (entro il ciclo di valutazione, ogni 30 secondi)
-  quando il carico supera la soglia. Lo scale-down avviene con un periodo
-  di cooldown configurabile per evitare oscillazioni rapide (flapping):
-  il sistema attende N minuti di carico sotto soglia prima di rimuovere
-  un'istanza. Le istanze candidate alla rimozione sono quelle con meno
-  sessioni attive, e vengono rimosse solo se non hanno sessioni ACTIVE
-  (si attende la migrazione naturale delle sessioni).
-
-  Nuove AuditAction GATEWAY_SCALE_UP e GATEWAY_SCALE_DOWN registrano ogni
-  decisione di scaling automatico con dettagli (sessioni attive, istanze
-  attuali, nuove istanze, soglia).
-
-  DETTAGLI TECNICI:
-  Prisma (server/prisma/schema.prisma):
-    - Aggiungere al modello Gateway:
-        autoScale                Boolean  @default(false)
-        minReplicas              Int      @default(1)
-        maxReplicas              Int      @default(5)
-        sessionsPerInstance      Int      @default(10)
-        scaleDownCooldownSeconds Int      @default(300)  // 5 minuti
-        lastScaleAction          DateTime?
-    - Aggiungere a AuditAction enum:
-        GATEWAY_SCALE_UP, GATEWAY_SCALE_DOWN
-    - Eseguire migrazione Prisma
-
-  Servizio (server/src/services/autoscaler.service.ts):
-    - evaluateScaling(): Promise<void>
-        - Per ogni gateway managed con autoScale=true:
-          1. Contare sessioni attive (status ACTIVE/IDLE) per il gateway
-             via sessionService.getActiveSessionCount({ gatewayId })
-          2. Contare istanze RUNNING
-          3. Calcolare target: ceil(activeSessions / sessionsPerInstance)
-          4. Clamp target tra minReplicas e maxReplicas
-          5. Se target > currentInstances: SCALE UP
-             - Chiamare managedGatewayService.scaleGateway(id, target)
-             - Aggiornare lastScaleAction
-             - Audit log GATEWAY_SCALE_UP con dettagli
-          6. Se target < currentInstances: verificare cooldown
-             - Se lastScaleAction + scaleDownCooldownSeconds > now():
-               skip
-             - Altrimenti: SCALE DOWN
-             - Preferire rimozione istanze senza sessioni attive
-             - Se tutte hanno sessioni: attendere (non forzare
-               disconnessione)
-             - Chiamare managedGatewayService.scaleGateway(id, target)
-             - Aggiornare lastScaleAction
-             - Audit log GATEWAY_SCALE_DOWN con dettagli
-          7. Se target == currentInstances: noop
-
-    - getScalingStatus(gatewayId: string): Promise<ScalingStatus>
-        interface ScalingStatus {
-          currentReplicas: number;
-          desiredReplicas: number;
-          activeSessions: number;
-          sessionsPerInstance: number;
-          autoScale: boolean;
-          lastScaleAction: Date | null;
-          recommendation: 'scale-up' | 'scale-down' | 'stable';
-        }
-
-  Cron job (server/src/index.ts):
-    - setInterval ogni 30 secondi:
-        autoscalerService.evaluateScaling()
-    - Nota: questo si aggiunge al health check e reconcile gia'
-      presenti in ORCH-063. L'ordine e':
-        1. healthCheck() — 30s (verifica container health)
-        2. evaluateScaling() — 30s (decisioni scaling)
-        3. reconcileAll() — 5min (riconciliazione stato desiderato)
-
-  Controller e Routes:
-    - GET /api/gateways/:id/scaling -> getScalingStatus()
-    - PUT /api/gateways/:id/scaling -> aggiorna scaling config
-        Body: { autoScale, minReplicas, maxReplicas,
-                sessionsPerInstance, scaleDownCooldownSeconds }
-        Zod validation: minReplicas >= 0, maxReplicas <= 20,
-          minReplicas <= maxReplicas, sessionsPerInstance >= 1,
-          scaleDownCooldownSeconds >= 60
-    - Proteggere con requireTenantRole('ADMIN')
-
-  Gateway controller updateSchema:
-    - Aggiungere i campi scaling allo schema Zod di update:
-        autoScale: z.boolean().optional()
-        minReplicas: z.number().int().min(0).max(20).optional()
-        maxReplicas: z.number().int().min(1).max(20).optional()
-        sessionsPerInstance: z.number().int().min(1).max(100).optional()
-        scaleDownCooldownSeconds:
-          z.number().int().min(60).max(3600).optional()
-    - Validazione cross-field: minReplicas <= maxReplicas
-
-  File coinvolti:
-    MODIFICARE: server/prisma/schema.prisma (Gateway scaling fields,
-                AuditAction values)
-    CREARE:     server/src/services/autoscaler.service.ts
-    MODIFICARE: server/src/index.ts (cron job autoscaler)
-    MODIFICARE: server/src/controllers/gateway.controller.ts (scaling
-                endpoints, Zod schemas)
-    MODIFICARE: server/src/routes/gateway.routes.ts (scaling routes)
-    MODIFICARE: server/src/services/gateway.service.ts (scaling defaults)
-
 
 ------------------------------------------------------------------------------
 [ ] ORCH-065 — Frontend: dashboard sessioni attive, scaling controls,
@@ -1162,7 +1049,7 @@
    51. ORCH-061  Cleanup sessioni inattive con timeout configurabile  [COMPLETATO]
    52. ORCH-062  Container orchestrator abstraction layer (Docker + K8s)  [COMPLETATO]
    53. ORCH-063  Deploy e lifecycle management gateway containers  [COMPLETATO]
-   54. ORCH-064  Auto-scaling gateway basato su sessioni attive
+   54. ORCH-064  Auto-scaling gateway basato su sessioni attive  [COMPLETATO]
    55. ORCH-065  Frontend dashboard sessioni, scaling controls, monitoring
 
   Fase 9 — Zero Trust hardening (Tier 1, priorita' alta):

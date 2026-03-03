@@ -10,7 +10,7 @@ import { AppError } from '../middleware/error.middleware';
 import * as auditService from './audit.service';
 import { logger } from '../utils/logger';
 
-const MAX_REPLICAS = 10;
+const MAX_REPLICAS = 20;
 const HEALTH_CHECK_FAILURE_THRESHOLD = 3;
 const LOG_PREFIX = '[managed-gateway]';
 
