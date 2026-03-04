@@ -47,6 +47,7 @@ declare module 'guacamole-common-js' {
 
       class Event {
         state: State;
+        preventDefault(): void;
       }
     }
 

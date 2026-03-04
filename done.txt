@@ -10,6 +10,53 @@
 ================================================================================
 
 ------------------------------------------------------------------------------
+[x] RDP-081 — Fix click in sessione RDP su Firefox (context menu indesiderato)
+------------------------------------------------------------------------------
+  Priorita: ALTA
+  Dipendenze: Nessuna
+  COMPLETATO: Fixed Firefox 125+ "Paste" popup by detecting Firefox and skipping navigator.clipboard.readText() calls in syncClipboardToRemote. Also added contextmenu preventDefault on display, preventDefault in mouse handlers, and updated guacamole-common-js.d.ts types.
+
+  DESCRIZIONE:
+  Su Firefox, il click sinistro nella sessione RDP viene interpretato in modo
+  errato: invece di inoltrare il click al desktop remoto, il browser mostra il
+  menu contestuale nativo (es. "Paste"). Il problema e' causato dalla mancanza
+  di preventDefault() sugli eventi mouse nativi e dall'assenza di un listener
+  per l'evento 'contextmenu' sull'elemento display di Guacamole. Chrome non
+  presenta lo stesso problema perche' gestisce diversamente il bubbling degli
+  eventi mouse sul canvas.
+
+  DETTAGLI TECNICI:
+  Intervento su RdpViewer.tsx nella sezione di setup del mouse Guacamole:
+
+    1. Aggiungere listener 'contextmenu' sull'elemento display per prevenire
+       il menu contestuale nativo del browser:
+         display.addEventListener('contextmenu', (e) => e.preventDefault());
+
+    2. Nei handler mousedown/mouseup/mousemove di Guacamole.Mouse, invocare
+       preventDefault() sull'evento originale per evitare che il browser
+       interpreti il click in modo autonomo:
+         mouse.onEach(['mousedown', 'mouseup', 'mousemove'],
+           (e: Guacamole.Mouse.Event) => {
+             if (activeRef.current) {
+               e.preventDefault();
+               client.sendMouseState(e.state);
+             }
+           });
+
+    3. Verificare che il type definition di Guacamole.Mouse.Event includa
+       preventDefault() — aggiornare guacamole-common-js.d.ts se necessario.
+
+    4. Testare su Firefox e Chrome per confermare che:
+       - Click sinistro funziona correttamente
+       - Click destro viene inoltrato al desktop remoto
+       - Scroll wheel funziona
+       - Il menu contestuale nativo NON appare
+
+  File coinvolti:
+    MODIFICARE: client/src/components/RDP/RdpViewer.tsx
+    MODIFICARE: client/src/types/guacamole-common-js.d.ts
+
+------------------------------------------------------------------------------
 [x] FOLD-001 — Gestione cartelle per organizzare le connessioni
 ------------------------------------------------------------------------------
   Priorita: ALTA

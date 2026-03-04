@@ -149,10 +149,17 @@ export default function RdpViewer({ connectionId, tabId: _tabId, isActive = true
           setError(err.message || 'RDP connection error');
         };
 
+        // Prevent native context menu on the Guacamole display (fixes Firefox)
+        const preventContextMenu = (e: Event) => e.preventDefault();
+        display.addEventListener('contextmenu', preventContextMenu);
+
         // Mouse events — only forward when this viewer is active
         const mouse = new Guacamole.Mouse(display);
         mouse.onEach(['mousedown', 'mouseup', 'mousemove'], (e: Guacamole.Mouse.Event) => {
-          if (activeRef.current) client.sendMouseState(e.state);
+          if (activeRef.current) {
+            e.preventDefault();
+            client.sendMouseState(e.state);
+          }
         });
 
         // Clipboard: remote → browser
@@ -189,6 +196,7 @@ export default function RdpViewer({ connectionId, tabId: _tabId, isActive = true
 
         return () => {
           resizeObserver?.disconnect();
+          display.removeEventListener('contextmenu', preventContextMenu);
           keyboard.onkeydown = null;
           keyboard.onkeyup = null;
           if (heartbeatInterval) clearInterval(heartbeatInterval);
@@ -244,7 +252,12 @@ export default function RdpViewer({ connectionId, tabId: _tabId, isActive = true
     };
 
     // Clipboard: browser → remote
+    // Firefox 125+ shows a native "Paste" popup every time navigator.clipboard.readText()
+    // is called, so we skip automatic clipboard sync on Firefox to avoid it.
+    // See: https://github.com/Ylianst/MeshCentral/issues/6571
+    const isFirefox = /firefox/i.test(navigator.userAgent);
     const syncClipboardToRemote = () => {
+      if (isFirefox) return;
       const client = clientRef.current;
       if (!client || !activeRef.current) return;
       if (!navigator.clipboard?.readText) return;
