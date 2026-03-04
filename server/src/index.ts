@@ -19,6 +19,15 @@ import { detectOrchestrator, OrchestratorType } from './orchestrator';
 import * as managedGatewayService from './services/managedGateway.service';
 import * as autoscalerService from './services/autoscaler.service';
 
+function freePort(port: number): void {
+  try {
+    execSync(`fuser -k ${port}/tcp`, { stdio: 'pipe' });
+    logger.info(`Killed stale process on port ${port}`);
+  } catch {
+    // No process on that port — nothing to do
+  }
+}
+
 async function runDatabaseMigrations() {
   const serverDir = path.resolve(__dirname, '..');
   try {
@@ -60,6 +69,10 @@ async function runStartupMigrations() {
 }
 
 async function main() {
+  // Kill stale processes from previous runs (e.g. tsx watch restart, debugger)
+  freePort(config.port);
+  freePort(config.guacamoleWsPort);
+
   await runDatabaseMigrations();
   await runStartupMigrations();
 
@@ -161,13 +174,15 @@ async function main() {
   }, 24 * 60 * 60 * 1000);
 
   // Setup guacamole-lite for RDP
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  let guacServer: any = null;
   if (config.nodeEnv !== 'test') {
     try {
       // eslint-disable-next-line @typescript-eslint/no-require-imports
       const GuacamoleLite = require('guacamole-lite');
       // eslint-disable-next-line @typescript-eslint/no-require-imports
       const { getGuacamoleKey } = require('./services/rdp.service');
-      const guacServer = new GuacamoleLite(
+      guacServer = new GuacamoleLite(
         { port: config.guacamoleWsPort },
         {
           host: config.guacdHost,
@@ -184,7 +199,7 @@ async function main() {
         }
       );
 
-      guacServer.on('error', (clientConnection: unknown, error: unknown) => {
+      guacServer.on('error', (_clientConnection: unknown, error: unknown) => {
         logger.error(
           'Guacamole connection error:',
           error instanceof Error ? error.message : error
@@ -247,6 +262,15 @@ async function main() {
       }
     } catch (err) {
       logger.error('Failed to close sessions on shutdown:', err);
+    }
+
+    if (guacServer) {
+      try {
+        guacServer.close();
+        logger.info('Guacamole WebSocket server closed.');
+      } catch {
+        // Ignore close errors during shutdown
+      }
     }
 
     server.close(() => {
