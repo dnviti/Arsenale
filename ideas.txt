@@ -1,0 +1,9 @@
+================================================================================
+  REMOTE DESKTOP MANAGER — IDEA BACKLOG
+  Formato: IDEA-NNN — Titolo
+  Stato: Le idee qui sono in attesa di valutazione.
+  Note: Usare /idea-approve per promuovere un'idea a task,
+        /idea-disapprove per rifiutarla (spostata in idea-disapproved.txt)
+================================================================================
+
+
