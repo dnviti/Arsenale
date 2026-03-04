@@ -84,7 +84,7 @@ export async function issueTokens(user: {
   avatarData: string | null;
   tenantId?: string | null;
   tenantRole?: string | null;
-}) {
+}, tokenFamily?: string) {
   const payload: AuthPayload = {
     userId: user.id,
     email: user.email,
@@ -97,10 +97,12 @@ export async function issueTokens(user: {
 
   const refreshTokenValue = uuidv4();
   const refreshExpiresMs = parseExpiry(config.jwtRefreshExpiresIn);
+  const family = tokenFamily ?? uuidv4();
   await prisma.refreshToken.create({
     data: {
       token: refreshTokenValue,
       userId: user.id,
+      tokenFamily: family,
       expiresAt: new Date(Date.now() + refreshExpiresMs),
     },
   });
@@ -331,48 +333,113 @@ export async function verifySmsCode(tempToken: string, code: string) {
   return issueTokens(user);
 }
 
+const ROTATION_GRACE_PERIOD_MS = 10_000; // 10 seconds for concurrent-tab tolerance
+
 export async function refreshAccessToken(refreshToken: string) {
   const stored = await prisma.refreshToken.findUnique({
     where: { token: refreshToken },
     include: { user: true },
   });
 
-  if (!stored || stored.expiresAt < new Date()) {
-    if (stored) {
-      await prisma.refreshToken.delete({ where: { id: stored.id } });
-    }
+  if (!stored) {
     throw new Error('Invalid or expired refresh token');
   }
 
-  const payload: AuthPayload = {
-    userId: stored.user.id,
-    email: stored.user.email,
-    ...(stored.user.tenantId && { tenantId: stored.user.tenantId }),
-    ...(stored.user.tenantRole && { tenantRole: stored.user.tenantRole as AuthPayload['tenantRole'] }),
-  };
-  const accessToken = jwt.sign(payload, config.jwtSecret, {
-    expiresIn: config.jwtExpiresIn as string,
-  } as jwt.SignOptions);
+  // Reuse detection: token was already rotated
+  if (stored.revokedAt) {
+    const timeSinceRevocation = Date.now() - stored.revokedAt.getTime();
 
-  return {
-    accessToken,
-    user: {
+    // Grace period for concurrent tabs using the same token
+    if (timeSinceRevocation <= ROTATION_GRACE_PERIOD_MS) {
+      const activeToken = await prisma.refreshToken.findFirst({
+        where: {
+          tokenFamily: stored.tokenFamily,
+          revokedAt: null,
+          expiresAt: { gt: new Date() },
+        },
+      });
+
+      if (activeToken) {
+        // Rotate the successor token and issue new ones
+        await prisma.refreshToken.update({
+          where: { id: activeToken.id },
+          data: { revokedAt: new Date() },
+        });
+
+        return issueTokens(
+          {
+            id: stored.user.id,
+            email: stored.user.email,
+            username: stored.user.username,
+            avatarData: stored.user.avatarData,
+            tenantId: stored.user.tenantId,
+            tenantRole: stored.user.tenantRole,
+          },
+          stored.tokenFamily,
+        );
+      }
+    }
+
+    // Outside grace period or no active successor — likely token theft
+    await prisma.refreshToken.deleteMany({
+      where: { tokenFamily: stored.tokenFamily },
+    });
+
+    auditService.log({
+      userId: stored.userId,
+      action: 'REFRESH_TOKEN_REUSE',
+      details: {
+        tokenFamily: stored.tokenFamily,
+        reason: 'Rotated refresh token reused — all family tokens revoked',
+      },
+    });
+
+    logger.warn(
+      `[auth] Refresh token reuse detected for user ${stored.userId}, family ${stored.tokenFamily}. All tokens revoked.`,
+    );
+
+    throw new Error('Invalid or expired refresh token');
+  }
+
+  // Token has expired
+  if (stored.expiresAt < new Date()) {
+    await prisma.refreshToken.delete({ where: { id: stored.id } });
+    throw new Error('Invalid or expired refresh token');
+  }
+
+  // Normal rotation: mark old token as revoked, issue new one in same family
+  await prisma.refreshToken.update({
+    where: { id: stored.id },
+    data: { revokedAt: new Date() },
+  });
+
+  return issueTokens(
+    {
       id: stored.user.id,
       email: stored.user.email,
       username: stored.user.username,
       avatarData: stored.user.avatarData,
-      tenantId: stored.user.tenantId ?? undefined,
-      tenantRole: stored.user.tenantRole ?? undefined,
+      tenantId: stored.user.tenantId,
+      tenantRole: stored.user.tenantRole,
     },
-  };
+    stored.tokenFamily,
+  );
 }
 
 export async function logout(refreshToken: string): Promise<string | null> {
   const stored = await prisma.refreshToken.findFirst({
     where: { token: refreshToken },
-    select: { userId: true },
+    select: { userId: true, tokenFamily: true },
   });
-  await prisma.refreshToken.deleteMany({ where: { token: refreshToken } });
+
+  if (stored?.tokenFamily) {
+    // Delete all tokens in the family (active and revoked)
+    await prisma.refreshToken.deleteMany({
+      where: { tokenFamily: stored.tokenFamily },
+    });
+  } else {
+    await prisma.refreshToken.deleteMany({ where: { token: refreshToken } });
+  }
 
   if (stored?.userId) {
     lockVault(stored.userId);
@@ -486,6 +553,16 @@ export async function verifyMfaSetupDuringLogin(tempToken: string, code: string)
   if (!user) throw new Error('User not found');
 
   return issueTokens(user);
+}
+
+export async function cleanupExpiredTokens() {
+  const result = await prisma.refreshToken.deleteMany({
+    where: { expiresAt: { lt: new Date() } },
+  });
+  if (result.count > 0) {
+    logger.info(`[auth] Cleaned up ${result.count} expired refresh token(s)`);
+  }
+  return result.count;
 }
 
 function parseExpiry(expiry: string): number {

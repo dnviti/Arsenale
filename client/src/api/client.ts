@@ -35,8 +35,9 @@ api.interceptors.response.use(
             refreshPromise = axios
               .post('/api/auth/refresh', { refreshToken })
               .then((res) => {
-                const { accessToken, user } = res.data;
+                const { accessToken, refreshToken: newRefreshToken, user } = res.data;
                 useAuthStore.getState().setAccessToken(accessToken);
+                if (newRefreshToken) useAuthStore.getState().setRefreshToken(newRefreshToken);
                 if (user) useAuthStore.getState().updateUser(user);
                 return accessToken as string;
               })

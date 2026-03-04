@@ -1863,6 +1863,32 @@
     MODIFICATO: client/src/components/Settings/TenantSection.tsx (MFA policy toggle, confirmation dialog, MFA column)
 
 
+------------------------------------------------------------------------------
+[x] ZT-042 — Rotazione refresh token
+------------------------------------------------------------------------------
+  Priorita: MEDIA
+  Dipendenze: Nessuna
+  COMPLETATO: Implemented refresh token rotation with reuse detection. Added
+    tokenFamily and revokedAt fields to RefreshToken model with indexes. On
+    every refresh, the old token is revoked and a new one issued in the same
+    family. Reuse detection: if a revoked token is replayed outside a 10-second
+    grace period (for concurrent tabs), the entire token family is deleted and
+    REFRESH_TOKEN_REUSE audit event logged. Logout now revokes the full family.
+    Added hourly cleanup of expired tokens. Client updated: authStore gains
+    setRefreshToken, Axios interceptor/useAuth/ConnectionViewerPage all save
+    the rotated refresh token from the response.
+
+  File coinvolti:
+    MODIFICATO: server/prisma/schema.prisma (RefreshToken model + REFRESH_TOKEN_REUSE)
+    MODIFICATO: server/src/services/auth.service.ts (issueTokens, refreshAccessToken, logout, cleanupExpiredTokens)
+    MODIFICATO: server/src/index.ts (hourly cleanup interval)
+    MODIFICATO: client/src/store/authStore.ts (setRefreshToken action)
+    MODIFICATO: client/src/api/auth.api.ts (refreshApi return type)
+    MODIFICATO: client/src/api/client.ts (interceptor saves rotated token)
+    MODIFICATO: client/src/hooks/useAuth.ts (bootstrap saves rotated token)
+    MODIFICATO: client/src/pages/ConnectionViewerPage.tsx (popup bootstrap saves rotated token)
+
+
 ================================================================================
   SEZIONE F — PASSWORD KEYCHAIN / SECRET VAULT
 ================================================================================

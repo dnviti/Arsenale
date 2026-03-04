@@ -29,6 +29,7 @@ export default function ConnectionViewerPage() {
       axios.post('/api/auth/refresh', { refreshToken })
         .then((res) => {
           setAccessToken(res.data.accessToken);
+          if (res.data.refreshToken) useAuthStore.getState().setRefreshToken(res.data.refreshToken);
           setAuthReady(true);
         })
         .catch(() => {

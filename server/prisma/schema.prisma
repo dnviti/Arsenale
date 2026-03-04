@@ -393,13 +393,18 @@ enum SecretScope {
 }
 
 model RefreshToken {
-  id        String   @id @default(uuid())
-  token     String   @unique
-  userId    String
-  expiresAt DateTime
-  createdAt DateTime @default(now())
+  id          String    @id @default(uuid())
+  token       String    @unique
+  userId      String
+  tokenFamily String
+  revokedAt   DateTime?
+  expiresAt   DateTime
+  createdAt   DateTime  @default(now())
 
   user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([tokenFamily])
+  @@index([userId])
 }
 
 enum AuditAction {
@@ -479,6 +484,7 @@ enum AuditAction {
   GATEWAY_TEMPLATE_UPDATE
   GATEWAY_TEMPLATE_DELETE
   GATEWAY_TEMPLATE_DEPLOY
+  REFRESH_TOKEN_REUSE
 }
 
 model AuditLog {

@@ -12,6 +12,7 @@ export function useAuth() {
       refreshApi(refreshToken)
         .then((data) => {
           setAccessToken(data.accessToken);
+          if (data.refreshToken) useAuthStore.getState().setRefreshToken(data.refreshToken);
           if (data.user) useAuthStore.getState().updateUser(data.user);
         })
         .catch(() => {

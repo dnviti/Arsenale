@@ -10,6 +10,7 @@ import prisma from './lib/prisma';
 import { startKeyRotationJob, stopAllJobs } from './services/scheduler.service';
 import { startAllMonitors, stopAllMonitors } from './services/gatewayMonitor.service';
 import { cleanupExpiredShares } from './services/externalShare.service';
+import { cleanupExpiredTokens } from './services/auth.service';
 import { checkExpiringSecrets } from './services/secretExpiry.service';
 import { markServerReady } from './services/health.service';
 import * as sessionService from './services/session.service';
@@ -115,6 +116,13 @@ async function main() {
   setInterval(() => {
     cleanupExpiredShares().catch((err) => {
       logger.error('Failed to cleanup expired external shares:', err);
+    });
+  }, 60 * 60 * 1000);
+
+  // Cleanup expired refresh tokens every hour
+  setInterval(() => {
+    cleanupExpiredTokens().catch((err) => {
+      logger.error('Failed to cleanup expired refresh tokens:', err);
     });
   }, 60 * 60 * 1000);
 
