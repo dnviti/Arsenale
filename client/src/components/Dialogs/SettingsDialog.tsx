@@ -27,6 +27,7 @@ import TenantSection from '../Settings/TenantSection';
 import TeamSection from '../Settings/TeamSection';
 import GatewaySection from '../Settings/GatewaySection';
 import EmailProviderSection from '../Settings/EmailProviderSection';
+import TenantAuditLogSection from '../Settings/TenantAuditLogSection';
 
 const SlideUp = forwardRef(function SlideUp(
   props: TransitionProps & { children: React.ReactElement },
@@ -196,7 +197,12 @@ export default function SettingsDialog({ open, onClose, initialTab, linkedProvid
           {resolvedTab === 'gateways' && (
             <GatewaySection onNavigateToTab={setActiveTab} />
           )}
-          {resolvedTab === 'administration' && <EmailProviderSection />}
+          {resolvedTab === 'administration' && (
+            <Stack spacing={3}>
+              <EmailProviderSection />
+              <TenantAuditLogSection />
+            </Stack>
+          )}
         </Box>
       </Box>
     </Dialog>

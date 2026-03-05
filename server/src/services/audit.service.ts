@@ -34,6 +34,36 @@ export function log(input: AuditLogInput): void {
     });
 }
 
+export interface TenantAuditLogQuery {
+  tenantId: string;
+  userId?: string;
+  page?: number;
+  limit?: number;
+  action?: AuditAction;
+  startDate?: Date;
+  endDate?: Date;
+  search?: string;
+  targetType?: string;
+  ipAddress?: string;
+  gatewayId?: string;
+  sortBy?: 'createdAt' | 'action';
+  sortOrder?: 'asc' | 'desc';
+}
+
+export interface TenantAuditLogEntry extends AuditLogEntry {
+  userId: string | null;
+  userName: string | null;
+  userEmail: string | null;
+}
+
+export interface PaginatedTenantAuditLogs {
+  data: TenantAuditLogEntry[];
+  total: number;
+  page: number;
+  limit: number;
+  totalPages: number;
+}
+
 export interface AuditLogQuery {
   userId: string;
   page?: number;
@@ -145,6 +175,125 @@ export async function getAuditLogs(query: AuditLogQuery): Promise<PaginatedAudit
 export async function getAuditGateways(userId: string): Promise<AuditGateway[]> {
   const rows = await prisma.auditLog.findMany({
     where: { userId, gatewayId: { not: null } },
+    select: { gatewayId: true },
+    distinct: ['gatewayId'],
+  });
+
+  const gatewayIds = rows.map((r) => r.gatewayId!);
+  if (gatewayIds.length === 0) return [];
+
+  const gateways = await prisma.gateway.findMany({
+    where: { id: { in: gatewayIds } },
+    select: { id: true, name: true },
+  });
+
+  const nameMap = new Map(gateways.map((g) => [g.id, g.name]));
+  return gatewayIds.map((id) => ({
+    id,
+    name: nameMap.get(id) ?? `Deleted (${id.slice(0, 8)}…)`,
+  }));
+}
+
+function buildCommonWhereClause(opts: {
+  action?: AuditAction;
+  startDate?: Date;
+  endDate?: Date;
+  targetType?: string;
+  ipAddress?: string;
+  gatewayId?: string;
+  search?: string;
+}): Prisma.AuditLogWhereInput {
+  const where: Prisma.AuditLogWhereInput = {};
+  if (opts.action) where.action = opts.action;
+  if (opts.startDate || opts.endDate) {
+    where.createdAt = {
+      ...(opts.startDate && { gte: opts.startDate }),
+      ...(opts.endDate && { lte: opts.endDate }),
+    };
+  }
+  if (opts.targetType) where.targetType = opts.targetType;
+  if (opts.ipAddress) where.ipAddress = { contains: opts.ipAddress, mode: 'insensitive' };
+  if (opts.gatewayId) where.gatewayId = opts.gatewayId;
+  if (opts.search) {
+    const term = opts.search;
+    where.AND = [
+      {
+        OR: [
+          { targetType: { contains: term, mode: 'insensitive' } },
+          { targetId: { contains: term, mode: 'insensitive' } },
+          { ipAddress: { contains: term, mode: 'insensitive' } },
+          { details: { string_contains: term } },
+        ],
+      },
+    ];
+  }
+  return where;
+}
+
+export async function getTenantAuditLogs(query: TenantAuditLogQuery): Promise<PaginatedTenantAuditLogs> {
+  const page = query.page ?? 1;
+  const limit = Math.min(query.limit ?? 50, 100);
+  const skip = (page - 1) * limit;
+
+  const where: Prisma.AuditLogWhereInput = {
+    user: { tenantId: query.tenantId },
+    ...(query.userId && { userId: query.userId }),
+    ...buildCommonWhereClause(query),
+  };
+
+  const sortBy = query.sortBy ?? 'createdAt';
+  const sortOrder = query.sortOrder ?? 'desc';
+  const orderBy: Prisma.AuditLogOrderByWithRelationInput = { [sortBy]: sortOrder };
+
+  const [rows, total] = await Promise.all([
+    prisma.auditLog.findMany({
+      where,
+      orderBy,
+      skip,
+      take: limit,
+      select: {
+        id: true,
+        userId: true,
+        action: true,
+        targetType: true,
+        targetId: true,
+        details: true,
+        ipAddress: true,
+        gatewayId: true,
+        createdAt: true,
+        user: { select: { username: true, email: true } },
+      },
+    }),
+    prisma.auditLog.count({ where }),
+  ]);
+
+  const data: TenantAuditLogEntry[] = rows.map((r) => ({
+    id: r.id,
+    action: r.action,
+    targetType: r.targetType,
+    targetId: r.targetId,
+    details: r.details,
+    ipAddress: r.ipAddress,
+    gatewayId: r.gatewayId,
+    createdAt: r.createdAt,
+    userId: r.userId,
+    userName: r.user?.username ?? null,
+    userEmail: r.user?.email ?? null,
+  }));
+
+  return { data, total, page, limit, totalPages: Math.ceil(total / limit) };
+}
+
+export async function getTenantAuditGateways(tenantId: string): Promise<AuditGateway[]> {
+  const userIds = await prisma.user.findMany({
+    where: { tenantId },
+    select: { id: true },
+  });
+  const ids = userIds.map((u) => u.id);
+  if (ids.length === 0) return [];
+
+  const rows = await prisma.auditLog.findMany({
+    where: { userId: { in: ids }, gatewayId: { not: null } },
     select: { gatewayId: true },
     distinct: ['gatewayId'],
   });

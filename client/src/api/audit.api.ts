@@ -85,3 +85,31 @@ export async function getAuditGateways(): Promise<AuditGateway[]> {
   const res = await api.get('/audit/gateways');
   return res.data;
 }
+
+export interface TenantAuditLogEntry extends AuditLogEntry {
+  userId: string | null;
+  userName: string | null;
+  userEmail: string | null;
+}
+
+export interface TenantAuditLogResponse {
+  data: TenantAuditLogEntry[];
+  total: number;
+  page: number;
+  limit: number;
+  totalPages: number;
+}
+
+export interface TenantAuditLogParams extends AuditLogParams {
+  userId?: string;
+}
+
+export async function getTenantAuditLogs(params: TenantAuditLogParams = {}): Promise<TenantAuditLogResponse> {
+  const res = await api.get('/audit/tenant', { params });
+  return res.data;
+}
+
+export async function getTenantAuditGateways(): Promise<AuditGateway[]> {
+  const res = await api.get('/audit/tenant/gateways');
+  return res.data;
+}

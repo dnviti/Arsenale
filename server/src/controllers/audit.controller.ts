@@ -46,3 +46,31 @@ export async function listGateways(req: AuthRequest, res: Response, next: NextFu
     next(err);
   }
 }
+
+const tenantQuerySchema = querySchema.extend({
+  userId: z.string().uuid().optional(),
+});
+
+export async function listTenantLogs(req: AuthRequest, res: Response, next: NextFunction) {
+  try {
+    const query = tenantQuerySchema.parse(req.query);
+    const result = await auditService.getTenantAuditLogs({
+      tenantId: req.user!.tenantId!,
+      ...query,
+      action: query.action as AuditAction | undefined,
+    });
+    res.json(result);
+  } catch (err) {
+    if (err instanceof z.ZodError) return next(new AppError(err.issues[0].message, 400));
+    next(err);
+  }
+}
+
+export async function listTenantGateways(req: AuthRequest, res: Response, next: NextFunction) {
+  try {
+    const gateways = await auditService.getTenantAuditGateways(req.user!.tenantId!);
+    res.json(gateways);
+  } catch (err) {
+    next(err);
+  }
+}

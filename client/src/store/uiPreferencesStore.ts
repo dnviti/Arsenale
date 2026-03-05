@@ -24,11 +24,18 @@ interface UiPreferences {
   auditLogGatewayId: string;
   auditLogSortBy: string;
   auditLogSortOrder: string;
+  tenantAuditLogAction: string;
+  tenantAuditLogSearch: string;
+  tenantAuditLogTargetType: string;
+  tenantAuditLogGatewayId: string;
+  tenantAuditLogUserId: string;
+  tenantAuditLogSortBy: string;
+  tenantAuditLogSortOrder: string;
 }
 
 interface UiPreferencesState extends UiPreferences {
   set: <K extends keyof UiPreferences>(key: K, value: UiPreferences[K]) => void;
-  toggle: (key: keyof Omit<UiPreferences, 'sidebarTeamSections' | 'settingsActiveTab' | 'keychainScopeFilter' | 'keychainTypeFilter' | 'keychainSortBy' | 'orchestrationDashboardTab' | 'orchestrationRefreshInterval' | 'gatewayActiveSubTab' | 'auditLogAction' | 'auditLogSearch' | 'auditLogTargetType' | 'auditLogGatewayId' | 'auditLogSortBy' | 'auditLogSortOrder'>) => void;
+  toggle: (key: keyof Omit<UiPreferences, 'sidebarTeamSections' | 'settingsActiveTab' | 'keychainScopeFilter' | 'keychainTypeFilter' | 'keychainSortBy' | 'orchestrationDashboardTab' | 'orchestrationRefreshInterval' | 'gatewayActiveSubTab' | 'auditLogAction' | 'auditLogSearch' | 'auditLogTargetType' | 'auditLogGatewayId' | 'auditLogSortBy' | 'auditLogSortOrder' | 'tenantAuditLogAction' | 'tenantAuditLogSearch' | 'tenantAuditLogTargetType' | 'tenantAuditLogGatewayId' | 'tenantAuditLogUserId' | 'tenantAuditLogSortBy' | 'tenantAuditLogSortOrder'>) => void;
   toggleTeamSection: (teamId: string) => void;
 }
 
@@ -55,6 +62,13 @@ const defaults: UiPreferences = {
   auditLogGatewayId: '',
   auditLogSortBy: 'createdAt',
   auditLogSortOrder: 'desc',
+  tenantAuditLogAction: '',
+  tenantAuditLogSearch: '',
+  tenantAuditLogTargetType: '',
+  tenantAuditLogGatewayId: '',
+  tenantAuditLogUserId: '',
+  tenantAuditLogSortBy: 'createdAt',
+  tenantAuditLogSortOrder: 'desc',
 };
 
 export const useUiPreferencesStore = create<UiPreferencesState>()(

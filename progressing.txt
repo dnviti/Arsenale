@@ -32,6 +32,35 @@
   SEZIONE E — ZERO TRUST HARDENING
 ================================================================================
 
+------------------------------------------------------------------------------
+[~] ZT-045 — Vista audit log per admin tenant
+------------------------------------------------------------------------------
+  Priorita: MEDIA
+  Dipendenze: AUDIT-013 (completato), TENANT-020 (completato)
+
+  DESCRIZIONE:
+  Aggiungere un endpoint per permettere ai tenant OWNER e ADMIN di consultare
+  i log audit di tutti gli utenti del proprio tenant. Attualmente ogni utente
+  vede solo i propri log, rendendo impossibile per gli admin investigare
+  incidenti di sicurezza o monitorare l'attivita' del tenant.
+
+  DETTAGLI TECNICI:
+  Backend:
+    - Nuovo endpoint GET /api/audit/tenant in audit.routes.ts
+    - Proteggere con middleware: authenticate + requireTenantRole('ADMIN')
+    - audit.service.ts: nuova funzione getTenantAuditLogs() che filtra per
+      tutti gli userId del tenant (JOIN su User.tenantId)
+    - Supportare filtri: userId specifico, action, dateRange, paginazione
+    - Restituire anche il nome/email dell'utente per ogni log entry
+  Frontend:
+    - Nuova pagina/tab nelle impostazioni tenant per admin audit log
+    - Tabella con filtri: utente, azione, data
+    - Export CSV opzionale
+  File coinvolti:
+    - server/src/routes/audit.routes.ts
+    - server/src/controllers/audit.controller.ts
+    - server/src/services/audit.service.ts
+    - client/src/ (pagina admin audit)
 
 ================================================================================
   SEZIONE F — PASSWORD KEYCHAIN / SECRET VAULT
