@@ -2,7 +2,9 @@ import { useEffect, useRef, useState, useMemo } from 'react';
 import { Box, CircularProgress, Typography, Alert } from '@mui/material';
 import { FolderOpen as FolderOpenIcon } from '@mui/icons-material';
 import Guacamole from 'guacamole-common-js';
+import { io } from 'socket.io-client';
 import api from '../../api/client';
+import { useAuthStore } from '../../store/authStore';
 import type { CredentialOverride } from '../../store/tabsStore';
 import FileBrowser from './FileBrowser';
 import FloatingToolbar, { ToolbarAction } from '../shared/FloatingToolbar';
@@ -49,6 +51,32 @@ export default function RdpViewer({ connectionId, tabId: _tabId, isActive = true
       displayRef.current?.blur();
     }
   }, [isActive]);
+
+  // Listen for admin-initiated session termination via the /notifications namespace.
+  useEffect(() => {
+    const accessToken = useAuthStore.getState().accessToken;
+    if (!accessToken) return;
+
+    const socket = io('/notifications', {
+      auth: { token: accessToken },
+      transports: ['websocket'],
+    });
+
+    const handler = (data: { sessionId: string }) => {
+      if (data.sessionId && data.sessionId === sessionIdRef.current) {
+        setStatus('error');
+        setError('Session terminated by administrator');
+        clientRef.current?.disconnect();
+      }
+    };
+
+    socket.on('session:terminated', handler);
+
+    return () => {
+      socket.off('session:terminated', handler);
+      socket.disconnect();
+    };
+  }, [connectionId]);
 
   useEffect(() => {
     if (!displayRef.current) return;
@@ -132,7 +160,7 @@ export default function RdpViewer({ connectionId, tabId: _tabId, isActive = true
                       }
                     });
                   }
-                }, 30_000);
+                }, 10_000);
               }
               break;
             case 5: // DISCONNECTED

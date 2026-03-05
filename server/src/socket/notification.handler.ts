@@ -38,3 +38,13 @@ export function emitNotification(userId: string, notification: NotificationEntry
     notificationNamespace.to(userId).emit('notification:new', notification);
   }
 }
+
+/**
+ * Notify a user's browser that a session was terminated by an admin.
+ * Safe to call even if the user is not connected — it simply won't deliver.
+ */
+export function emitSessionTerminated(userId: string, sessionId: string, reason: string) {
+  if (notificationNamespace) {
+    notificationNamespace.to(userId).emit('session:terminated', { sessionId, reason });
+  }
+}

@@ -176,6 +176,53 @@ export async function endSessionByGuacTokenHash(tokenHash: string): Promise<void
   }
 }
 
+export async function closeStaleSessionsForConnection(
+  userId: string,
+  connectionId: string,
+  protocol: SessionProtocol,
+): Promise<number> {
+  try {
+    const staleSessions = await prisma.activeSession.findMany({
+      where: { userId, connectionId, protocol, status: { not: 'CLOSED' } },
+      include: { gateway: { select: { name: true } } },
+    });
+
+    if (staleSessions.length === 0) return 0;
+
+    const now = new Date();
+    await prisma.activeSession.updateMany({
+      where: { id: { in: staleSessions.map((s) => s.id) }, status: { not: 'CLOSED' } },
+      data: { status: 'CLOSED', endedAt: now },
+    });
+
+    for (const session of staleSessions) {
+      log.debug(`Closed stale session ${session.id} (dedup: ${protocol} user=${userId} conn=${connectionId})`);
+      auditService.log({
+        userId: session.userId,
+        action: 'SESSION_END',
+        targetType: 'Connection',
+        targetId: session.connectionId,
+        details: {
+          sessionId: session.id,
+          protocol: session.protocol,
+          reason: 'superseded_by_new_session',
+          durationMs: now.getTime() - session.startedAt.getTime(),
+          durationFormatted: formatDuration(now.getTime() - session.startedAt.getTime()),
+          ...(session.gatewayId
+            ? { gatewayName: session.gateway?.name ?? null, instanceId: session.instanceId }
+            : {}),
+        },
+        gatewayId: session.gatewayId,
+      });
+    }
+
+    return staleSessions.length;
+  } catch (err) {
+    log.error('Failed to close stale sessions for dedup:', err);
+    return 0;
+  }
+}
+
 export async function heartbeat(sessionId: string): Promise<void> {
   await prisma.activeSession.updateMany({
     where: { id: sessionId, status: { not: 'CLOSED' } },

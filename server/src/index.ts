@@ -214,17 +214,20 @@ async function main() {
         }
       });
 
-      // Safety net: close persistent session if client didn't explicitly end it
+      // Safety net: close persistent session if client didn't explicitly end it.
+      // Note: guacamole-lite deletes the raw token after decryption, so we use
+      // the metadata object (userId + connectionId) which IS preserved.
       // eslint-disable-next-line @typescript-eslint/no-explicit-any
       guacServer.on('close', (clientConnection: any) => {
         try {
-          const token = clientConnection.connectionSettings?.token;
-          if (token) {
-            // eslint-disable-next-line @typescript-eslint/no-require-imports
-            const crypto = require('crypto');
-            const hash = crypto.createHash('sha256').update(token).digest('hex');
-            sessionService.endSessionByGuacTokenHash(hash).catch((err: unknown) => {
-              logger.error('Failed to end RDP session by guac token:', err);
+          const metadata = clientConnection.connectionSettings?.metadata;
+          if (metadata?.userId && metadata?.connectionId) {
+            sessionService.closeStaleSessionsForConnection(
+              metadata.userId,
+              metadata.connectionId,
+              'RDP',
+            ).catch((err: unknown) => {
+              logger.error('Failed to end RDP session on guac close:', err);
             });
           }
         } catch {

@@ -4,11 +4,38 @@ import * as auditService from './audit.service';
 import { formatDuration } from '../utils/format';
 import { logger } from '../utils/logger';
 import { config } from '../config';
+import { emitSessionTerminated } from '../socket/notification.handler';
 
 let ioInstance: Server | null = null;
 
 export function initSessionCleanup(io: Server): void {
   ioInstance = io;
+}
+
+/**
+ * Force-disconnect the live transport for a terminated session.
+ * - SSH: emit session:terminated then disconnect the Socket.IO socket
+ * - RDP: emit session:terminated to the user's browser via /notifications
+ */
+export function forceDisconnectSession(session: {
+  id: string;
+  protocol: string;
+  socketId: string | null;
+  userId: string;
+}): void {
+  if (!ioInstance) return;
+
+  if (session.protocol === 'SSH' && session.socketId) {
+    const socket = ioInstance.of('/ssh').sockets.get(session.socketId);
+    if (socket) {
+      socket.emit('session:terminated', { sessionId: session.id, reason: 'admin_terminated' });
+      socket.disconnect(true);
+    }
+  }
+
+  if (session.protocol === 'RDP') {
+    emitSessionTerminated(session.userId, session.id, 'admin_terminated');
+  }
 }
 
 export async function checkAndCloseInactiveSessions(): Promise<number> {

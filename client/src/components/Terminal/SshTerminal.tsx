@@ -219,6 +219,12 @@ export default function SshTerminal({ connectionId, tabId: _tabId, credentials, 
       setError('Session expired due to inactivity');
     });
 
+    socket.on('session:terminated', () => {
+      terminal.write('\r\n\x1b[31mSession terminated by administrator.\x1b[0m\r\n');
+      setStatus('error');
+      setError('Session terminated by administrator');
+    });
+
     socket.on('connect_error', (err) => {
       setStatus('error');
       setError(err.message);

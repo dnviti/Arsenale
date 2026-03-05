@@ -9,6 +9,7 @@ import * as sessionService from '../services/session.service';
 import * as auditService from '../services/audit.service';
 import { selectInstance } from '../services/loadBalancer.service';
 import { AppError } from '../middleware/error.middleware';
+import { forceDisconnectSession } from '../services/sessionCleanup.service';
 
 const sessionSchema = z.object({
   connectionId: z.string().uuid(),
@@ -118,6 +119,10 @@ export async function createRdpSession(req: AuthRequest, res: Response, next: Ne
         ipAddress: req.ip ?? undefined,
       },
     });
+
+    // Close any stale sessions for this user+connection to prevent duplicates
+    // (e.g. React StrictMode double-mount or page refresh without clean unmount)
+    await sessionService.closeStaleSessionsForConnection(req.user!.userId, connectionId, 'RDP');
 
     // Create persistent session record
     const sessionId = await sessionService.startSession({
@@ -270,6 +275,14 @@ export async function terminateSession(req: AuthRequest, res: Response, next: Ne
       throw new AppError('Session not found', 404);
     }
     await sessionService.endSession(sessionId, 'admin_terminated');
+
+    // Force-disconnect the live transport (SSH socket / RDP browser notification)
+    forceDisconnectSession({
+      id: sessionId,
+      protocol: session.protocol,
+      socketId: session.socketId,
+      userId: session.userId,
+    });
 
     auditService.log({
       userId: req.user!.userId,
