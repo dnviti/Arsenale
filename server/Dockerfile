@@ -13,14 +13,16 @@ RUN npx tsc
 
 RUN npm prune --production
 
+RUN apk add --no-cache su-exec
+
 RUN addgroup -S appgroup && adduser -S appuser -G appgroup \
     && chown -R appuser:appgroup /app
 
-USER appuser
+RUN mkdir -p /guacd-drive && chmod 1777 /guacd-drive
 
 EXPOSE 3001 3002
 
 HEALTHCHECK --interval=10s --timeout=5s --retries=5 --start-period=30s \
     CMD wget -qO- http://localhost:3001/api/health || exit 1
 
-CMD ["sh", "-c", "npx prisma migrate deploy && node dist/index.js"]
+CMD ["sh", "-c", "chmod 1777 /guacd-drive && exec su-exec appuser sh -c 'npx prisma migrate deploy && node dist/index.js'"]
