@@ -258,6 +258,20 @@
     MODIFICATO: server/src/socket/rdp.handler.ts
 
 
+------------------------------------------------------------------------------
+[x] FIDO-093 — Supporto passkey e chiavi di sicurezza FIDO2 come metodo MFA
+------------------------------------------------------------------------------
+  Priorita: MEDIA
+  Dipendenze: Nessuna
+  COMPLETATO: Added WebAuthn/FIDO2 passkey support as third MFA method alongside TOTP and SMS. Backend: webauthn.service.ts with @simplewebauthn/server (challenge store with TTL, credential CRUD, counter-based replay prevention), webauthn.controller.ts (6 handlers with Zod validation and audit logging), webauthn.routes.ts. Auth integration: WebAuthn login flow in auth.service.ts/controller/routes with rate limiting. Frontend: WebAuthnSection.tsx in Settings Security tab (register, list, rename, delete credentials with browser support detection), LoginPage WebAuthn authentication step, webauthn.api.ts client wrapper. Prisma: WebAuthnCredential model, User.webauthnEnabled field, WEBAUTHN_REGISTER/REMOVE/LOGIN_WEBAUTHN audit actions. Config: WEBAUTHN_RP_ID/ORIGIN/NAME env vars. Also added MFA-based vault re-unlock and configurable vault auto-lock timeout.
+
+------------------------------------------------------------------------------
+[x] CRED-094 — Recupero password con link email, verifica SMS e recovery key vault
+------------------------------------------------------------------------------
+  Priorita: ALTA
+  Dipendenze: Nessuna
+  COMPLETATO: Implemented full forgot-password flow with dual-channel verification. Backend: passwordReset.service.ts with 4 functions (requestPasswordReset, validateResetToken, requestResetSmsCode, completePasswordReset), SHA-256 hashed tokens with 1h TTL, anti-enumeration (silent no-op for unknown emails). Vault recovery: generateRecoveryKey/encryptMasterKeyWithRecovery/decryptMasterKeyWithRecovery in crypto.service.ts; recovery key generated at registration and shown once. Password reset with recovery key preserves vault; without it, wipes all encrypted data (connections, secrets, team vaults, TOTP) in Prisma transaction. SMS OTP dual-channel verification when SMS MFA is active. Rate limiting: forgotPasswordLimiter (3/15min), resetPasswordLimiter (5/15min), resetSmsLimiter (3/10min). Frontend: ForgotPasswordPage.tsx (email input), ResetPasswordPage.tsx (state machine: validating->sms->form->success->error with optional recovery key input). LoginPage "Forgot password?" link, RegisterPage recovery key display. Routes: /forgot-password, /reset-password (public). Prisma: passwordResetTokenHash, passwordResetExpiry, vault recovery key fields on User; PASSWORD_RESET_REQUEST/COMPLETE/FAILURE, VAULT_RECOVERY_KEY_GENERATED, VAULT_RESET audit actions.
+
 ================================================================================
   SEZIONE B — TASK AGGIUNTIVI SUGGERITI
 ================================================================================
