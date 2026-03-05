@@ -78,6 +78,35 @@ export async function sendVerificationEmail(
   });
 }
 
+export async function sendPasswordResetEmail(
+  to: string,
+  token: string,
+): Promise<void> {
+  const resetUrl = `${config.clientUrl}/reset-password?token=${token}`;
+
+  const send = getSendFn();
+  if (!send) {
+    logger.info('========================================');
+    logger.info('PASSWORD RESET LINK (dev mode):');
+    logger.info(resetUrl);
+    logger.info('========================================');
+    return;
+  }
+
+  await send({
+    to,
+    subject: 'Password Reset — Remote Desktop Manager',
+    html: `
+      <h2>Password Reset Request</h2>
+      <p>You requested a password reset. Click the link below to set a new password:</p>
+      <p><a href="${resetUrl}">${resetUrl}</a></p>
+      <p>This link expires in 1 hour.</p>
+      <p>If you did not request this, you can safely ignore this email. Your password will not be changed.</p>
+    `,
+    text: `Password Reset: ${resetUrl}\n\nThis link expires in 1 hour. If you did not request this, ignore this email.`,
+  });
+}
+
 export function getEmailStatus(): {
   provider: string;
   configured: boolean;

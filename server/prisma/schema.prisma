@@ -101,6 +101,12 @@ model User {
   emailVerified      Boolean     @default(false)
   emailVerifyToken   String?     @unique
   emailVerifyExpiry  DateTime?
+  passwordResetTokenHash     String?   @unique
+  passwordResetExpiry        DateTime?
+  encryptedVaultRecoveryKey  String?
+  vaultRecoveryKeyIV         String?
+  vaultRecoveryKeyTag        String?
+  vaultRecoveryKeySalt       String?
   failedLoginAttempts Int         @default(0)
   lockedUntil         DateTime?
   tenantId           String?
@@ -508,6 +514,11 @@ enum AuditAction {
   WEBAUTHN_REGISTER
   WEBAUTHN_REMOVE
   LOGIN_WEBAUTHN
+  PASSWORD_RESET_REQUEST
+  PASSWORD_RESET_COMPLETE
+  PASSWORD_RESET_FAILURE
+  VAULT_RECOVERY_KEY_GENERATED
+  VAULT_RESET
 }
 
 model AuditLog {

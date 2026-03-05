@@ -17,6 +17,7 @@ export default function RegisterPage() {
   const [registered, setRegistered] = useState(false);
   const [successMessage, setSuccessMessage] = useState('');
   const [registeredEmail, setRegisteredEmail] = useState('');
+  const [recoveryKey, setRecoveryKey] = useState('');
   const [resendCountdown, setResendCountdown] = useState(0);
   const countdownRef = useRef<ReturnType<typeof setInterval>>(undefined);
 
@@ -60,6 +61,7 @@ export default function RegisterPage() {
       }
       setRegisteredEmail(email);
       setSuccessMessage(result.message);
+      if (result.recoveryKey) setRecoveryKey(result.recoveryKey);
       setRegistered(true);
       setResendCountdown(60);
     } catch (err: unknown) {
@@ -101,6 +103,30 @@ export default function RegisterPage() {
               <Alert severity="success" sx={{ mb: 2 }}>
                 {successMessage}
               </Alert>
+              {recoveryKey && (
+                <Alert severity="warning" sx={{ mb: 2 }}>
+                  <Typography variant="subtitle2" gutterBottom>
+                    Save your vault recovery key:
+                  </Typography>
+                  <Typography
+                    variant="body2"
+                    sx={{
+                      fontFamily: 'monospace',
+                      wordBreak: 'break-all',
+                      bgcolor: 'action.hover',
+                      p: 1,
+                      borderRadius: 1,
+                      userSelect: 'all',
+                    }}
+                  >
+                    {recoveryKey}
+                  </Typography>
+                  <Typography variant="caption" sx={{ display: 'block', mt: 1 }}>
+                    This key allows you to recover your encrypted vault if you forget your password.
+                    Store it in a safe place. It is shown only once.
+                  </Typography>
+                </Alert>
+              )}
               <Typography variant="body2" align="center" sx={{ mb: 2 }}>
                 Didn't receive the email? Check your spam folder or resend it.
               </Typography>

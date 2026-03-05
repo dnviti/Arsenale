@@ -3,6 +3,7 @@ import rateLimit from 'express-rate-limit';
 import * as authController from '../controllers/auth.controller';
 import { smsLoginRateLimiter } from '../middleware/smsRateLimit.middleware';
 import { loginRateLimiter } from '../middleware/loginRateLimit.middleware';
+import { forgotPasswordLimiter, resetPasswordLimiter, resetSmsLimiter } from '../middleware/resetRateLimit.middleware';
 import { validateCsrf } from '../middleware/csrf.middleware';
 
 const registrationRateLimiter = rateLimit({
@@ -26,6 +27,10 @@ router.post('/request-webauthn-options', loginRateLimiter, authController.reques
 router.post('/verify-webauthn', loginRateLimiter, authController.verifyWebAuthn);
 router.post('/mfa-setup/init', loginRateLimiter, authController.mfaSetupInit);
 router.post('/mfa-setup/verify', loginRateLimiter, authController.mfaSetupVerify);
+router.post('/forgot-password', forgotPasswordLimiter, authController.forgotPassword);
+router.post('/reset-password/validate', resetPasswordLimiter, authController.validateResetToken);
+router.post('/reset-password/request-sms', resetSmsLimiter, authController.requestResetSmsCode);
+router.post('/reset-password/complete', resetPasswordLimiter, authController.completePasswordReset);
 router.post('/refresh', validateCsrf, authController.refresh);
 router.post('/logout', validateCsrf, authController.logout);
 

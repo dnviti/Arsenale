@@ -18,6 +18,8 @@ import {
   storeVaultSession,
   storeVaultRecovery,
   lockVault,
+  generateRecoveryKey,
+  encryptMasterKeyWithRecovery,
 } from './crypto.service';
 import { verifyCode as verifyTotpCode, getDecryptedSecret } from './totp.service';
 import { encrypt, getMasterKey } from './crypto.service';
@@ -43,6 +45,10 @@ export async function register(email: string, password: string) {
   const derivedKey = await deriveKeyFromPassword(password, vaultSalt);
   const encryptedVault = encryptMasterKey(masterKey, derivedKey);
 
+  // Generate vault recovery key (shown once to user)
+  const recoveryKey = generateRecoveryKey();
+  const recoveryResult = await encryptMasterKeyWithRecovery(masterKey, recoveryKey);
+
   const needsVerification = config.emailVerifyRequired;
   const emailVerifyToken = needsVerification ? crypto.randomBytes(32).toString('hex') : null;
   const emailVerifyExpiry = needsVerification ? new Date(Date.now() + EMAIL_VERIFY_TTL_MS) : null;
@@ -55,6 +61,10 @@ export async function register(email: string, password: string) {
       encryptedVaultKey: encryptedVault.ciphertext,
       vaultKeyIV: encryptedVault.iv,
       vaultKeyTag: encryptedVault.tag,
+      encryptedVaultRecoveryKey: recoveryResult.encrypted.ciphertext,
+      vaultRecoveryKeyIV: recoveryResult.encrypted.iv,
+      vaultRecoveryKeyTag: recoveryResult.encrypted.tag,
+      vaultRecoveryKeySalt: recoveryResult.salt,
       emailVerified: !needsVerification,
       emailVerifyToken,
       emailVerifyExpiry,
@@ -80,6 +90,7 @@ export async function register(email: string, password: string) {
       : 'Registration successful. You can now log in.',
     userId: user.id,
     emailVerifyRequired: needsVerification,
+    recoveryKey,
   };
 }
 

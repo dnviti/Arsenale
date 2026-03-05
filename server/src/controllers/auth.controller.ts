@@ -1,6 +1,7 @@
 import { Request, Response, NextFunction } from 'express';
 import { z } from 'zod';
 import * as authService from '../services/auth.service';
+import * as passwordResetService from '../services/passwordReset.service';
 import * as auditService from '../services/audit.service';
 import { AppError } from '../middleware/error.middleware';
 import { config } from '../config';
@@ -21,7 +22,11 @@ export async function register(req: Request, res: Response, next: NextFunction) 
     const { email, password } = registerSchema.parse(req.body);
     const result = await authService.register(email, password);
     auditService.log({ userId: result.userId, action: 'REGISTER', ipAddress: req.ip });
-    res.status(201).json({ message: result.message, emailVerifyRequired: result.emailVerifyRequired });
+    res.status(201).json({
+      message: result.message,
+      emailVerifyRequired: result.emailVerifyRequired,
+      recoveryKey: result.recoveryKey,
+    });
   } catch (err) {
     if (err instanceof z.ZodError) {
       return next(new AppError(err.issues[0].message, 400));
@@ -302,6 +307,87 @@ export async function mfaSetupVerify(req: Request, res: Response, next: NextFunc
     if (err instanceof Error) {
       if (err.message.includes('token')) return next(new AppError(err.message, 401));
       if (err.message === 'Invalid TOTP code') return next(new AppError(err.message, 401));
+    }
+    next(err);
+  }
+}
+
+// --- Password Reset ---
+
+const forgotPasswordSchema = z.object({
+  email: z.string().email(),
+});
+
+const resetTokenSchema = z.object({
+  token: z.string().length(64),
+});
+
+const completeResetSchema = z.object({
+  token: z.string().length(64),
+  newPassword: z.string().min(8),
+  smsCode: z.string().length(6).regex(/^\d{6}$/).optional(),
+  recoveryKey: z.string().optional(),
+});
+
+export async function forgotPassword(req: Request, res: Response, next: NextFunction) {
+  try {
+    const { email } = forgotPasswordSchema.parse(req.body);
+    await passwordResetService.requestPasswordReset(email, req.ip);
+    res.json({ message: 'If an account exists with this email, a password reset link has been sent.' });
+  } catch (err) {
+    if (err instanceof z.ZodError) {
+      return next(new AppError('Invalid email format', 400));
+    }
+    next(err);
+  }
+}
+
+export async function validateResetToken(req: Request, res: Response, next: NextFunction) {
+  try {
+    const { token } = resetTokenSchema.parse(req.body);
+    const result = await passwordResetService.validateResetToken(token);
+    if (!result.valid) {
+      return next(new AppError('Invalid or expired reset link.', 400));
+    }
+    res.json(result);
+  } catch (err) {
+    if (err instanceof z.ZodError) {
+      return next(new AppError('Invalid token format', 400));
+    }
+    next(err);
+  }
+}
+
+export async function requestResetSmsCode(req: Request, res: Response, next: NextFunction) {
+  try {
+    const { token } = resetTokenSchema.parse(req.body);
+    await passwordResetService.requestResetSmsCode(token);
+    res.json({ message: 'SMS code sent' });
+  } catch (err) {
+    if (err instanceof z.ZodError) return next(new AppError('Invalid request', 400));
+    if (err instanceof Error) {
+      if (err.message.includes('token')) return next(new AppError(err.message, 400));
+      if (err.message.includes('not available')) return next(new AppError(err.message, 400));
+    }
+    next(err);
+  }
+}
+
+export async function completePasswordReset(req: Request, res: Response, next: NextFunction) {
+  try {
+    const body = completeResetSchema.parse(req.body);
+    const result = await passwordResetService.completePasswordReset({
+      ...body,
+      ipAddress: req.ip,
+    });
+    res.json(result);
+  } catch (err) {
+    if (err instanceof z.ZodError) {
+      return next(new AppError(err.issues[0].message, 400));
+    }
+    if (err instanceof Error) {
+      if (err.message.includes('token')) return next(new AppError(err.message, 400));
+      if (err.message.includes('SMS')) return next(new AppError(err.message, 401));
     }
     next(err);
   }

@@ -131,6 +131,34 @@ export function decryptMasterKey(
   return Buffer.from(hex, 'hex');
 }
 
+// Vault recovery key (for password reset)
+
+export function generateRecoveryKey(): string {
+  return crypto.randomBytes(32).toString('base64url');
+}
+
+export async function encryptMasterKeyWithRecovery(
+  masterKey: Buffer,
+  recoveryKey: string
+): Promise<{ encrypted: EncryptedField; salt: string }> {
+  const salt = generateSalt();
+  const derivedKey = await deriveKeyFromPassword(recoveryKey, salt);
+  const encrypted = encryptMasterKey(masterKey, derivedKey);
+  derivedKey.fill(0);
+  return { encrypted, salt };
+}
+
+export async function decryptMasterKeyWithRecovery(
+  encryptedField: EncryptedField,
+  recoveryKey: string,
+  salt: string
+): Promise<Buffer> {
+  const derivedKey = await deriveKeyFromPassword(recoveryKey, salt);
+  const masterKey = decryptMasterKey(encryptedField, derivedKey);
+  derivedKey.fill(0);
+  return masterKey;
+}
+
 // External share key derivation
 
 export function hashToken(token: string): string {

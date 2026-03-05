@@ -10,6 +10,101 @@
   SEZIONE A — TASK RICHIESTI (Core Features)
 ================================================================================
 
+------------------------------------------------------------------------------
+[ ] CRED-094 — Recupero password con link email, verifica SMS e recovery key vault
+------------------------------------------------------------------------------
+  Priorita: ALTA
+  Dipendenze: Nessuna
+
+  DESCRIZIONE:
+  Implementare il flusso completo "Forgot Password" accessibile dalla pagina
+  di login. L'utente inserisce la propria email e riceve un link sicuro per
+  reimpostare la password. Se l'utente ha SMS MFA attivo, viene richiesta
+  anche una verifica OTP via SMS (dual-channel) prima di consentire il cambio.
+  Il token di reset e' hash-ato SHA-256 nel DB (mai in chiaro), TTL 1 ora,
+  monouso. Per il vault zero-knowledge, viene generata una recovery key alla
+  registrazione (mostrata una sola volta). Durante il reset, se l'utente
+  fornisce la recovery key il vault viene preservato; altrimenti viene
+  rigenerato (perdita credenziali cifrate). Rate limiting dedicato su ogni
+  endpoint. Anti-enumerazione: risposta identica indipendentemente dall'email.
+
+  DETTAGLI TECNICI:
+
+  1. Schema Prisma — Aggiungere al modello User:
+     passwordResetTokenHash String? @unique, passwordResetExpiry DateTime?,
+     encryptedVaultRecoveryKey String?, vaultRecoveryKeyIV String?,
+     vaultRecoveryKeyTag String?, vaultRecoveryKeySalt String?.
+     Aggiungere ad AuditAction: PASSWORD_RESET_REQUEST, PASSWORD_RESET_COMPLETE,
+     PASSWORD_RESET_FAILURE, VAULT_RECOVERY_KEY_GENERATED, VAULT_RESET.
+
+  2. Crypto service — Aggiungere generateRecoveryKey() (32 byte base64url),
+     encryptMasterKeyWithRecovery(masterKey, recoveryKey) e
+     decryptMasterKeyWithRecovery(encryptedField, recoveryKey, salt).
+     Riutilizzare deriveKeyFromPassword, encryptMasterKey, hashToken esistenti.
+
+  3. Email service — Aggiungere sendPasswordResetEmail(to, token) seguendo
+     il pattern di sendVerificationEmail(). Link: ${clientUrl}/reset-password?token=.
+
+  4. Password reset service (NUOVO) — 4 funzioni:
+     requestPasswordReset(email, ip) — lookup user, no-op silenzioso se non
+     trovato/OAuth-only/bloccato, genera token 32 byte, hash SHA-256, salva,
+     invia email, audit log.
+     validateResetToken(token) — hash, lookup, verifica scadenza, ritorna
+     { valid, requiresSmsVerification, maskedPhone?, hasRecoveryKey }.
+     requestResetSmsCode(token) — valida token, chiama sendOtpToPhone().
+     completePasswordReset({ token, newPassword, smsCode?, recoveryKey?, ip })
+     — verifica token, verifica OTP SMS se MFA attivo, hash nuova password,
+     se recovery key: decripta master key e ri-cifra con nuova password +
+     genera nuova recovery key; se no recovery key: genera nuovo master key,
+     wipe credenziali cifrate (connessioni, vault secrets, team vault keys,
+     TOTP secrets, shared secrets) in transazione Prisma. Invalida tutti i
+     refresh token, lock vault.
+
+  5. Rate limit middleware (NUOVO) — forgotPasswordLimiter (3/15min),
+     resetPasswordLimiter (5/15min), resetSmsLimiter (3/10min).
+
+  6. Controller — 4 handler con validazione Zod: forgotPassword,
+     validateResetToken, requestResetSmsCode, completePasswordReset.
+
+  7. Routes — POST /forgot-password, POST /reset-password/validate,
+     POST /reset-password/request-sms, POST /reset-password/complete.
+
+  8. Registrazione — Modificare register() per generare recovery key,
+     cifrarci il master key, salvarla nel DB. Ritornare recovery key al client.
+     RegisterPage mostra dialog con recovery key dopo registrazione riuscita.
+
+  9. Client API (NUOVO) — forgotPasswordApi, validateResetTokenApi,
+     requestResetSmsCodeApi, completePasswordResetApi.
+
+  10. ForgotPasswordPage (NUOVO) — Input email, submit, messaggio successo,
+      link "Back to Login". Stesso layout Card di LoginPage.
+
+  11. ResetPasswordPage (NUOVO) — Macchina a stati:
+      validating -> sms (se richiesto) -> form -> success -> error.
+      Form: nuova password + conferma + input recovery key (opzionale,
+      collassabile, mostrato solo se hasRecoveryKey=true).
+
+  12. App.tsx — Route /forgot-password e /reset-password (pubbliche).
+
+  13. LoginPage — Link "Forgot password?" sotto il campo password.
+      Gestione query param ?passwordReset=true per messaggio successo.
+
+  File coinvolti:
+    CREARE:     server/src/services/passwordReset.service.ts
+    CREARE:     server/src/middleware/resetRateLimit.middleware.ts
+    CREARE:     client/src/api/passwordReset.api.ts
+    CREARE:     client/src/pages/ForgotPasswordPage.tsx
+    CREARE:     client/src/pages/ResetPasswordPage.tsx
+    MODIFICARE: server/prisma/schema.prisma
+    MODIFICARE: server/src/services/crypto.service.ts
+    MODIFICARE: server/src/services/email/index.ts
+    MODIFICARE: server/src/services/auth.service.ts
+    MODIFICARE: server/src/controllers/auth.controller.ts
+    MODIFICARE: server/src/routes/auth.routes.ts
+    MODIFICARE: client/src/App.tsx
+    MODIFICARE: client/src/pages/LoginPage.tsx
+    MODIFICARE: client/src/pages/RegisterPage.tsx
+
 
 ================================================================================
   SEZIONE B — TASK AGGIUNTIVI SUGGERITI
@@ -28,9 +123,194 @@
   SEZIONE C — MULTI-TENANT / TEAMS / PERMESSI
 ================================================================================
 
+------------------------------------------------------------------------------
+[ ] TENANT-094 — Gestione completa utenti organizzazione e controllo self-signup
+------------------------------------------------------------------------------
+  Priorita: ALTA
+  Dipendenze: TENANT-021 (completato)
+
+  DESCRIZIONE:
+  Permettere a OWNER e ADMIN di gestire completamente gli utenti della propria
+  organizzazione dalla WebUI: creazione diretta di nuovi account (non solo invito
+  di utenti esistenti), abilitazione/disabilitazione utenti, e modifica ruoli.
+  Aggiungere un toggle per disabilitare/abilitare la self-registration sia come
+  variabile d'ambiente (SELF_SIGNUP_ENABLED) sia come impostazione runtime nella
+  tab Administration. Se la self-registration e' disattivata, solo OWNER/ADMIN
+  possono creare nuovi utenti. Se il servizio email e' configurato, inviare una
+  notifica all'utente con le credenziali di accesso.
+
+  DETTAGLI TECNICI:
+
+  1. Schema Prisma (server/prisma/schema.prisma):
+     - Nuovo modello AppConfig (key-value store per configurazione globale):
+         model AppConfig { key String @id; value String; updatedAt DateTime @updatedAt }
+     - Nuovo campo User.enabled (Boolean @default(true)) per abilitare/disabilitare utenti
+     - Nuove AuditAction: TENANT_CREATE_USER, TENANT_TOGGLE_USER, APP_CONFIG_UPDATE
+     - Generare migrazione Prisma
+
+  2. Configurazione server (server/src/config.ts + .env.example):
+     - Aggiungere selfSignupEnabled: process.env.SELF_SIGNUP_ENABLED !== 'false'
+     - Aggiungere SELF_SIGNUP_ENABLED=true in .env.example
+
+  3. Nuovo servizio AppConfig (server/src/services/appConfig.service.ts):
+     - getSelfSignupEnabled(): legge da DB (tabella AppConfig, chiave selfSignupEnabled),
+       fallback su config.selfSignupEnabled (env var) se non presente in DB
+     - setSelfSignupEnabled(enabled): upsert chiave selfSignupEnabled in AppConfig
+     - getPublicConfig(): restituisce { selfSignupEnabled } per client non autenticati
+     - Cache in-memory con TTL breve per evitare query ad ogni registrazione
+
+  4. Guard self-signup su registrazione (server/src/services/auth.service.ts):
+     - In register(): verificare getSelfSignupEnabled(), lanciare AppError 403 se disattivato
+     - In login(): verificare user.enabled, bloccare con 403 se account disabilitato
+     - In refreshAccessToken(): verificare user.enabled, invalidare token se disabilitato
+     - Verificare anche nel flusso OAuth callback per bloccare registrazioni OAuth
+
+  5. Creazione utente da admin (server/src/services/tenant.service.ts):
+     - Nuova funzione createUser(tenantId, { email, password, role, username }, actingUserId)
+     - Verifica email non duplicata (distinguere: gia' nel tenant / in altro tenant / senza tenant)
+     - Setup vault encryption (Argon2 salt, master key, derived key, AES-256-GCM) identico a register()
+     - emailVerified = true (vouched by admin), assegnazione diretta a tenant con ruolo
+     - Nuova funzione toggleUserEnabled(tenantId, targetUserId, enabled, actingUserId)
+     - Protezioni: non disabilitare se stessi, non disabilitare ultimo OWNER
+
+  6. Controller e route (server/src/controllers/tenant.controller.ts, tenant.routes.ts):
+     - POST /:id/users → createUser (requireTenantRole('ADMIN'))
+     - PATCH /:id/users/:userId/enabled → toggleUserEnabled (requireTenantRole('ADMIN'))
+     - Validazione con Zod (email, password min 8, role ADMIN|MEMBER, sendWelcomeEmail boolean)
+     - Audit logging per ogni azione
+
+  7. Endpoint self-signup toggle (server/src/routes/admin.routes.ts, admin.controller.ts):
+     - GET /admin/app-config → stato attuale { selfSignupEnabled }
+     - PUT /admin/app-config/self-signup → toggle { enabled: boolean }
+     - GET /auth/config → endpoint pubblico (non autenticato) per il client
+
+  8. Email di benvenuto (server/src/services/email/index.ts):
+     - Nuova funzione sendWelcomeEmail(to, temporaryPassword)
+     - Template HTML/text con: login URL, email, password temporanea
+     - Dev mode: log su console come sendVerificationEmail
+
+  9. API client frontend (client/src/api/tenant.api.ts, admin.api.ts, auth.api.ts):
+     - createTenantUser(tenantId, data) → POST /tenants/:id/users
+     - toggleUserEnabled(tenantId, userId, enabled) → PATCH /tenants/:id/users/:userId/enabled
+     - getAppConfig() e setSelfSignup(enabled) in admin.api.ts
+     - getPublicConfig() in auth.api.ts
+
+  10. Store frontend (client/src/store/tenantStore.ts):
+      - Nuove azioni: createUser(), toggleUserEnabled()
+      - Aggiornare tipo TenantUser con campo enabled
+
+  11. UI — CreateUserDialog (client/src/components/Dialogs/CreateUserDialog.tsx):
+      - Campi: email (required), username (opzionale), password (min 8), conferma password,
+        ruolo (ADMIN|MEMBER), checkbox "Invia email di benvenuto" (visibile solo se email configurata)
+      - Bottone genera password casuale (16 caratteri)
+      - Mostra riepilogo credenziali dopo creazione
+
+  12. UI — TenantSection aggiornata (client/src/components/Settings/TenantSection.tsx):
+      - Aggiungere bottone "Create User" accanto a "Invite"
+      - Nuova colonna "Status" nella tabella utenti con Switch enable/disable
+      - Protezione: non mostrare switch per il proprio account
+
+  13. UI — SelfSignupSection (client/src/components/Settings/SelfSignupSection.tsx):
+      - Card con Switch "Allow new users to register themselves"
+      - Helper text: "When disabled, only organization admins can create user accounts"
+      - Aggiungere in SettingsDialog.tsx nella tab Administration
+
+  14. UI — RegisterPage (client/src/pages/RegisterPage.tsx):
+      - On mount: chiamare getPublicConfig()
+      - Se selfSignupEnabled === false: mostrare messaggio info e disabilitare form
+
+  File coinvolti:
+    CREARE:     server/src/services/appConfig.service.ts
+    CREARE:     client/src/components/Dialogs/CreateUserDialog.tsx
+    CREARE:     client/src/components/Settings/SelfSignupSection.tsx
+    MODIFICARE: server/prisma/schema.prisma
+    MODIFICARE: server/src/config.ts
+    MODIFICARE: server/src/services/auth.service.ts
+    MODIFICARE: server/src/services/tenant.service.ts
+    MODIFICARE: server/src/controllers/tenant.controller.ts
+    MODIFICARE: server/src/routes/tenant.routes.ts
+    MODIFICARE: server/src/controllers/admin.controller.ts
+    MODIFICARE: server/src/routes/admin.routes.ts
+    MODIFICARE: server/src/routes/auth.routes.ts
+    MODIFICARE: server/src/controllers/auth.controller.ts
+    MODIFICARE: server/src/services/email/index.ts
+    MODIFICARE: client/src/api/tenant.api.ts
+    MODIFICARE: client/src/api/admin.api.ts
+    MODIFICARE: client/src/api/auth.api.ts
+    MODIFICARE: client/src/store/tenantStore.ts
+    MODIFICARE: client/src/components/Settings/TenantSection.tsx
+    MODIFICARE: client/src/components/Dialogs/SettingsDialog.tsx
+    MODIFICARE: client/src/pages/RegisterPage.tsx
+    MODIFICARE: .env.example
 
 
+------------------------------------------------------------------------------
+[ ] USER-094 — Pagina profilo utente nell'organizzazione con dettagli e audit log
+------------------------------------------------------------------------------
+  Priorita: MEDIA
+  Dipendenze: DISC-024, ZT-045
 
+  DESCRIZIONE:
+  Permettere la visualizzazione del profilo di un utente all'interno della
+  propria organizzazione. Qualsiasi membro del tenant puo' cercare un utente
+  per username e visualizzarne i dettagli pubblici (avatar, username, ruolo,
+  data iscrizione, team di appartenenza). Gli ADMIN e OWNER dell'organizzazione
+  possono accedere a una vista completa con email, stato MFA, ultima attivita'
+  e l'intero audit log dell'utente filtrato automaticamente. Il profilo si
+  apre come Dialog full-screen sopra la navigazione esistente, preservando le
+  sessioni RDP/SSH attive.
+
+  DETTAGLI TECNICI:
+
+  Backend — nuovo endpoint profilo utente:
+    - server/src/services/tenant.service.ts: aggiungere funzione getUserProfile
+      (tenantId, targetUserId, viewerRole). Query Prisma su User con include
+      teamMembers -> team {id, name}. Campi pubblici sempre restituiti:
+      id, username, avatarData, tenantRole, createdAt, teams[].
+      Campi admin (solo ADMIN/OWNER): email, totpEnabled, smsMfaEnabled,
+      webauthnEnabled, updatedAt, lastActivity (da AuditLog.findFirst
+      orderBy createdAt desc). Mai selezionare passwordHash, vault keys, TOTP
+      secrets.
+    - server/src/controllers/tenant.controller.ts: aggiungere handler
+      getUserProfile con validazione UUID via zod su req.params.userId.
+    - server/src/routes/tenant.routes.ts: aggiungere route
+      GET /:id/users/:userId/profile con middleware requireTenant +
+      requireOwnTenant (nessun requireTenantRole — il filtraggio per ruolo
+      avviene nel service).
+
+  Frontend — dialog profilo utente:
+    - client/src/components/Dialogs/UserProfileDialog.tsx (NUOVO):
+      Dialog fullScreen con SlideUp transition (stesso pattern di
+      AuditLogDialog). Props: { open, onClose, userId }.
+      Sezione pubblica: Avatar grande, username (o "Nessun username"),
+      Chip ruolo tenant, "Membro dal" data, lista team con ruoli.
+      Sezione admin (condizionale, se response contiene email):
+      email, stato MFA (chip per TOTP/SMS/WebAuthn), ultima attivita',
+      tabella audit log embedded che chiama getTenantAuditLogs con userId
+      pre-impostato, paginata, senza persistenza filtri in uiPreferencesStore.
+    - client/src/api/tenant.api.ts: aggiungere interfaccia UserProfileData e
+      funzione getUserProfile(tenantId, userId).
+
+  Integrazione con componenti esistenti:
+    - client/src/components/Layout/MainLayout.tsx: aggiungere stato
+      profileUserId, renderizzare UserProfileDialog fuori dal blur wrapper.
+    - client/src/components/Dialogs/SettingsDialog.tsx: accettare e propagare
+      prop onViewUserProfile a TenantSection e TenantAuditLogSection.
+    - client/src/components/Settings/TenantSection.tsx: rendere cliccabili
+      le righe utente nella tabella membri (click -> onViewUserProfile(userId)).
+    - client/src/components/Settings/TenantAuditLogSection.tsx: rendere
+      cliccabili i nomi utente nella colonna User delle voci audit log.
+
+  File coinvolti:
+    CREARE:     client/src/components/Dialogs/UserProfileDialog.tsx
+    MODIFICARE: server/src/services/tenant.service.ts
+    MODIFICARE: server/src/controllers/tenant.controller.ts
+    MODIFICARE: server/src/routes/tenant.routes.ts
+    MODIFICARE: client/src/api/tenant.api.ts
+    MODIFICARE: client/src/components/Layout/MainLayout.tsx
+    MODIFICARE: client/src/components/Dialogs/SettingsDialog.tsx
+    MODIFICARE: client/src/components/Settings/TenantSection.tsx
+    MODIFICARE: client/src/components/Settings/TenantAuditLogSection.tsx
 
 
 

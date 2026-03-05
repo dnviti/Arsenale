@@ -46,6 +46,11 @@ export default function LoginPage() {
       searchParams.delete('registered');
       setSearchParams(searchParams, { replace: true });
     }
+    if (searchParams.get('passwordReset') === 'true') {
+      setSuccess('Password reset successful! You can now sign in with your new password.');
+      searchParams.delete('passwordReset');
+      setSearchParams(searchParams, { replace: true });
+    }
     const verifyError = searchParams.get('verifyError');
     if (verifyError) {
       setError(verifyError);
@@ -343,6 +348,11 @@ export default function LoginPage() {
                 margin="normal"
                 required
               />
+              <Box sx={{ textAlign: 'right', mt: -0.5 }}>
+                <Link component={RouterLink} to="/forgot-password" variant="body2">
+                  Forgot password?
+                </Link>
+              </Box>
               <Button
                 fullWidth
                 type="submit"
