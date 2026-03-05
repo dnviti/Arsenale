@@ -13,13 +13,13 @@ COPY --from=build /app/dist /usr/share/nginx/html
 COPY client/nginx.conf /etc/nginx/conf.d/default.conf
 
 RUN chown -R nginx:nginx /var/cache/nginx /var/log/nginx /etc/nginx/conf.d \
-    && touch /var/run/nginx.pid && chown nginx:nginx /var/run/nginx.pid
+  && touch /var/run/nginx.pid && chown nginx:nginx /var/run/nginx.pid
 
 USER nginx
 
-EXPOSE 80
+EXPOSE 8080
 
 HEALTHCHECK --interval=10s --timeout=5s --retries=3 --start-period=5s \
-    CMD wget -qO- http://localhost:80/ || exit 1
+  CMD wget -qO- http://localhost:8080/ || exit 1
 
 CMD ["nginx", "-g", "daemon off;"]
