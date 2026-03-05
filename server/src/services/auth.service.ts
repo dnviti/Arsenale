@@ -18,7 +18,8 @@ import {
   storeVaultSession,
   lockVault,
 } from './crypto.service';
-import { verifyCode as verifyTotpCode } from './totp.service';
+import { verifyCode as verifyTotpCode, getDecryptedSecret } from './totp.service';
+import { encrypt, getMasterKey } from './crypto.service';
 import { sendVerificationEmail } from './email';
 import * as auditService from './audit.service';
 
@@ -275,12 +276,34 @@ export async function verifyTotp(tempToken: string, code: string) {
   }
 
   const user = await prisma.user.findUnique({ where: { id: decoded.userId } });
-  if (!user || !user.totpEnabled || !user.totpSecret) {
+  if (!user || !user.totpEnabled) {
     throw new Error('2FA verification failed');
   }
 
-  if (!verifyTotpCode(user.totpSecret, code)) {
+  const secret = getDecryptedSecret(user, user.id);
+  if (!secret) {
+    throw new Error('2FA verification failed');
+  }
+
+  if (!verifyTotpCode(secret, code)) {
     throw new Error('Invalid TOTP code');
+  }
+
+  // Lazy migration: encrypt plaintext TOTP secret if not yet encrypted
+  if (user.totpSecret && !user.encryptedTotpSecret) {
+    const masterKey = getMasterKey(user.id);
+    if (masterKey) {
+      const enc = encrypt(user.totpSecret, masterKey);
+      await prisma.user.update({
+        where: { id: user.id },
+        data: {
+          encryptedTotpSecret: enc.ciphertext,
+          totpSecretIV: enc.iv,
+          totpSecretTag: enc.tag,
+          totpSecret: null,
+        },
+      });
+    }
   }
 
   // Issue real tokens (vault was already unlocked during password step)

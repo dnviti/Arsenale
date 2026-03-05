@@ -85,8 +85,11 @@ model User {
   vaultSetupComplete Boolean     @default(true)
   sshDefaults        Json?
   rdpDefaults        Json?
-  totpSecret         String?
-  totpEnabled        Boolean     @default(false)
+  totpSecret          String?
+  encryptedTotpSecret String?
+  totpSecretIV        String?
+  totpSecretTag       String?
+  totpEnabled         Boolean     @default(false)
   phoneNumber        String?
   phoneVerified      Boolean     @default(false)
   smsMfaEnabled      Boolean     @default(false)

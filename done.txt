@@ -2090,6 +2090,19 @@
     MODIFICATO: server/src/services/externalShare.service.ts (generate & use tokenSalt)
 
 
+------------------------------------------------------------------------------
+[x] ZT-044 — Cifratura TOTP secret a riposo
+------------------------------------------------------------------------------
+  Priorita: MEDIA
+  Dipendenze: Nessuna
+  COMPLETATO: Encrypted TOTP secrets at rest using AES-256-GCM with the user's vault master key. Added encryptedTotpSecret/totpSecretIV/totpSecretTag fields to User model. Rewrote totp.service.ts to encrypt on setup and decrypt on verify/disable. Added lazy migration in auth.service.ts verifyTotp() to auto-encrypt plaintext secrets on first login after deployment. Legacy totpSecret field kept temporarily for migration compatibility.
+
+  File coinvolti:
+    MODIFICATO: server/prisma/schema.prisma (User: encryptedTotpSecret, totpSecretIV, totpSecretTag)
+    MODIFICATO: server/src/services/totp.service.ts (encrypt/decrypt TOTP secret with vault master key)
+    MODIFICATO: server/src/services/auth.service.ts (lazy migration in verifyTotp)
+
+
 ================================================================================
   SEZIONE F — PASSWORD KEYCHAIN / SECRET VAULT
 ================================================================================

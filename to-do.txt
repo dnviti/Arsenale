@@ -70,38 +70,6 @@
 
 
 
-------------------------------------------------------------------------------
-[ ] ZT-044 — Cifratura TOTP secret a riposo
-------------------------------------------------------------------------------
-  Priorita: MEDIA
-  Dipendenze: Nessuna
-
-  DESCRIZIONE:
-  Cifrare il segreto TOTP con la master key dell'utente invece di salvarlo
-  in chiaro nel database. Attualmente il campo totpSecret e' un String?
-  in chiaro, il che significa che una compromissione del DB espone i seed
-  MFA di tutti gli utenti, permettendo di generare codici TOTP validi.
-
-  DETTAGLI TECNICI:
-  Backend:
-    - In schema.prisma, sostituire totpSecret String? con:
-      encryptedTotpSecret String?
-      totpSecretIV        String?
-      totpSecretTag       String?
-    - Migrazione Prisma (richiede script di migrazione per re-cifrare
-      i segreti TOTP esistenti)
-    - In totp.service.ts:
-      - enableTotp(): cifrare il secret con la master key dell'utente
-        prima di salvarlo (stesso pattern di encryption.service.ts)
-      - verifyTotp(): decifrare il secret dalla vault prima di verificare
-      - Richiede vault sbloccata per operazioni TOTP
-    - Script di migrazione: per ogni utente con totpSecret non-null,
-      richiedere la master key (o eseguire al prossimo vault unlock)
-  File coinvolti:
-    - server/prisma/schema.prisma (modello User)
-    - server/src/services/totp.service.ts
-    - server/src/services/crypto.service.ts
-
 
 ------------------------------------------------------------------------------
 [ ] ZT-045 — Vista audit log per admin tenant
@@ -922,7 +890,7 @@
    61. ZT-041   Policy MFA obbligatorio a livello tenant           [COMPLETATO]
    62. ZT-042   Rotazione refresh token                                   [COMPLETATO]
    63. ZT-043   Fix validazione certificato RDP (default ignoreCert)
-   64. ZT-044   Cifratura TOTP secret a riposo
+   64. ZT-044   Cifratura TOTP secret a riposo                       [COMPLETATO]
    65. ZT-045   Vista audit log per admin tenant
 
   Fase 11 — SSO & Domain Credential Passthrough:
