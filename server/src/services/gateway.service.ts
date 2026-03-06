@@ -307,7 +307,7 @@ export async function updateGateway(
   return updated;
 }
 
-export async function deleteGateway(tenantId: string, gatewayId: string) {
+export async function deleteGateway(tenantId: string, gatewayId: string, force?: boolean) {
   const existing = await prisma.gateway.findFirst({
     where: { id: gatewayId, tenantId },
   });
@@ -316,11 +316,12 @@ export async function deleteGateway(tenantId: string, gatewayId: string) {
   const connectionCount = await prisma.connection.count({
     where: { gatewayId },
   });
+  if (connectionCount > 0 && !force) {
+    return { blocked: true as const, connectionCount };
+  }
+
   if (connectionCount > 0) {
-    throw new AppError(
-      `Cannot delete gateway: ${connectionCount} connection(s) are using it. Reassign or remove those connections first.`,
-      409,
-    );
+    log.info(`Force-deleting gateway ${gatewayId} "${existing.name}" — ${connectionCount} connection(s) will have gatewayId set to null`);
   }
 
   // Remove all managed container instances before deleting the gateway record
@@ -338,7 +339,7 @@ export async function deleteGateway(tenantId: string, gatewayId: string) {
   await prisma.gateway.delete({ where: { id: gatewayId } });
   stopMonitor(gatewayId);
   log.debug(`Deleted gateway ${gatewayId} in tenant ${tenantId}`);
-  return { deleted: true };
+  return { deleted: true as const, connectionCount };
 }
 
 export async function getGatewayCredentials(

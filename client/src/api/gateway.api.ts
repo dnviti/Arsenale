@@ -111,8 +111,8 @@ export async function updateGateway(id: string, data: GatewayUpdate): Promise<Ga
   return res.data;
 }
 
-export async function deleteGateway(id: string): Promise<{ deleted: boolean }> {
-  const res = await api.delete(`/gateways/${id}`);
+export async function deleteGateway(id: string, force?: boolean): Promise<{ deleted: boolean }> {
+  const res = await api.delete(`/gateways/${id}`, { params: force ? { force: 'true' } : undefined });
   return res.data;
 }
 

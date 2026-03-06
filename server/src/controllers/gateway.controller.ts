@@ -188,15 +188,28 @@ export async function update(req: AuthRequest, res: Response, next: NextFunction
 export async function remove(req: AuthRequest, res: Response, next: NextFunction) {
   try {
     const gatewayId = req.params.id as string;
-    const result = await gatewayService.deleteGateway(req.user!.tenantId!, gatewayId);
+    const force = req.query.force === 'true';
+    const result = await gatewayService.deleteGateway(req.user!.tenantId!, gatewayId, force);
+
+    if ('blocked' in result && result.blocked) {
+      res.status(409).json({
+        error: `Cannot delete gateway: ${result.connectionCount} connection(s) are using it.`,
+        connectionCount: result.connectionCount,
+      });
+      return;
+    }
+
     auditService.log({
       userId: req.user!.userId,
       action: 'GATEWAY_DELETE',
       targetType: 'Gateway',
       targetId: gatewayId,
+      details: result.connectionCount > 0
+        ? { force: true, disconnectedConnections: result.connectionCount }
+        : undefined,
       ipAddress: req.ip,
     });
-    res.json(result);
+    res.json({ deleted: true });
   } catch (err) {
     next(err);
   }
