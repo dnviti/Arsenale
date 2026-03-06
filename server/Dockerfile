@@ -2,13 +2,18 @@ FROM node:22-alpine
 
 WORKDIR /app
 
-COPY server/package.json server/package-lock.json* ./
+COPY server/package.json ./
+COPY package-lock.json ./
 RUN npm install --production=false
 
+# Copy everything prisma needs BEFORE generate
 COPY server/prisma ./prisma
+COPY server/prisma.config.ts ./
+COPY server/tsconfig.json ./
 RUN npx prisma generate
 
-COPY server/ .
+# Copy source and compile
+COPY server/src ./src
 RUN npx tsc
 
 RUN npm prune --production
@@ -25,4 +30,4 @@ EXPOSE 3001 3002
 HEALTHCHECK --interval=10s --timeout=5s --retries=5 --start-period=30s \
     CMD wget -qO- http://localhost:3001/api/health || exit 1
 
-CMD ["sh", "-c", "npx prisma migrate deploy && node dist/index.js"]
+CMD ["node", "dist/index.js"]
