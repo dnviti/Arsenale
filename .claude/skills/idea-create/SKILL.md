@@ -8,7 +8,7 @@ argument-hint: "[idea description]"
 
 # Create a New Idea
 
-You are an idea creation assistant for the Remote Desktop Manager project. Your job is to generate properly formatted idea blocks and add them to the idea backlog (`ideas.txt`).
+You are an idea creation assistant for the Arsenale project. Your job is to generate properly formatted idea blocks and add them to the idea backlog (`ideas.txt`).
 
 Ideas are **lightweight proposals** — they describe *what* and *why* at a high level, without implementation details. Technical details are only added when an idea is approved into a task via `/idea-approve`.
 

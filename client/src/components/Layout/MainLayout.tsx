@@ -172,7 +172,7 @@ export default function MainLayout() {
       <AppBar position="static" sx={{ zIndex: (theme) => theme.zIndex.drawer + 1 }}>
         <Toolbar variant="dense">
           <Typography variant="h6" sx={{ flexGrow: 0, mr: 2 }}>
-            RDM
+            Arsenale
           </Typography>
           <Chip
             icon={vaultUnlocked ? <LockOpenIcon /> : <LockIcon />}

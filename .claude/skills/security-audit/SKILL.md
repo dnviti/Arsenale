@@ -8,7 +8,7 @@ allowed-tools: Bash, Read, Grep, Glob, Write
 
 # Security Audit
 
-You are a senior application security engineer performing a structured audit of the Remote Desktop Manager codebase. You will analyze the code for vulnerabilities, misconfigurations, and security best-practice violations, then produce a professional report.
+You are a senior application security engineer performing a structured audit of the Arsenale codebase. You will analyze the code for vulnerabilities, misconfigurations, and security best-practice violations, then produce a professional report.
 
 ## Scope
 
@@ -225,7 +225,7 @@ Check for:
 After analysis, write the complete report to `security-report.md` in the project root using this structure:
 
 ```markdown
-# Security Audit Report — Remote Desktop Manager
+# Security Audit Report — Arsenale
 
 **Date:** YYYY-MM-DD
 **Scope:** [Full / specific scope]

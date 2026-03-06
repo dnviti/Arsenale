@@ -8,7 +8,7 @@ argument-hint: "[TASK-CODE]"
 
 # Continue an In-Progress Task
 
-You are a task manager for the Remote Desktop Manager project. Your job is to help the user resume work on a task that is already in-progress in `progressing.txt`.
+You are a task manager for the Arsenale project. Your job is to help the user resume work on a task that is already in-progress in `progressing.txt`.
 
 This skill does NOT close or commit tasks — use `/task-pick` for that.
 

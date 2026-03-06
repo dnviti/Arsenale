@@ -20,8 +20,8 @@
 ### 1. Clone and Install
 
 ```bash
-git clone https://github.com/dnviti/remote-desktop-manager.git
-cd remote-desktop-manager
+git clone https://github.com/dnviti/arsenale.git
+cd arsenale
 npm install
 ```
 
@@ -35,7 +35,7 @@ Default values work out of the box for development. Key defaults:
 
 | Variable | Default | Notes |
 |----------|---------|-------|
-| `DATABASE_URL` | `postgresql://rdm:rdm_password@127.0.0.1:5432/remote_desktop_manager` | Uses `127.0.0.1` (not `localhost`) to avoid IPv6 issues on Windows |
+| `DATABASE_URL` | `postgresql://arsenale:arsenale_password@127.0.0.1:5432/arsenale` | Uses `127.0.0.1` (not `localhost`) to avoid IPv6 issues on Windows |
 | `JWT_SECRET` | `change-me-in-production` | Fine for development |
 | `GUACD_HOST` | `localhost` | Docker-exposed guacd |
 | `EMAIL_PROVIDER` | `smtp` | With empty `SMTP_HOST`, verification links are logged to console |
@@ -64,7 +64,7 @@ The `predev` script handles:
 | Service | Image | Exposed Port | Purpose |
 |---------|-------|-------------|---------|
 | guacd | `guacamole/guacd` | 4822 | Guacamole daemon for RDP |
-| postgres | `postgres:16` | 5432 | Database (user: `rdm`, password: `rdm_password`) |
+| postgres | `postgres:16` | 5432 | Database (user: `arsenale`, password: `arsenale_password`) |
 
 Data persistence: PostgreSQL uses named volume `pgdata_dev`. guacd drive files stored at `./data/drive`.
 
@@ -140,14 +140,14 @@ docker compose --env-file .env.production up -d --build
 - Environment from `.env.production`
 
 **guacd**:
-- Volume: `rdm_drive` (shared with server for drive redirection)
+- Volume: `arsenale_drive` (shared with server for drive redirection)
 - No health check (starts immediately)
 
 **server**:
 - Built from `server/Dockerfile` (Node 22 Alpine)
 - Runs `prisma migrate deploy` on startup, then `node dist/index.js`
 - Exposes ports 3001 (HTTP/Socket.IO) and 3002 (Guacamole WS)
-- Volume: `rdm_drive` at `/guacd-drive`
+- Volume: `arsenale_drive` at `/guacd-drive`
 - Environment: `DATABASE_URL`, `GUACD_HOST=guacd`, `NODE_ENV=production`, secrets from `.env.production`
 
 **client**:
@@ -161,7 +161,7 @@ docker compose --env-file .env.production up -d --build
 | Volume | Mount Point | Purpose |
 |--------|-------------|---------|
 | `pgdata` | `/var/lib/postgresql/data` | PostgreSQL data persistence |
-| `rdm_drive` | `/guacd-drive` (server + guacd) | RDP drive redirection file storage |
+| `arsenale_drive` | `/guacd-drive` (server + guacd) | RDP drive redirection file storage |
 
 <!-- manual-start -->
 <!-- manual-end -->
@@ -213,7 +213,7 @@ All proxy locations include WebSocket upgrade headers (`Upgrade`, `Connection`).
 PostgreSQL connection may fail with `localhost` on Windows due to IPv6 resolution. Use `127.0.0.1` instead:
 
 ```
-DATABASE_URL=postgresql://rdm:rdm_password@127.0.0.1:5432/remote_desktop_manager
+DATABASE_URL=postgresql://arsenale:arsenale_password@127.0.0.1:5432/arsenale
 ```
 
 ### Docker Networking

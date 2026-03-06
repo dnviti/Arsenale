@@ -24,7 +24,7 @@ Source files: `.env.example`, `.env.production.example`, `server/src/config.ts`
 
 | Variable | Type | Default | Required | Env | Description | Security |
 |----------|------|---------|----------|-----|-------------|----------|
-| `DATABASE_URL` | string | `postgresql://rdm:rdm_password@127.0.0.1:5432/remote_desktop_manager` | Yes | Both | PostgreSQL connection string | Use strong password in prod |
+| `DATABASE_URL` | string | `postgresql://arsenale:arsenale_password@127.0.0.1:5432/arsenale` | Yes | Both | PostgreSQL connection string | Use strong password in prod |
 
 <!-- manual-start -->
 <!-- manual-end -->
@@ -205,9 +205,9 @@ These are used by `docker-compose.yml` (production) and are not consumed by the 
 
 | Variable | Type | Default | Required | Env | Description | Security |
 |----------|------|---------|----------|-----|-------------|----------|
-| `POSTGRES_USER` | string | `rdm` | No | Prod | PostgreSQL superuser name | — |
+| `POSTGRES_USER` | string | `arsenale` | No | Prod | PostgreSQL superuser name | — |
 | `POSTGRES_PASSWORD` | string | — | **Yes** | Prod | PostgreSQL superuser password | **Must** be strong random value |
-| `POSTGRES_DB` | string | `remote_desktop_manager` | No | Prod | Database name | — |
+| `POSTGRES_DB` | string | `arsenale` | No | Prod | Database name | — |
 
 <!-- manual-start -->
 <!-- manual-end -->

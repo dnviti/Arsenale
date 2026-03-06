@@ -211,7 +211,7 @@ show_summary() {
   total=$((done + progress + todo + blocked))
 
   echo ""
-  echo "=== RDM TASK SUMMARY ==="
+  echo "=== ARSENALE TASK SUMMARY ==="
   echo "  Completati: $done/$total"
   echo "  In corso:   $progress"
   echo "  Da fare:    $todo"

@@ -47,7 +47,7 @@ export const useAuthStore = create<AuthState>()(
         }),
     }),
     {
-      name: 'rdm-auth',
+      name: 'arsenale-auth',
       partialize: (state) => ({
         user: state.user,
         isAuthenticated: state.isAuthenticated,

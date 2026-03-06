@@ -37,14 +37,14 @@ export async function sendTestEmail(
 
     await sendEmail({
       to,
-      subject: 'Test Email — Remote Desktop Manager',
+      subject: 'Test Email — Arsenale',
       html: `
         <h2>Test Email</h2>
-        <p>This is a test email sent from your Remote Desktop Manager instance.</p>
+        <p>This is a test email sent from your Arsenale instance.</p>
         <p>Provider: <strong>${status.provider}</strong></p>
         <p>If you received this email, your email configuration is working correctly.</p>
       `,
-      text: `Test email from Remote Desktop Manager.\nProvider: ${status.provider}.\nYour email configuration is working correctly.`,
+      text: `Test email from Arsenale.\nProvider: ${status.provider}.\nYour email configuration is working correctly.`,
     });
 
     auditService.log({

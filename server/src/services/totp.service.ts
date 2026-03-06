@@ -4,7 +4,7 @@ import { AppError } from '../middleware/error.middleware';
 import { encrypt, decrypt, getMasterKey } from './crypto.service';
 import type { EncryptedField } from '../types';
 
-const APP_NAME = 'Remote Desktop Manager';
+const APP_NAME = 'Arsenale';
 
 function requireMasterKey(userId: string): Buffer {
   const key = getMasterKey(userId);

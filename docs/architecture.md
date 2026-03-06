@@ -5,10 +5,10 @@
 
 ## System Overview
 
-Remote Desktop Manager is a **monorepo** using npm workspaces with two packages:
+Arsenale is a **monorepo** using npm workspaces with two packages:
 
 ```
-remote-desktop-manager/
+arsenale/
 ├── server/          # Express + TypeScript backend
 ├── client/          # React 19 + Vite frontend
 ├── package.json     # Root workspace config
@@ -99,9 +99,9 @@ client/src/
 ### State Management
 
 Zustand stores with selective localStorage persistence:
-- `authStore` — tokens and user identity (`rdm-auth`)
-- `uiPreferencesStore` — panel states, sidebar, view modes (`rdm-ui-preferences`)
-- `themeStore` — dark/light mode (`rdm-theme`)
+- `authStore` — tokens and user identity (`arsenale-auth`)
+- `uiPreferencesStore` — panel states, sidebar, view modes (`arsenale-ui-preferences`)
+- `themeStore` — dark/light mode (`arsenale-theme`)
 - Other stores (connections, vault, tabs, etc.) are session-only
 
 ### API Layer
@@ -214,7 +214,7 @@ Docker internal network:
 | **Proxy** | Vite proxy config | nginx reverse proxy |
 | **Database** | Exposed on :5432, default credentials | Internal network, env-based credentials |
 | **guacd** | Exposed on :4822 | Internal network only |
-| **Volumes** | `./data/drive` bind mount | Named volumes (`pgdata`, `rdm_drive`) |
+| **Volumes** | `./data/drive` bind mount | Named volumes (`pgdata`, `arsenale_drive`) |
 | **Migrations** | `npm run db:push` (schema sync) | `prisma migrate deploy` on container start |
 
 <!-- manual-start -->

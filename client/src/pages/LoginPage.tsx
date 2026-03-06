@@ -313,7 +313,7 @@ export default function LoginPage() {
       <Card sx={{ width: 400, maxWidth: '90vw' }}>
         <CardContent>
           <Typography variant="h5" gutterBottom align="center">
-            Remote Desktop Manager
+            Arsenale
           </Typography>
           <Typography variant="body2" color="text.secondary" align="center" mb={3}>
             {subtitle}

@@ -6,7 +6,7 @@ export function openConnectionWindow(connectionId: string) {
 
   window.open(
     `/connection/${connectionId}`,
-    `rdm-${connectionId}`,
+    `arsenale-${connectionId}`,
     `width=${width},height=${height},left=${left},top=${top},menubar=no,toolbar=no,location=no,status=no`
   );
 }

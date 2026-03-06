@@ -17,7 +17,7 @@
         "hooks": [
           {
             "type": "command",
-            "command": "echo '[RDM] Consulta to-do.txt per lo stato dei task attivi' > /dev/null"
+            "command": "echo '[Arsenale] Consulta to-do.txt per lo stato dei task attivi' > /dev/null"
           }
         ]
       }

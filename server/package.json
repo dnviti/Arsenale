@@ -1,7 +1,7 @@
 {
   "name": "server",
   "version": "1.0.0",
-  "description": "Express + TypeScript backend for Remote Desktop Manager",
+  "description": "Express + TypeScript backend for Arsenale",
   "license": "GPL-3.0",
   "private": true,
   "scripts": {

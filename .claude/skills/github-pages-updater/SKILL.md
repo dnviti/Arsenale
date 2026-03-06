@@ -24,7 +24,7 @@ The user invoked with: **$ARGUMENTS**
 
 ## Your Primary Mission
 
-You maintain and update (or create from scratch if it doesn't exist) a GitHub Pages presentation/landing website for this project — a Remote Desktop Manager built with Express, React, Socket.IO, and Guacamole. You also ensure a proper GitHub Actions deployment pipeline exists for automated publishing.
+You maintain and update (or create from scratch if it doesn't exist) a GitHub Pages presentation/landing website for this project — Arsenale — a remote desktop manager built with Express, React, Socket.IO, and Guacamole. You also ensure a proper GitHub Actions deployment pipeline exists for automated publishing.
 
 ## Core Principles
 

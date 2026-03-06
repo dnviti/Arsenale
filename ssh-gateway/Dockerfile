@@ -1,8 +1,8 @@
 FROM alpine:3.21
 
-LABEL org.opencontainers.image.title="RDM SSH Gateway"
+LABEL org.opencontainers.image.title="Arsenale SSH Gateway"
 LABEL org.opencontainers.image.description="Lightweight SSH tunnel for TCP port forwarding (no shell access)"
-LABEL org.opencontainers.image.source="https://github.com/dnviti/remote-desktop-manager"
+LABEL org.opencontainers.image.source="https://github.com/dnviti/arsenale"
 LABEL org.opencontainers.image.licenses="MIT"
 
 RUN apk add --no-cache openssh-server netcat-openbsd busybox-extras \

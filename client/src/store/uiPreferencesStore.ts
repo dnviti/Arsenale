@@ -86,6 +86,6 @@ export const useUiPreferencesStore = create<UiPreferencesState>()(
           },
         })),
     }),
-    { name: 'rdm-ui-preferences' },
+    { name: 'arsenale-ui-preferences' },
   ),
 );

@@ -63,7 +63,7 @@ Rotate through these categories across invocations to maintain diversity:
 - **Collaboration**: Shared sessions, team credential vaults, role-based access, activity feeds, connection usage analytics
 - **UX/Productivity**: Keyboard shortcuts, command palette, connection search/filter, dark mode, custom themes, tab grouping, split-pane views
 - **Protocol Support**: VNC improvements, Telnet, Kubernetes exec, Docker exec, cloud shell integration (AWS SSM, Azure Bastion, GCP IAP)
-- **Integration**: REST API for external tools, CLI client, browser extension, import/export from other RDM tools, LDAP/SSO
+- **Integration**: REST API for external tools, CLI client, browser extension, import/export from other remote desktop management tools, LDAP/SSO
 - **File Management**: SFTP browser, file transfer progress, drag-and-drop upload, clipboard sync improvements
 - **Monitoring & Ops**: Connection latency tracking, session duration stats, bandwidth usage, notification system
 

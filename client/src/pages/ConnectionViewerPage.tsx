@@ -53,7 +53,7 @@ export default function ConnectionViewerPage() {
     getConnection(id)
       .then((data) => {
         setConnection(data);
-        document.title = `${data.name} - RDM`;
+        document.title = `${data.name} - Arsenale`;
       })
       .catch((err) => {
         setError(

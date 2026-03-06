@@ -2,18 +2,18 @@ services:
   postgres:
     image: postgres:16
     environment:
-      POSTGRES_USER: rdm
-      POSTGRES_PASSWORD: rdm_password
-      POSTGRES_DB: remote_desktop_manager
+      POSTGRES_USER: arsenale
+      POSTGRES_PASSWORD: arsenale_password
+      POSTGRES_DB: arsenale
     ports:
       - "5432:5432"
     volumes:
       - pgdata_dev:/var/lib/postgresql/data
     networks:
-      - rdm-dev
+      - arsenale-dev
     restart: unless-stopped
     healthcheck:
-      test: ["CMD-SHELL", "pg_isready -U rdm -d remote_desktop_manager"]
+      test: ["CMD-SHELL", "pg_isready -U arsenale -d arsenale"]
       interval: 5s
       timeout: 5s
       retries: 5
@@ -21,7 +21,7 @@ services:
   # guacd:
   #   image: guacamole/guacd
   #   networks:
-  #     - rdm-dev
+  #     - arsenale-dev
   #   restart: unless-stopped
   #   healthcheck:
   #     test: ["CMD-SHELL", "nc -z localhost 4822 || exit 1"]
@@ -49,14 +49,14 @@ services:
   #     - .env
   #   environment:
   #     # Override host-oriented values from .env for Docker networking
-  #     DATABASE_URL: postgresql://rdm:rdm_password@postgres:5432/remote_desktop_manager
+  #     DATABASE_URL: postgresql://arsenale:arsenale_password@postgres:5432/arsenale
   #     GUACD_HOST: guacd
   #     GUACD_PORT: "4822"
-  #     DOCKER_NETWORK: rdm-dev
+  #     DOCKER_NETWORK: arsenale-dev
   #     DOCKER_SOCKET_PATH: /var/run/docker.sock
   #     NODE_ENV: development
   #   networks:
-  #     - rdm-dev
+  #     - arsenale-dev
   #   depends_on:
   #     postgres:
   #       condition: service_healthy
@@ -76,13 +76,13 @@ services:
   #     VITE_API_TARGET: http://server:3001
   #     VITE_GUAC_TARGET: http://server:3002
   #   networks:
-  #     - rdm-dev
+  #     - arsenale-dev
   #   depends_on:
   #     - server
 
 networks:
-  rdm-dev:
-    name: rdm-dev
+  arsenale-dev:
+    name: arsenale-dev
 
 volumes:
   pgdata_dev:

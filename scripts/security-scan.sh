@@ -18,7 +18,7 @@ usage() {
   cat <<EOF
 ${BOLD}Usage:${NC} $(basename "$0") [OPTIONS]
 
-Security scanning for Remote Desktop Manager.
+Security scanning for Arsenale.
 
 ${BOLD}Modes:${NC}
   --quick     npm audit + ESLint security only (fast, no container needed)
@@ -144,9 +144,9 @@ if [[ "$MODE" == "docker" ]]; then
     IFS=: read -r name dockerfile context <<< "$image_spec"
     print_header "Phase 4: Build & scan $name image"
 
-    echo -e "${CYAN}  Building rdm-$name:scan ...${NC}"
+    echo -e "${CYAN}  Building arsenale-$name:scan ...${NC}"
     set +e
-    $CONTAINER_RT build -t "rdm-$name:scan" -f "$dockerfile" "$context" 2>&1
+    $CONTAINER_RT build -t "arsenale-$name:scan" -f "$dockerfile" "$context" 2>&1
     BUILD_EXIT=$?
     set -e
 
@@ -156,12 +156,12 @@ if [[ "$MODE" == "docker" ]]; then
       continue
     fi
 
-    echo -e "${CYAN}  Scanning rdm-$name:scan ...${NC}"
+    echo -e "${CYAN}  Scanning arsenale-$name:scan ...${NC}"
     set +e
     $CONTAINER_RT run --rm \
       -v /var/run/docker.sock:/var/run/docker.sock \
       -v trivy-cache:/root/.cache/trivy \
-      aquasec/trivy:latest image "rdm-$name:scan" \
+      aquasec/trivy:latest image "arsenale-$name:scan" \
       --severity HIGH,CRITICAL \
       --exit-code 1 \
       2>&1

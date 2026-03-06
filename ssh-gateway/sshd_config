@@ -1,4 +1,4 @@
-# RDM SSH Gateway — port-forwarding-only configuration
+# Arsenale SSH Gateway — port-forwarding-only configuration
 # No shell access, no root login, public key auth only
 
 Port 2222

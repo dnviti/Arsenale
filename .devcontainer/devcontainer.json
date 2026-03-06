@@ -1,12 +1,12 @@
 {
-  "name": "Remote Desktop Manager",
+  "name": "Arsenale",
   "dockerComposeFile": "docker-compose.yml",
   "service": "app",
   "workspaceFolder": "/app",
 
   "containerEnv": {
-    "DATABASE_URL": "postgresql://rdm:rdm_password@postgres:5432/remote_desktop_manager",
-    "DOCKER_NETWORK": "rdm-devcontainer",
+    "DATABASE_URL": "postgresql://arsenale:arsenale_password@postgres:5432/arsenale",
+    "DOCKER_NETWORK": "arsenale-devcontainer",
     "DOCKER_SOCKET_PATH": "/var/run/docker.sock",
     "NODE_ENV": "development"
   },

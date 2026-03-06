@@ -79,5 +79,5 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Email verification preventing unverified account login
 - ESLint security plugin enforced in CI
 
-[Unreleased]: https://github.com/dnviti/remote-desktop-manager/compare/v1.0.0...HEAD
-[1.0.0]: https://github.com/dnviti/remote-desktop-manager/releases/tag/v1.0.0
+[Unreleased]: https://github.com/dnviti/arsenale/compare/v1.0.0...HEAD
+[1.0.0]: https://github.com/dnviti/arsenale/releases/tag/v1.0.0

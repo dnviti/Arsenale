@@ -1,4 +1,4 @@
-# Contributing to Remote Desktop Manager
+# Contributing to Arsenale
 
 Thank you for your interest in contributing! This guide covers everything you need to get started.
 
@@ -13,8 +13,8 @@ Thank you for your interest in contributing! This guide covers everything you ne
 
 ```bash
 # 1. Fork and clone the repository
-git clone https://github.com/dnviti/remote-desktop-manager.git
-cd remote-desktop-manager
+git clone https://github.com/dnviti/arsenale.git
+cd arsenale
 
 # 2. Install all dependencies (monorepo — root + server + client)
 npm install
@@ -113,7 +113,7 @@ Prefix with a type when helpful:
 
 ## Opening Issues
 
-Search [existing issues](https://github.com/dnviti/remote-desktop-manager/issues) before opening a new one.
+Search [existing issues](https://github.com/dnviti/arsenale/issues) before opening a new one.
 
 Use the provided templates:
 - **Bug report** — for unexpected behavior or errors

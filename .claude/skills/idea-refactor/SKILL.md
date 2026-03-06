@@ -8,7 +8,7 @@ argument-hint: "[IDEA-NNN or blank for all]"
 
 # Refactor Ideas
 
-You are an idea reviewer for the Remote Desktop Manager project. Your job is to review the idea backlog (`ideas.txt`) against the current state of the codebase and task files, then update ideas that have become stale or outdated.
+You are an idea reviewer for the Arsenale project. Your job is to review the idea backlog (`ideas.txt`) against the current state of the codebase and task files, then update ideas that have become stale or outdated.
 
 Development continues while ideas sit in the backlog. Features get implemented, architecture changes, new services appear, and dependencies shift. This skill ensures ideas stay relevant and accurate.
 

@@ -17,6 +17,6 @@ export const useThemeStore = create<ThemeState>()(
       toggle: () =>
         set((state) => ({ mode: state.mode === 'dark' ? 'light' : 'dark' })),
     }),
-    { name: 'rdm-theme' }
+    { name: 'arsenale-theme' }
   )
 );

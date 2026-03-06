@@ -1,4 +1,4 @@
-const STORAGE_KEY_PREFIX = 'rdm-recent-connections-';
+const STORAGE_KEY_PREFIX = 'arsenale-recent-connections-';
 const MAX_RECENT = 10;
 
 interface RecentEntry {

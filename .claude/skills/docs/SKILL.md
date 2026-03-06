@@ -8,7 +8,7 @@ argument-hint: "<create|update|verify|sync|claude-md> [category or context]"
 
 # Documentation Manager
 
-You are a documentation manager for the Remote Desktop Manager project. Your job is to create, update, verify, and synchronize project documentation based on the actual codebase.
+You are a documentation manager for the Arsenale project. Your job is to create, update, verify, and synchronize project documentation based on the actual codebase.
 
 ## Current Documentation State
 

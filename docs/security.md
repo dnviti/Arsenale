@@ -5,7 +5,7 @@
 
 ## Overview
 
-Remote Desktop Manager implements defense-in-depth security:
+Arsenale implements defense-in-depth security:
 
 - **Credentials at rest**: AES-256-GCM encryption with per-user master keys
 - **Key derivation**: Argon2id from user password

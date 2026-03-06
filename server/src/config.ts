@@ -132,8 +132,8 @@ export const config = {
     },
   },
   cookie: {
-    refreshTokenName: 'rdm-rt',
-    csrfTokenName: 'rdm-csrf',
+    refreshTokenName: 'arsenale-rt',
+    csrfTokenName: 'arsenale-csrf',
     path: '/api/auth',
     secure: process.env.NODE_ENV === 'production',
     sameSite: 'strict' as const,
@@ -158,12 +158,12 @@ export const config = {
       : '/run/podman/podman.sock'
   ),
   dockerNetwork: process.env.DOCKER_NETWORK || '',
-  orchestratorK8sNamespace: process.env.ORCHESTRATOR_K8S_NAMESPACE || 'rdm',
-  orchestratorSshGatewayImage: process.env.ORCHESTRATOR_SSH_GATEWAY_IMAGE || 'ghcr.io/dnviti/remote-desktop-manager/ssh-gateway:latest',
+  orchestratorK8sNamespace: process.env.ORCHESTRATOR_K8S_NAMESPACE || 'arsenale',
+  orchestratorSshGatewayImage: process.env.ORCHESTRATOR_SSH_GATEWAY_IMAGE || 'ghcr.io/dnviti/arsenale/ssh-gateway:latest',
   orchestratorGuacdImage: process.env.ORCHESTRATOR_GUACD_IMAGE || 'guacamole/guacd:latest',
   webauthn: {
     rpId: process.env.WEBAUTHN_RP_ID || 'localhost',
     rpOrigin: process.env.WEBAUTHN_RP_ORIGIN || 'http://localhost:3000',
-    rpName: process.env.WEBAUTHN_RP_NAME || 'Remote Desktop Manager',
+    rpName: process.env.WEBAUTHN_RP_NAME || 'Arsenale',
   },
 };

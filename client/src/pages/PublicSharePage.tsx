@@ -211,7 +211,7 @@ export default function PublicSharePage() {
       <Card sx={{ maxWidth: 500, width: '100%' }}>
         <CardContent sx={{ p: 3 }}>
           <Typography variant="h6" align="center" sx={{ mb: 2 }}>
-            Remote Desktop Manager
+            Arsenale
           </Typography>
           <Divider sx={{ mb: 2 }} />
 

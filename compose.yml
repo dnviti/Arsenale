@@ -2,9 +2,9 @@ services:
   postgres:
     image: postgres:16
     environment:
-      POSTGRES_USER: ${POSTGRES_USER:-rdm}
+      POSTGRES_USER: ${POSTGRES_USER:-arsenale}
       POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:?Set POSTGRES_PASSWORD in .env.production}
-      POSTGRES_DB: ${POSTGRES_DB:-remote_desktop_manager}
+      POSTGRES_DB: ${POSTGRES_DB:-arsenale}
     env_file:
       - .env
     volumes:
@@ -14,7 +14,7 @@ services:
       test:
         [
           "CMD-SHELL",
-          "pg_isready -U ${POSTGRES_USER:-rdm} -d ${POSTGRES_DB:-remote_desktop_manager}",
+          "pg_isready -U ${POSTGRES_USER:-arsenale} -d ${POSTGRES_DB:-arsenale}",
         ]
       interval: 5s
       timeout: 5s
@@ -23,7 +23,7 @@ services:
   guacd:
     image: guacamole/guacd
     volumes:
-      - rdm_drive:/guacd-drive
+      - arsenale_drive:/guacd-drive
     restart: unless-stopped
     healthcheck:
       test: ["CMD-SHELL", "nc -z localhost 4822 || exit 1"]
@@ -49,7 +49,7 @@ services:
       guacd:
         condition: service_healthy
     environment:
-      DATABASE_URL: postgresql://${POSTGRES_USER:-rdm}:${POSTGRES_PASSWORD}@postgres:5432/${POSTGRES_DB:-remote_desktop_manager}
+      DATABASE_URL: postgresql://${POSTGRES_USER:-arsenale}:${POSTGRES_PASSWORD}@postgres:5432/${POSTGRES_DB:-arsenale}
       GUACD_HOST: guacd
       GUACD_PORT: 4822
       JWT_SECRET: ${JWT_SECRET:?Set JWT_SECRET in .env.production}
@@ -62,7 +62,7 @@ services:
     env_file:
       - .env
     volumes:
-      - rdm_drive:/guacd-drive
+      - arsenale_drive:/guacd-drive
     restart: unless-stopped
 
   client:
@@ -105,4 +105,4 @@ services:
 
 volumes:
   pgdata:
-  rdm_drive:
+  arsenale_drive:

@@ -8,7 +8,7 @@ argument-hint: "[TASK-CODE]"
 
 # Pick Up a Task
 
-You are a task manager for the Remote Desktop Manager project. Your job is to:
+You are a task manager for the Arsenale project. Your job is to:
 1. **First**: verify and close any in-progress tasks that have already been implemented
 2. **Then**: pick up a new task only when all in-progress tasks are resolved
 

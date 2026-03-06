@@ -1,7 +1,7 @@
-# Remote Desktop Manager
+# Arsenale
 
 [![License: GPL v3](https://img.shields.io/badge/License-GPLv3-blue.svg)](LICENSE)
-[![Verify](https://github.com/dnviti/remote-desktop-manager/actions/workflows/verify.yml/badge.svg)](https://github.com/dnviti/remote-desktop-manager/actions/workflows/verify.yml)
+[![Verify](https://github.com/dnviti/arsenale/actions/workflows/verify.yml/badge.svg)](https://github.com/dnviti/arsenale/actions/workflows/verify.yml)
 [![Version](https://img.shields.io/badge/version-1.0.0-green.svg)](CHANGELOG.md)
 
 A web-based application for managing and accessing remote SSH and RDP connections from your browser. Organize connections in folders, share them with team members, and keep credentials encrypted at rest with a personal vault.
@@ -37,7 +37,7 @@ A web-based application for managing and accessing remote SSH and RDP connection
 
 ```bash
 git clone <repository-url>
-cd remote-desktop-manager
+cd arsenale
 ```
 
 ### 2. Install dependencies
@@ -71,7 +71,7 @@ This starts:
 
 | Variable | Default | Description |
 |----------|---------|-------------|
-| `DATABASE_URL` | `postgresql://rdm:rdm_password@127.0.0.1:5432/remote_desktop_manager` | PostgreSQL connection string |
+| `DATABASE_URL` | `postgresql://arsenale:arsenale_password@127.0.0.1:5432/arsenale` | PostgreSQL connection string |
 | `JWT_SECRET` | `change-me-in-production` | Secret key for signing JWT tokens |
 | `JWT_EXPIRES_IN` | `15m` | Access token TTL |
 | `JWT_REFRESH_EXPIRES_IN` | `7d` | Refresh token TTL |
@@ -86,7 +86,7 @@ This starts:
 ## Project Structure
 
 ```
-remote-desktop-manager/
+arsenale/
 ├── server/                        # Express backend
 │   ├── src/
 │   │   ├── index.ts              # Entry point (HTTP + Socket.IO + Guacamole WS)

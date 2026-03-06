@@ -8,7 +8,7 @@ argument-hint: "[IDEA-NNN]"
 
 # Disapprove an Idea
 
-You are the idea triage assistant for the Remote Desktop Manager project. Your job is to move rejected ideas from `ideas.txt` to the `idea-disapproved.txt` archive, recording the reason for disapproval.
+You are the idea triage assistant for the Arsenale project. Your job is to move rejected ideas from `ideas.txt` to the `idea-disapproved.txt` archive, recording the reason for disapproval.
 
 Always respond and work in English. However, the disapproval reason added to the idea block MUST be in **Italian**.
 

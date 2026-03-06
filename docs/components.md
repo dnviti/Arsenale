@@ -332,7 +332,7 @@ Source: `client/src/`
 ### authStore
 
 - **File**: `client/src/store/authStore.ts`
-- **Persistence**: localStorage (`rdm-auth`)
+- **Persistence**: localStorage (`arsenale-auth`)
 - **State**: `accessToken`, `refreshToken`, `user`, `isAuthenticated`
 - **Actions**: `setAuth(tokens, user)`, `setAccessToken(token)`, `updateUser(user)`, `logout()`
 
@@ -362,7 +362,7 @@ Source: `client/src/`
 ### uiPreferencesStore
 
 - **File**: `client/src/store/uiPreferencesStore.ts`
-- **Persistence**: localStorage (`rdm-ui-preferences`)
+- **Persistence**: localStorage (`arsenale-ui-preferences`)
 - **State**: `rdpFileBrowserOpen`, `sshSftpBrowserOpen`, `sshSftpTransferQueueOpen`, `sidebarFavoritesOpen`, `sidebarRecentsOpen`, `sidebarSharedOpen`, `sidebarCompact`, `sidebarTeamSections` (Map of team collapse states)
 - **Actions**: `set(key, value)`, `toggle(key)`, `toggleTeamSection(teamId)`
 
@@ -413,7 +413,7 @@ Source: `client/src/`
 ### themeStore
 
 - **File**: `client/src/store/themeStore.ts`
-- **Persistence**: localStorage (`rdm-theme`)
+- **Persistence**: localStorage (`arsenale-theme`)
 - **State**: `mode` (`'light'` | `'dark'`)
 - **Actions**: `toggle()`
 

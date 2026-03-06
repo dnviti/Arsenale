@@ -1,7 +1,7 @@
 {
   "name": "client",
   "version": "1.0.0",
-  "description": "React 19 + Vite frontend for Remote Desktop Manager",
+  "description": "React 19 + Vite frontend for Arsenale",
   "license": "GPL-3.0",
   "private": true,
   "type": "module",

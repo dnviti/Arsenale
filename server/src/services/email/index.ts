@@ -66,7 +66,7 @@ export async function sendVerificationEmail(
 
   await send({
     to,
-    subject: 'Verify your email — Remote Desktop Manager',
+    subject: 'Verify your email — Arsenale',
     html: `
       <h2>Email Verification</h2>
       <p>Click the link below to verify your email address:</p>
@@ -95,7 +95,7 @@ export async function sendPasswordResetEmail(
 
   await send({
     to,
-    subject: 'Password Reset — Remote Desktop Manager',
+    subject: 'Password Reset — Arsenale',
     html: `
       <h2>Password Reset Request</h2>
       <p>You requested a password reset. Click the link below to set a new password:</p>
@@ -126,16 +126,16 @@ export async function sendWelcomeEmail(
 
   await send({
     to,
-    subject: 'Your account has been created — Remote Desktop Manager',
+    subject: 'Your account has been created — Arsenale',
     html: `
-      <h2>Welcome to Remote Desktop Manager</h2>
+      <h2>Welcome to Arsenale</h2>
       <p>An administrator has created an account for you.</p>
       <p><strong>Email:</strong> ${to}</p>
       <p><strong>Temporary password:</strong> ${temporaryPassword}</p>
       <p><a href="${loginUrl}">Sign in to your account</a></p>
       <p>We recommend changing your password after your first login.</p>
     `,
-    text: `Welcome to Remote Desktop Manager\n\nAn administrator has created an account for you.\nEmail: ${to}\nTemporary password: ${temporaryPassword}\nLogin: ${loginUrl}\n\nPlease change your password after your first login.`,
+    text: `Welcome to Arsenale\n\nAn administrator has created an account for you.\nEmail: ${to}\nTemporary password: ${temporaryPassword}\nLogin: ${loginUrl}\n\nPlease change your password after your first login.`,
   });
 }
 

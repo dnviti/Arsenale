@@ -45,8 +45,8 @@ function buildContainerConfig(
   const suffix = `${gateway.id.slice(0, 8)}-${instanceIndex}`;
   const tenantSlug = gateway.tenantId.slice(0, 8);
   const slug = gateway.name.toLowerCase().replace(/[^a-z0-9]/g, '-').replace(/-+/g, '-');
-  const baseName = `rdm-gw-${tenantSlug}-${slug}-${suffix}`;
-  const k8sNamespace = `rdm-${gateway.tenantId}`;
+  const baseName = `arsenale-gw-${tenantSlug}-${slug}-${suffix}`;
+  const k8sNamespace = `arsenale-${gateway.tenantId}`;
 
   if (gateway.type === 'MANAGED_SSH') {
     return {
@@ -62,10 +62,10 @@ function buildContainerConfig(
         ...(apiHostPort != null ? [{ container: 8022, host: apiHostPort }] : []),
       ],
       labels: {
-        'rdm.managed': 'true',
-        'rdm.gateway-id': gateway.id,
-        'rdm.tenant-id': gateway.tenantId,
-        'rdm.type': 'ssh',
+        'arsenale.managed': 'true',
+        'arsenale.gateway-id': gateway.id,
+        'arsenale.tenant-id': gateway.tenantId,
+        'arsenale.type': 'ssh',
       },
       ...(config.dockerNetwork ? { network: config.dockerNetwork } : {}),
       restartPolicy: 'unless-stopped',
@@ -80,10 +80,10 @@ function buildContainerConfig(
     env: {},
     ports: [{ container: 4822, ...(hostPort != null ? { host: hostPort } : {}) }],
     labels: {
-      'rdm.managed': 'true',
-      'rdm.gateway-id': gateway.id,
-      'rdm.tenant-id': gateway.tenantId,
-      'rdm.type': 'guacd',
+      'arsenale.managed': 'true',
+      'arsenale.gateway-id': gateway.id,
+      'arsenale.tenant-id': gateway.tenantId,
+      'arsenale.type': 'guacd',
     },
     ...(config.dockerNetwork ? { network: config.dockerNetwork } : {}),
     restartPolicy: 'unless-stopped',

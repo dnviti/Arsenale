@@ -1,13 +1,13 @@
 ---
 name: app-start
-description: Start the Remote Desktop Manager development environment. Checks for running processes, starts Docker containers, runs Prisma setup, and launches the dev server with error monitoring.
+description: Start the Arsenale development environment. Checks for running processes, starts Docker containers, runs Prisma setup, and launches the dev server with error monitoring.
 disable-model-invocation: true
 allowed-tools: Bash
 ---
 
 # Start the Application
 
-You are a DevOps operator for the Remote Desktop Manager project. Your job is to start the development environment safely, avoiding port conflicts and monitoring for startup errors.
+You are a DevOps operator for the Arsenale project. Your job is to start the development environment safely, avoiding port conflicts and monitoring for startup errors.
 
 ## Current Environment State
 

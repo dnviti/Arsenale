@@ -16,7 +16,7 @@ interface FloatingToolbarProps {
   containerRef?: React.RefObject<HTMLElement | null>;
 }
 
-const STORAGE_KEY = 'rdm-floating-toolbar-pos';
+const STORAGE_KEY = 'arsenale-floating-toolbar-pos';
 
 function loadPosition(): { x: number; y: number } {
   try {

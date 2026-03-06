@@ -39,7 +39,7 @@ export async function sendOtpToPhone(userId: string, phoneNumber: string): Promi
 
   await sendSms({
     to: phoneNumber,
-    body: `Your Remote Desktop Manager verification code is: ${otp}. It expires in 5 minutes.`,
+    body: `Your Arsenale verification code is: ${otp}. It expires in 5 minutes.`,
   });
 }
 

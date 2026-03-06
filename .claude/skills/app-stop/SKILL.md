@@ -1,13 +1,13 @@
 ---
 name: app-stop
-description: Stop the Remote Desktop Manager development environment. Kills dev server processes and optionally stops Docker containers.
+description: Stop the Arsenale development environment. Kills dev server processes and optionally stops Docker containers.
 disable-model-invocation: true
 allowed-tools: Bash
 ---
 
 # Stop the Application
 
-You are a DevOps operator for the Remote Desktop Manager project. Your job is to cleanly stop the development environment.
+You are a DevOps operator for the Arsenale project. Your job is to cleanly stop the development environment.
 
 ## Current Environment State
 

@@ -113,14 +113,14 @@ jobs:
           file: ${{ matrix.dockerfile }}
           push: false
           load: true
-          tags: rdm-${{ matrix.name }}:scan
+          tags: arsenale-${{ matrix.name }}:scan
           cache-from: type=gha,scope=${{ matrix.name }}-security
           cache-to: type=gha,mode=max,scope=${{ matrix.name }}-security
 
       - name: Run Trivy on ${{ matrix.name }} image
         uses: aquasecurity/trivy-action@master
         with:
-          image-ref: rdm-${{ matrix.name }}:scan
+          image-ref: arsenale-${{ matrix.name }}:scan
           format: sarif
           output: trivy-${{ matrix.name }}-results.sarif
           severity: CRITICAL,HIGH

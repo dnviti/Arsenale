@@ -75,7 +75,7 @@ export class KubernetesProvider implements IOrchestratorProvider {
             metadata: {
               name: ns,
               labels: {
-                'app.kubernetes.io/managed-by': 'rdm',
+                'app.kubernetes.io/managed-by': 'arsenale',
               },
             },
           },
@@ -103,7 +103,7 @@ export class KubernetesProvider implements IOrchestratorProvider {
     await this.ensureNamespace(ns);
 
     const labels: Record<string, string> = {
-      'app.kubernetes.io/managed-by': 'rdm',
+      'app.kubernetes.io/managed-by': 'arsenale',
       'app.kubernetes.io/name': name,
       ...containerConfig.labels,
     };
@@ -221,7 +221,7 @@ export class KubernetesProvider implements IOrchestratorProvider {
       .join(',');
 
     try {
-      // List across all namespaces managed by RDM to support per-tenant isolation
+      // List across all namespaces managed by Arsenale to support per-tenant isolation
       const res = await this.appsApi.listDeploymentForAllNamespaces({
         labelSelector,
       });
