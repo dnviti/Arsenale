@@ -7,6 +7,7 @@ export interface RdpConnectionParams {
   port: number;
   username: string;
   password: string;
+  domain?: string;
   enableDrive?: boolean;
   drivePath?: string;
   rdpSettings?: Partial<RdpSettings>;
@@ -97,6 +98,8 @@ export function generateGuacamoleToken(params: RdpConnectionParams): string {
     'disable-audio': boolStr(rdp.disableAudio, true),
     'enable-audio-input': boolStr(rdp.enableAudioInput, false),
   };
+
+  if (params.domain) settings.domain = params.domain;
 
   if (rdp.colorDepth) settings['color-depth'] = String(rdp.colorDepth);
   if (rdp.width) settings.width = String(rdp.width);

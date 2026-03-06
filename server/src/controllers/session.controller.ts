@@ -15,6 +15,7 @@ const sessionSchema = z.object({
   connectionId: z.string().uuid(),
   username: z.string().min(1).optional(),
   password: z.string().min(1).optional(),
+  domain: z.string().min(1).optional(),
 }).refine(
   (data) => (!data.username && !data.password) || (data.username && data.password),
   { message: 'Both username and password must be provided together' },
@@ -32,7 +33,7 @@ export async function createRdpSession(req: AuthRequest, res: Response, next: Ne
   try {
     const parsed = sessionSchema.parse(req.body);
     connectionId = parsed.connectionId;
-    const { username: overrideUser, password: overridePass } = parsed;
+    const { username: overrideUser, password: overridePass, domain: overrideDomain } = parsed;
 
     const conn = await getConnection(req.user!.userId, connectionId, req.user!.tenantId);
     connHost = conn.host;
@@ -77,9 +78,11 @@ export async function createRdpSession(req: AuthRequest, res: Response, next: Ne
 
     let username: string;
     let password: string;
+    let domain: string | undefined;
     if (overrideUser && overridePass) {
       username = overrideUser;
       password = overridePass;
+      domain = overrideDomain;
     } else {
       const creds = await getConnectionCredentials(req.user!.userId, connectionId, req.user!.tenantId);
       if (creds.privateKey && !creds.password) {
@@ -87,6 +90,7 @@ export async function createRdpSession(req: AuthRequest, res: Response, next: Ne
       }
       username = creds.username;
       password = creds.password;
+      domain = creds.domain;
     }
 
     // Load user RDP defaults and connection RDP settings, then merge
@@ -108,6 +112,7 @@ export async function createRdpSession(req: AuthRequest, res: Response, next: Ne
       port: conn.port,
       username,
       password,
+      domain,
       enableDrive,
       drivePath,
       rdpSettings: mergedRdp,

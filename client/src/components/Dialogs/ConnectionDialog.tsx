@@ -36,6 +36,7 @@ export default function ConnectionDialog({ open, onClose, connection, folderId, 
   const [port, setPort] = useState('22');
   const [username, setUsername] = useState('');
   const [password, setPassword] = useState('');
+  const [domain, setDomain] = useState('');
   const [description, setDescription] = useState('');
   const [enableDrive, setEnableDrive] = useState(false);
   const [sshTerminalConfig, setSshTerminalConfig] = useState<Partial<SshTerminalConfig>>({});
@@ -64,6 +65,7 @@ export default function ConnectionDialog({ open, onClose, connection, folderId, 
       setPort(String(connection.port));
       setUsername('');
       setPassword('');
+      setDomain('');
       setDescription(connection.description || '');
       setEnableDrive(connection.enableDrive ?? false);
       setGatewayId(connection.gatewayId || '');
@@ -87,6 +89,7 @@ export default function ConnectionDialog({ open, onClose, connection, folderId, 
       setPort('22');
       setUsername('');
       setPassword('');
+      setDomain('');
       setDescription('');
       setEnableDrive(false);
       setGatewayId('');
@@ -147,6 +150,7 @@ export default function ConnectionDialog({ open, onClose, connection, folderId, 
         if (credentialMode === 'manual') {
           if (username) data.username = username;
           if (password) data.password = password;
+          if (domain) data.domain = domain;
         }
         await updateConnection(connection.id, data);
       } else {
@@ -160,7 +164,7 @@ export default function ConnectionDialog({ open, onClose, connection, folderId, 
           gatewayId: gatewayId || null,
           ...(credentialMode === 'keychain'
             ? { credentialSecretId: selectedSecretId! }
-            : { username, password }),
+            : { username, password, ...(domain ? { domain } : {}) }),
           ...(folderId ? { folderId } : {}),
           ...(teamId ? { teamId } : {}),
           ...(type === 'SSH' && Object.keys(sshTerminalConfig).length > 0 && {
@@ -191,6 +195,7 @@ export default function ConnectionDialog({ open, onClose, connection, folderId, 
     setPort('22');
     setUsername('');
     setPassword('');
+    setDomain('');
     setDescription('');
     setEnableDrive(false);
     setGatewayId('');
@@ -306,6 +311,15 @@ export default function ConnectionDialog({ open, onClose, connection, folderId, 
                 fullWidth
                 placeholder={isEditMode ? 'Leave blank to keep unchanged' : undefined}
               />
+              {type === 'RDP' && (
+                <TextField
+                  label="Domain (optional)"
+                  value={domain}
+                  onChange={(e) => setDomain(e.target.value)}
+                  fullWidth
+                  placeholder={isEditMode ? 'Leave blank to keep unchanged' : 'e.g. CONTOSO'}
+                />
+              )}
             </>
           )}
           <TextField

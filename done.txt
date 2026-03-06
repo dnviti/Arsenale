@@ -2367,3 +2367,84 @@
     MODIFICATO: client/src/components/Keychain/SecretListPanel.tsx (chip label improvement)
     MODIFICATO: client/src/components/Layout/MainLayout.tsx (Badge on keychain icon)
     MODIFICATO: client/src/components/Dialogs/AuditLogDialog.tsx (30+ new action labels and colors)
+
+
+================================================================================
+  SEZIONE I — SSO & DOMAIN CREDENTIAL PASSTHROUGH
+================================================================================
+
+------------------------------------------------------------------------------
+[x] SSO-073 — RDP domain field: schema, dialogs, Guacamole token
+------------------------------------------------------------------------------
+  Priorita: ALTA
+  Dipendenze: Nessuna
+  COMPLETATO: Added encrypted domain field (AES-256-GCM) to Connection and SharedConnection models,
+    extended RDP service to emit domain in Guacamole token, added domain encrypt/decrypt in
+    connection service (all 4 credential resolution paths), sharing service re-encryption,
+    session controller domain override, ConnectionDialog/ConnectAsDialog domain TextField for RDP,
+    RdpViewer POST body, and Keychain UI (SecretDialog + SecretDetailView) for LOGIN secrets.
+
+  DESCRIZIONE:
+  Aggiungere il campo `domain` alle connessioni RDP. Guacamole supporta
+  nativamente il parametro `domain` per l'autenticazione NLA, ma attualmente
+  l'app non lo passa mai. Questo task aggiunge domain come campo opzionale
+  cifrato su Connection, estende ConnectionDialog e ConnectAsDialog con un
+  input Domain (visibile solo per RDP), e lo propaga a generateGuacamoleToken().
+  Il campo domain viene anche aggiunto ai vault secrets di tipo LOGIN.
+
+  DETTAGLI TECNICI:
+  Prisma (server/prisma/schema.prisma):
+    - Aggiungere al modello Connection:
+        encryptedDomain  String?
+        domainIV         String?
+        domainTag        String?
+    - Migrazione Prisma (colonne nullable, nessuna perdita dati)
+
+  Server types (server/src/types/index.ts):
+    - Aggiungere `domain?: string` a LoginSecretData
+    - Aggiungere `domain?: string` a ResolvedCredentials (o equivalente)
+
+  Server services:
+    - server/src/services/rdp.service.ts:
+      - Aggiungere `domain?: string` a RdpConnectionParams
+      - In generateGuacamoleToken(): se params.domain e' truthy, aggiungere
+        `settings.domain = params.domain` all'oggetto config (riga 82)
+    - server/src/services/connection.service.ts:
+      - createConnection(): cifrare domain insieme a username/password
+      - updateConnection(): cifrare domain se fornito
+      - getConnectionCredentials(): decifrare domain da Connection o da
+        LoginSecretData quando si usa un vault secret
+
+  Server handler (server/src/socket/rdp.handler.ts):
+    - sessionSchema: aggiungere `domain: z.string().optional()`
+    - POST /rdp: passare domain override o domain risolto a
+      generateGuacamoleToken()
+
+  Client:
+    - client/src/store/tabsStore.ts: aggiungere `domain?: string` a
+      CredentialOverride
+    - client/src/api/connections.api.ts: aggiungere `domain?: string`
+      a ConnectionInput, ConnectionUpdate, ConnectionData
+    - client/src/components/Dialogs/ConnectionDialog.tsx: aggiungere
+      TextField "Domain (optional)" visibile quando type=RDP
+    - client/src/components/Dialogs/ConnectAsDialog.tsx: aggiungere
+      TextField "Domain (optional)" in modalita' manual per RDP
+    - client/src/components/RDP/RdpViewer.tsx: passare credentials.domain
+      nel body POST /sessions/rdp
+
+  File coinvolti:
+    MODIFICATO: server/prisma/schema.prisma (Connection + SharedConnection domain fields)
+    MODIFICATO: server/src/types/index.ts (LoginSecretData, ResolvedCredentials)
+    MODIFICATO: server/src/services/rdp.service.ts (RdpConnectionParams, token)
+    MODIFICATO: server/src/services/connection.service.ts (encrypt/decrypt domain)
+    MODIFICATO: server/src/services/sharing.service.ts (re-encrypt domain for shared)
+    MODIFICATO: server/src/controllers/session.controller.ts (sessionSchema, domain param)
+    MODIFICATO: server/src/controllers/connections.controller.ts (create/update Zod schemas)
+    MODIFICATO: client/src/store/tabsStore.ts (CredentialOverride)
+    MODIFICATO: client/src/api/connections.api.ts (ConnectionInput, ConnectionUpdate)
+    MODIFICATO: client/src/api/secrets.api.ts (LoginData domain field)
+    MODIFICATO: client/src/components/Dialogs/ConnectionDialog.tsx (Domain input)
+    MODIFICATO: client/src/components/Dialogs/ConnectAsDialog.tsx (Domain input)
+    MODIFICATO: client/src/components/RDP/RdpViewer.tsx (domain nel POST body)
+    MODIFICATO: client/src/components/Keychain/SecretDialog.tsx (Domain input for LOGIN)
+    MODIFICATO: client/src/components/Keychain/SecretDetailView.tsx (Domain display for LOGIN)

@@ -50,6 +50,7 @@ export default function SecretDialog({ open, onClose, secret }: SecretDialogProp
   // Type-specific data
   const [loginUsername, setLoginUsername] = useState('');
   const [loginPassword, setLoginPassword] = useState('');
+  const [loginDomain, setLoginDomain] = useState('');
   const [loginUrl, setLoginUrl] = useState('');
   const [notes, setNotes] = useState('');
   const [showPassword, setShowPassword] = useState(false);
@@ -111,6 +112,7 @@ export default function SecretDialog({ open, onClose, secret }: SecretDialogProp
     setExpiresAt('');
     setLoginUsername('');
     setLoginPassword('');
+    setLoginDomain('');
     setLoginUrl('');
     setNotes('');
     setShowPassword(false);
@@ -135,6 +137,7 @@ export default function SecretDialog({ open, onClose, secret }: SecretDialogProp
       case 'LOGIN':
         setLoginUsername(data.username);
         setLoginPassword(data.password);
+        setLoginDomain(data.domain || '');
         setLoginUrl(data.url || '');
         setNotes(data.notes || '');
         break;
@@ -174,7 +177,7 @@ export default function SecretDialog({ open, onClose, secret }: SecretDialogProp
     switch (type) {
       case 'LOGIN':
         if (!loginUsername || !loginPassword) { setError('Username and password are required'); return null; }
-        return { type: 'LOGIN', username: loginUsername, password: loginPassword, url: loginUrl || undefined, notes: notes || undefined };
+        return { type: 'LOGIN', username: loginUsername, password: loginPassword, domain: loginDomain || undefined, url: loginUrl || undefined, notes: notes || undefined };
       case 'SSH_KEY':
         if (!sshPrivateKey) { setError('Private key is required'); return null; }
         return { type: 'SSH_KEY', username: sshUsername || undefined, privateKey: sshPrivateKey, publicKey: sshPublicKey || undefined, passphrase: sshPassphrase || undefined, algorithm: sshAlgorithm || undefined, notes: notes || undefined };
@@ -351,6 +354,7 @@ export default function SecretDialog({ open, onClose, secret }: SecretDialogProp
                   },
                 }}
               />
+              <TextField label="Domain (optional)" value={loginDomain} onChange={(e) => setLoginDomain(e.target.value)} fullWidth size="small" placeholder="e.g. CONTOSO" />
               <TextField label="URL" value={loginUrl} onChange={(e) => setLoginUrl(e.target.value)} fullWidth size="small" />
             </>
           )}

@@ -7,6 +7,7 @@ import { useAuthStore } from './authStore';
 export interface CredentialOverride {
   username: string;
   password: string;
+  domain?: string;
 }
 
 export interface Tab {

@@ -24,6 +24,7 @@ export interface CreateConnectionInput {
   port: number;
   username?: string;
   password?: string;
+  domain?: string;
   credentialSecretId?: string;
   description?: string;
   folderId?: string;
@@ -41,6 +42,7 @@ export interface UpdateConnectionInput {
   port?: number;
   username?: string;
   password?: string;
+  domain?: string;
   credentialSecretId?: string | null;
   description?: string | null;
   folderId?: string | null;
@@ -78,12 +80,16 @@ export async function createConnection(userId: string, input: CreateConnectionIn
   // Encrypt inline credentials if provided
   let encUsername = null;
   let encPassword = null;
+  let encDomain = null;
   if (input.username !== undefined && input.password !== undefined) {
     const encryptionKey = input.teamId
       ? await resolveTeamKey(input.teamId, userId)
       : requireMasterKey(userId);
     encUsername = encrypt(input.username, encryptionKey);
     encPassword = encrypt(input.password, encryptionKey);
+    if (input.domain) {
+      encDomain = encrypt(input.domain, encryptionKey);
+    }
   }
 
   const connection = await prisma.connection.create({
@@ -101,6 +107,9 @@ export async function createConnection(userId: string, input: CreateConnectionIn
       encryptedPassword: encPassword?.ciphertext ?? null,
       passwordIV: encPassword?.iv ?? null,
       passwordTag: encPassword?.tag ?? null,
+      encryptedDomain: encDomain?.ciphertext ?? null,
+      domainIV: encDomain?.iv ?? null,
+      domainTag: encDomain?.tag ?? null,
       description: input.description || null,
       enableDrive: input.enableDrive ?? false,
       gatewayId: input.gatewayId || null,
@@ -180,6 +189,9 @@ export async function updateConnection(
       data.encryptedPassword = null;
       data.passwordIV = null;
       data.passwordTag = null;
+      data.encryptedDomain = null;
+      data.domainIV = null;
+      data.domainTag = null;
     }
   }
 
@@ -195,6 +207,19 @@ export async function updateConnection(
     data.encryptedPassword = enc.ciphertext;
     data.passwordIV = enc.iv;
     data.passwordTag = enc.tag;
+  }
+
+  if (input.domain !== undefined) {
+    if (input.domain) {
+      const enc = encrypt(input.domain, encryptionKey);
+      data.encryptedDomain = enc.ciphertext;
+      data.domainIV = enc.iv;
+      data.domainTag = enc.tag;
+    } else {
+      data.encryptedDomain = null;
+      data.domainIV = null;
+      data.domainTag = null;
+    }
   }
 
   const updated = await prisma.connection.update({
@@ -475,7 +500,7 @@ async function resolveCredentialsFromSecret(
   }
 
   if (decryptedData.type === 'LOGIN') {
-    return { username: decryptedData.username, password: decryptedData.password };
+    return { username: decryptedData.username, password: decryptedData.password, domain: decryptedData.domain };
   }
 
   if (decryptedData.type === 'SSH_KEY') {
@@ -494,6 +519,16 @@ async function resolveCredentialsFromSecret(
     `Secret type "${decryptedData.type}" is not compatible with connection credentials. Use LOGIN or SSH_KEY.`,
     400
   );
+}
+
+function decryptDomain(
+  record: { encryptedDomain: string | null; domainIV: string | null; domainTag: string | null },
+  key: Buffer
+): string | undefined {
+  if (record.encryptedDomain && record.domainIV && record.domainTag) {
+    return decrypt({ ciphertext: record.encryptedDomain, iv: record.domainIV, tag: record.domainTag }, key);
+  }
+  return undefined;
 }
 
 export async function getConnectionCredentials(
@@ -521,6 +556,13 @@ export async function getConnectionCredentials(
         key
       );
     }
+    // If secret has no domain, fall back to inline encrypted domain
+    if (!creds.domain && connection.encryptedDomain && connection.domainIV && connection.domainTag) {
+      const key = access.accessType === 'team'
+        ? await resolveTeamKey(connection.teamId!, userId)
+        : requireMasterKey(userId);
+      creds.domain = decryptDomain(connection, key);
+    }
     return creds;
   }
 
@@ -541,6 +583,7 @@ export async function getConnectionCredentials(
         { ciphertext: connection.encryptedPassword, iv: connection.passwordIV, tag: connection.passwordTag },
         masterKey
       ),
+      domain: decryptDomain(connection, masterKey),
     };
   }
 
@@ -555,6 +598,7 @@ export async function getConnectionCredentials(
         { ciphertext: connection.encryptedPassword, iv: connection.passwordIV, tag: connection.passwordTag },
         teamKey
       ),
+      domain: decryptDomain(connection, teamKey),
     };
   }
 
@@ -575,6 +619,7 @@ export async function getConnectionCredentials(
         { ciphertext: shared.encryptedPassword, iv: shared.passwordIV, tag: shared.passwordTag },
         masterKey
       ),
+      domain: decryptDomain(shared, masterKey),
     };
   }
 

@@ -75,6 +75,7 @@ export interface LoginSecretData {
   type: 'LOGIN';
   username: string;
   password: string;
+  domain?: string;
   url?: string;
   notes?: string;
 }
@@ -122,6 +123,7 @@ export type SecretPayload =
 export interface ResolvedCredentials {
   username: string;
   password: string;
+  domain?: string;
   privateKey?: string;
   passphrase?: string;
 }

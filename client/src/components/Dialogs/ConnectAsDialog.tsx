@@ -21,6 +21,7 @@ export default function ConnectAsDialog({ open, onClose, connection }: ConnectAs
   const [mode, setMode] = useState<'saved' | 'profile' | 'manual'>('saved');
   const [username, setUsername] = useState('');
   const [password, setPassword] = useState('');
+  const [domain, setDomain] = useState('');
   const [error, setError] = useState('');
 
   /* eslint-disable react-hooks/set-state-in-effect -- reset form state when dialog opens */
@@ -29,6 +30,7 @@ export default function ConnectAsDialog({ open, onClose, connection }: ConnectAs
       setMode('saved');
       setUsername('');
       setPassword('');
+      setDomain('');
       setError('');
     }
   }, [open]);
@@ -40,6 +42,7 @@ export default function ConnectAsDialog({ open, onClose, connection }: ConnectAs
     } else if (mode === 'manual') {
       setUsername('');
       setPassword('');
+      setDomain('');
     }
     setError('');
   }, [mode, user]);
@@ -59,7 +62,7 @@ export default function ConnectAsDialog({ open, onClose, connection }: ConnectAs
         setError('Password is required');
         return;
       }
-      openTab(connection, { username: username.trim(), password });
+      openTab(connection, { username: username.trim(), password, ...(domain.trim() ? { domain: domain.trim() } : {}) });
     }
     onClose();
   };
@@ -126,6 +129,16 @@ export default function ConnectAsDialog({ open, onClose, connection }: ConnectAs
               fullWidth
               autoFocus={mode === 'profile'}
             />
+            {connection?.type === 'RDP' && (
+              <TextField
+                label="Domain (optional)"
+                value={domain}
+                onChange={(e) => setDomain(e.target.value)}
+                size="small"
+                fullWidth
+                placeholder="e.g. CONTOSO"
+              />
+            )}
           </Box>
         )}
       </DialogContent>

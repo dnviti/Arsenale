@@ -603,72 +603,6 @@
 ================================================================================
 
 
-------------------------------------------------------------------------------
-[ ] SSO-073 — RDP domain field: schema, dialogs, Guacamole token
-------------------------------------------------------------------------------
-  Priorita: ALTA
-  Dipendenze: Nessuna
-
-  DESCRIZIONE:
-  Aggiungere il campo `domain` alle connessioni RDP. Guacamole supporta
-  nativamente il parametro `domain` per l'autenticazione NLA, ma attualmente
-  l'app non lo passa mai. Questo task aggiunge domain come campo opzionale
-  cifrato su Connection, estende ConnectionDialog e ConnectAsDialog con un
-  input Domain (visibile solo per RDP), e lo propaga a generateGuacamoleToken().
-  Il campo domain viene anche aggiunto ai vault secrets di tipo LOGIN.
-
-  DETTAGLI TECNICI:
-  Prisma (server/prisma/schema.prisma):
-    - Aggiungere al modello Connection:
-        encryptedDomain  String?
-        domainIV         String?
-        domainTag        String?
-    - Migrazione Prisma (colonne nullable, nessuna perdita dati)
-
-  Server types (server/src/types/index.ts):
-    - Aggiungere `domain?: string` a LoginSecretData
-    - Aggiungere `domain?: string` a ResolvedCredentials (o equivalente)
-
-  Server services:
-    - server/src/services/rdp.service.ts:
-      - Aggiungere `domain?: string` a RdpConnectionParams
-      - In generateGuacamoleToken(): se params.domain e' truthy, aggiungere
-        `settings.domain = params.domain` all'oggetto config (riga 82)
-    - server/src/services/connection.service.ts:
-      - createConnection(): cifrare domain insieme a username/password
-      - updateConnection(): cifrare domain se fornito
-      - getConnectionCredentials(): decifrare domain da Connection o da
-        LoginSecretData quando si usa un vault secret
-
-  Server handler (server/src/socket/rdp.handler.ts):
-    - sessionSchema: aggiungere `domain: z.string().optional()`
-    - POST /rdp: passare domain override o domain risolto a
-      generateGuacamoleToken()
-
-  Client:
-    - client/src/store/tabsStore.ts: aggiungere `domain?: string` a
-      CredentialOverride
-    - client/src/api/connections.api.ts: aggiungere `domain?: string`
-      a ConnectionInput, ConnectionUpdate, ConnectionData
-    - client/src/components/Dialogs/ConnectionDialog.tsx: aggiungere
-      TextField "Domain (optional)" visibile quando type=RDP
-    - client/src/components/Dialogs/ConnectAsDialog.tsx: aggiungere
-      TextField "Domain (optional)" in modalita' manual per RDP
-    - client/src/components/RDP/RdpViewer.tsx: passare credentials.domain
-      nel body POST /sessions/rdp
-
-  File coinvolti:
-    MODIFICARE: server/prisma/schema.prisma (Connection domain fields)
-    MODIFICARE: server/src/types/index.ts (LoginSecretData, ResolvedCredentials)
-    MODIFICARE: server/src/services/rdp.service.ts (RdpConnectionParams, token)
-    MODIFICARE: server/src/services/connection.service.ts (encrypt/decrypt domain)
-    MODIFICARE: server/src/socket/rdp.handler.ts (sessionSchema, domain param)
-    MODIFICARE: client/src/store/tabsStore.ts (CredentialOverride)
-    MODIFICARE: client/src/api/connections.api.ts (domain field)
-    MODIFICARE: client/src/components/Dialogs/ConnectionDialog.tsx (Domain input)
-    MODIFICARE: client/src/components/Dialogs/ConnectAsDialog.tsx (Domain input)
-    MODIFICARE: client/src/components/RDP/RdpViewer.tsx (domain nel POST body)
-
 
 ------------------------------------------------------------------------------
 [ ] SSO-074 — SAML 2.0 SSO authentication via Passport.js
@@ -1006,7 +940,7 @@
    65. ZT-045   Vista audit log per admin tenant                     [IN CORSO]
 
   Fase 11 — SSO & Domain Credential Passthrough:
-   66. SSO-073  RDP domain field: schema, dialogs, Guacamole token
+   66. SSO-073  RDP domain field: schema, dialogs, Guacamole token  [COMPLETATO]
    67. SSO-074  SAML 2.0 SSO authentication via Passport.js
    68. SSO-075  User domain credential profile (domain identity)
    69. SSO-076  Credential passthrough: domain profile to connections

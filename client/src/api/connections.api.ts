@@ -9,6 +9,7 @@ export interface ConnectionInput {
   port: number;
   username?: string;
   password?: string;
+  domain?: string;
   credentialSecretId?: string;
   description?: string;
   folderId?: string;
@@ -69,6 +70,7 @@ export interface ConnectionUpdate {
   port?: number;
   username?: string;
   password?: string;
+  domain?: string;
   credentialSecretId?: string | null;
   description?: string | null;
   folderId?: string | null;

@@ -135,9 +135,19 @@ export async function shareConnection(
     decryptionKey
   );
 
+  // Decrypt domain if present
+  let domain: string | undefined;
+  if (connection.encryptedDomain && connection.domainIV && connection.domainTag) {
+    domain = decrypt(
+      { ciphertext: connection.encryptedDomain, iv: connection.domainIV, tag: connection.domainTag },
+      decryptionKey
+    );
+  }
+
   // Re-encrypt with target user's personal key
   const encUsername = encrypt(username, targetKey);
   const encPassword = encrypt(password, targetKey);
+  const encDomain = domain ? encrypt(domain, targetKey) : null;
 
   const shared = await prisma.sharedConnection.upsert({
     where: {
@@ -157,6 +167,9 @@ export async function shareConnection(
       encryptedPassword: encPassword.ciphertext,
       passwordIV: encPassword.iv,
       passwordTag: encPassword.tag,
+      encryptedDomain: encDomain?.ciphertext ?? null,
+      domainIV: encDomain?.iv ?? null,
+      domainTag: encDomain?.tag ?? null,
     },
     update: {
       permission,
@@ -166,6 +179,9 @@ export async function shareConnection(
       encryptedPassword: encPassword.ciphertext,
       passwordIV: encPassword.iv,
       passwordTag: encPassword.tag,
+      encryptedDomain: encDomain?.ciphertext ?? null,
+      domainIV: encDomain?.iv ?? null,
+      domainTag: encDomain?.tag ?? null,
     },
   });
 

@@ -145,6 +145,7 @@ function renderSecretFields(data: SecretPayload) {
         <>
           <PlainField label="Username" value={data.username} copyable />
           <SensitiveField label="Password" value={data.password} />
+          {data.domain && <PlainField label="Domain" value={data.domain} copyable />}
           {data.url && <PlainField label="URL" value={data.url} copyable isLink />}
           {data.notes && <PlainField label="Notes" value={data.notes} />}
         </>

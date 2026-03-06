@@ -195,6 +195,9 @@ model Connection {
   encryptedPassword String?
   passwordIV        String?
   passwordTag       String?
+  encryptedDomain   String?
+  domainIV          String?
+  domainTag         String?
   credentialSecretId String?
   description       String?
   isFavorite        Boolean        @default(false)
@@ -378,6 +381,9 @@ model SharedConnection {
   encryptedPassword String?
   passwordIV       String?
   passwordTag      String?
+  encryptedDomain  String?
+  domainIV         String?
+  domainTag        String?
   createdAt        DateTime   @default(now())
 
   connection Connection @relation(fields: [connectionId], references: [id], onDelete: Cascade)

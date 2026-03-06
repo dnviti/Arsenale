@@ -7,6 +7,7 @@ export interface LoginData {
   type: 'LOGIN';
   username: string;
   password: string;
+  domain?: string;
   url?: string;
   notes?: string;
 }
