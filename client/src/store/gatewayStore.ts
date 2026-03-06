@@ -51,7 +51,7 @@ interface GatewayState {
   fetchGateways: () => Promise<void>;
   createGateway: (data: GatewayInput) => Promise<GatewayData>;
   updateGateway: (id: string, data: GatewayUpdate) => Promise<void>;
-  deleteGateway: (id: string) => Promise<void>;
+  deleteGateway: (id: string, force?: boolean) => Promise<void>;
   applyHealthUpdate: (event: GatewayHealthEvent) => void;
   applyInstancesUpdate: (gatewayId: string, instances: ManagedInstanceData[]) => void;
   applyScalingUpdate: (gatewayId: string, scalingStatus: ScalingStatusData) => void;
@@ -132,8 +132,8 @@ export const useGatewayStore = create<GatewayState>((set) => ({
     }));
   },
 
-  deleteGateway: async (id) => {
-    await deleteGatewayApi(id);
+  deleteGateway: async (id, force) => {
+    await deleteGatewayApi(id, force);
     set((state) => ({
       gateways: state.gateways.filter((g) => g.id !== id),
     }));

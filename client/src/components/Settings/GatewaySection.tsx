@@ -66,6 +66,7 @@ export default function GatewaySection({ onNavigateToTab }: GatewaySectionProps)
   const [dialogOpen, setDialogOpen] = useState(false);
   const [editingGateway, setEditingGateway] = useState<GatewayData | null>(null);
   const [deleteTarget, setDeleteTarget] = useState<GatewayData | null>(null);
+  const [forceDeleteInfo, setForceDeleteInfo] = useState<{ gateway: GatewayData; connectionCount: number } | null>(null);
   const [deleting, setDeleting] = useState(false);
   const [error, setError] = useState('');
   const [testStates, setTestStates] = useState<Record<string, TestState>>({});
@@ -109,6 +110,32 @@ export default function GatewaySection({ onNavigateToTab }: GatewaySectionProps)
     setError('');
     try {
       await deleteGatewayAction(deleteTarget.id);
+      setDeleteTarget(null);
+    } catch (err: unknown) {
+      const axiosErr = err as {
+        response?: { status?: number; data?: { error?: string; connectionCount?: number } };
+      };
+      if (axiosErr?.response?.status === 409 && axiosErr.response.data?.connectionCount) {
+        setForceDeleteInfo({
+          gateway: deleteTarget,
+          connectionCount: axiosErr.response.data.connectionCount,
+        });
+        setDeleteTarget(null);
+      } else {
+        setError(axiosErr?.response?.data?.error || 'Failed to delete gateway');
+        setDeleteTarget(null);
+      }
+    } finally {
+      setDeleting(false);
+    }
+  };
+
+  const handleForceDelete = async () => {
+    if (!forceDeleteInfo) return;
+    setDeleting(true);
+    setError('');
+    try {
+      await deleteGatewayAction(forceDeleteInfo.gateway.id, true);
     } catch (err: unknown) {
       setError(
         (err as { response?: { data?: { error?: string } } })?.response?.data?.error ||
@@ -116,7 +143,7 @@ export default function GatewaySection({ onNavigateToTab }: GatewaySectionProps)
       );
     } finally {
       setDeleting(false);
-      setDeleteTarget(null);
+      setForceDeleteInfo(null);
     }
   };
 
@@ -617,6 +644,28 @@ export default function GatewaySection({ onNavigateToTab }: GatewaySectionProps)
           <Button onClick={() => setDeleteTarget(null)}>Cancel</Button>
           <Button onClick={handleDelete} color="error" variant="contained" disabled={deleting}>
             {deleting ? 'Deleting...' : 'Delete'}
+          </Button>
+        </DialogActions>
+      </Dialog>
+
+      {/* Force-delete gateway warning dialog */}
+      <Dialog open={!!forceDeleteInfo} onClose={() => setForceDeleteInfo(null)}>
+        <DialogTitle>Gateway In Use</DialogTitle>
+        <DialogContent>
+          <DialogContentText>
+            <strong>{forceDeleteInfo?.gateway.name}</strong> is currently used by{' '}
+            <strong>{forceDeleteInfo?.connectionCount}</strong> connection(s).
+            Deleting it will remove the gateway reference from those connections
+            and they will revert to direct connection mode.
+          </DialogContentText>
+          <DialogContentText sx={{ mt: 1 }}>
+            Are you sure you want to proceed?
+          </DialogContentText>
+        </DialogContent>
+        <DialogActions>
+          <Button onClick={() => setForceDeleteInfo(null)}>Cancel</Button>
+          <Button onClick={handleForceDelete} color="error" variant="contained" disabled={deleting}>
+            {deleting ? 'Deleting...' : 'Delete Anyway'}
           </Button>
         </DialogActions>
       </Dialog>
