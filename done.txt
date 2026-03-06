@@ -279,6 +279,13 @@
   Dipendenze: TENANT-021 (completato)
   COMPLETATO: Added complete org user management and self-signup control. Backend: appConfig.service.ts (DB-backed config with 30s in-memory cache, env var fallback), createUser in tenant.service.ts (full vault crypto setup with Argon2/AES-256-GCM, recovery key generation, email uniqueness checks), toggleUserEnabled (self-disable/last-OWNER protection, refresh token revocation on disable). Auth guards: self-signup check in register(), user.enabled check in login()/refreshAccessToken()/OAuth flows, differentiated OAuth error codes (account_disabled/registration_disabled). Admin endpoints: GET/PUT /admin/app-config/self-signup, GET /auth/config (public). Welcome email: sendWelcomeEmail() with temp password in HTML/text. Frontend: CreateUserDialog (password generator, recovery key display, welcome email option), SelfSignupSection (Switch in Administration tab), TenantSection updated (Create User button, Status column with enable/disable Switch, dimmed disabled rows), RegisterPage self-signup check on mount, LoginPage OAuth error code handling. Prisma: User.enabled field, AppConfig model, TENANT_CREATE_USER/TENANT_TOGGLE_USER/APP_CONFIG_UPDATE audit actions.
 
+------------------------------------------------------------------------------
+[x] HEALTH-098 — Endpoint healthcheck dedicato per il client (nginx)
+------------------------------------------------------------------------------
+  Priorita: BASSA
+  Dipendenze: HEALTH-068
+  COMPLETATO: Added dedicated /health endpoint in nginx.conf (exact-match location returning JSON {"status":"ok"} with access_log off) and updated Dockerfile HEALTHCHECK CMD to use /health instead of serving the full SPA HTML.
+
 ================================================================================
   SEZIONE B — TASK AGGIUNTIVI SUGGERITI
 ================================================================================
