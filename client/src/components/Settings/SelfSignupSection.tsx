@@ -9,10 +9,11 @@ export default function SelfSignupSection() {
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState('');
+  const [envLocked, setEnvLocked] = useState(false);
 
   useEffect(() => {
     getAppConfig()
-      .then((cfg) => { setEnabled(cfg.selfSignupEnabled); setLoading(false); })
+      .then((cfg) => { setEnabled(cfg.selfSignupEnabled); setEnvLocked(cfg.selfSignupEnvLocked); setLoading(false); })
       .catch(() => setLoading(false));
   }, []);
 
@@ -57,7 +58,7 @@ export default function SelfSignupSection() {
                 <Switch
                   checked={enabled}
                   onChange={handleToggle}
-                  disabled={saving}
+                  disabled={saving || envLocked}
                 />
               }
               label="Allow new users to register themselves"
@@ -67,6 +68,12 @@ export default function SelfSignupSection() {
             </Typography>
           </Box>
         </Box>
+        {envLocked && (
+          <Alert severity="info" sx={{ mt: 2 }}>
+            Self-registration has been disabled by the administrator at the environment level.
+            To change this setting, update the <code>SELF_SIGNUP_ENABLED</code> environment variable and restart the server.
+          </Alert>
+        )}
       </CardContent>
     </Card>
   );
