@@ -3,6 +3,7 @@ import bcrypt from 'bcrypt';
 import { AppError } from '../middleware/error.middleware';
 import * as sshKeyService from './sshkey.service';
 import * as auditService from './audit.service';
+import * as identityVerification from './identityVerification.service';
 import { logger } from '../utils/logger';
 import {
   generateSalt,
@@ -11,6 +12,7 @@ import {
   encryptMasterKey,
   generateRecoveryKey,
   encryptMasterKeyWithRecovery,
+  lockVault,
 } from './crypto.service';
 
 const BCRYPT_ROUNDS = 12;
@@ -429,4 +431,182 @@ export async function toggleUserEnabled(
   }
 
   return updated;
+}
+
+// ---------------------------------------------------------------------------
+// Admin operations on other users (requires identity verification)
+// ---------------------------------------------------------------------------
+
+export async function adminChangeUserEmail(
+  tenantId: string,
+  actingUserId: string,
+  targetUserId: string,
+  newEmail: string,
+  verificationId: string,
+) {
+  identityVerification.consumeVerification(verificationId, actingUserId, 'admin-action');
+
+  const actingUser = await prisma.user.findFirst({
+    where: { id: actingUserId, tenantId },
+    select: { tenantRole: true },
+  });
+  if (!actingUser || (actingUser.tenantRole !== 'ADMIN' && actingUser.tenantRole !== 'OWNER')) {
+    throw new AppError('Insufficient permissions', 403);
+  }
+
+  const targetUser = await prisma.user.findFirst({
+    where: { id: targetUserId, tenantId },
+  });
+  if (!targetUser) throw new AppError('User not found in this organization', 404);
+
+  const existing = await prisma.user.findUnique({ where: { email: newEmail } });
+  if (existing && existing.id !== targetUserId) {
+    throw new AppError('Email already in use', 409);
+  }
+
+  const updated = await prisma.user.update({
+    where: { id: targetUserId },
+    data: { email: newEmail, emailVerified: false },
+    select: { id: true, email: true, username: true, tenantRole: true },
+  });
+
+  auditService.log({
+    userId: actingUserId,
+    action: 'ADMIN_EMAIL_CHANGE',
+    targetType: 'User',
+    targetId: targetUserId,
+    details: { newEmail, oldEmail: targetUser.email },
+  });
+
+  return updated;
+}
+
+export async function adminChangeUserPassword(
+  tenantId: string,
+  actingUserId: string,
+  targetUserId: string,
+  newPassword: string,
+  verificationId: string,
+) {
+  identityVerification.consumeVerification(verificationId, actingUserId, 'admin-action');
+
+  const actingUser = await prisma.user.findFirst({
+    where: { id: actingUserId, tenantId },
+    select: { tenantRole: true },
+  });
+  if (!actingUser || (actingUser.tenantRole !== 'ADMIN' && actingUser.tenantRole !== 'OWNER')) {
+    throw new AppError('Insufficient permissions', 403);
+  }
+
+  const targetUser = await prisma.user.findFirst({
+    where: { id: targetUserId, tenantId },
+  });
+  if (!targetUser) throw new AppError('User not found in this organization', 404);
+
+  const passwordHash = await bcrypt.hash(newPassword, BCRYPT_ROUNDS);
+
+  // Generate fresh vault
+  const newMasterKey = generateMasterKey();
+  const newVaultSalt = generateSalt();
+  const newDerivedKey = await deriveKeyFromPassword(newPassword, newVaultSalt);
+  const newEncryptedVault = encryptMasterKey(newMasterKey, newDerivedKey);
+
+  // Generate recovery key
+  const recoveryKey = generateRecoveryKey();
+  const recoveryResult = await encryptMasterKeyWithRecovery(newMasterKey, recoveryKey);
+
+  newMasterKey.fill(0);
+  newDerivedKey.fill(0);
+
+  // Wipe all encrypted data and update vault in a transaction
+  await prisma.$transaction(async (tx) => {
+    await tx.user.update({
+      where: { id: targetUserId },
+      data: {
+        passwordHash,
+        vaultSalt: newVaultSalt,
+        encryptedVaultKey: newEncryptedVault.ciphertext,
+        vaultKeyIV: newEncryptedVault.iv,
+        vaultKeyTag: newEncryptedVault.tag,
+        encryptedVaultRecoveryKey: recoveryResult.encrypted.ciphertext,
+        vaultRecoveryKeyIV: recoveryResult.encrypted.iv,
+        vaultRecoveryKeyTag: recoveryResult.encrypted.tag,
+        vaultRecoveryKeySalt: recoveryResult.salt,
+        // Disable TOTP (encrypted secret is lost with old vault key)
+        totpEnabled: false,
+        totpSecret: null,
+        encryptedTotpSecret: null,
+        totpSecretIV: null,
+        totpSecretTag: null,
+      },
+    });
+
+    // Wipe encrypted connection credentials
+    await tx.connection.updateMany({
+      where: { userId: targetUserId },
+      data: {
+        encryptedUsername: null,
+        usernameIV: null,
+        usernameTag: null,
+        encryptedPassword: null,
+        passwordIV: null,
+        passwordTag: null,
+      },
+    });
+
+    // Wipe shared connections
+    await tx.sharedConnection.deleteMany({
+      where: { sharedByUserId: targetUserId },
+    });
+
+    // Wipe team vault keys
+    await tx.teamMember.updateMany({
+      where: { userId: targetUserId },
+      data: {
+        encryptedTeamVaultKey: null,
+        teamVaultKeyIV: null,
+        teamVaultKeyTag: null,
+      },
+    });
+
+    // Wipe tenant vault memberships
+    await tx.tenantVaultMember.deleteMany({
+      where: { userId: targetUserId },
+    });
+
+    // Wipe vault secrets
+    await tx.vaultSecret.deleteMany({
+      where: { userId: targetUserId },
+    });
+
+    // Wipe shared secrets
+    await tx.sharedSecret.deleteMany({
+      where: { sharedByUserId: targetUserId },
+    });
+
+    // Wipe external secret shares
+    await tx.externalSecretShare.deleteMany({
+      where: { secret: { userId: targetUserId } },
+    });
+  });
+
+  // Invalidate all refresh tokens (force re-login)
+  await prisma.refreshToken.deleteMany({
+    where: { userId: targetUserId },
+  });
+
+  // Lock vault in memory
+  lockVault(targetUserId);
+
+  auditService.log({
+    userId: actingUserId,
+    action: 'ADMIN_PASSWORD_CHANGE',
+    targetType: 'User',
+    targetId: targetUserId,
+    details: { vaultReset: true },
+  });
+
+  logger.verbose(`Admin ${actingUserId} reset password for user ${targetUserId}`);
+
+  return { recoveryKey };
 }

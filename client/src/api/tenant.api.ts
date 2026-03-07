@@ -130,3 +130,23 @@ export async function toggleUserEnabled(
   const res = await api.patch(`/tenants/${tenantId}/users/${userId}/enabled`, { enabled });
   return res.data;
 }
+
+export async function adminChangeUserEmail(
+  tenantId: string,
+  userId: string,
+  newEmail: string,
+  verificationId: string,
+): Promise<{ id: string; email: string }> {
+  const res = await api.put(`/tenants/${tenantId}/users/${userId}/email`, { newEmail, verificationId });
+  return res.data;
+}
+
+export async function adminChangeUserPassword(
+  tenantId: string,
+  userId: string,
+  newPassword: string,
+  verificationId: string,
+): Promise<{ recoveryKey: string }> {
+  const res = await api.put(`/tenants/${tenantId}/users/${userId}/password`, { newPassword, verificationId });
+  return res.data;
+}

@@ -4,13 +4,16 @@ import {
   Table, TableBody, TableCell, TableContainer, TableHead, TableRow,
   Select, MenuItem, Dialog, DialogTitle, DialogContent, DialogContentText,
   DialogActions, Alert, CircularProgress, Box, IconButton, FormControlLabel, Switch,
+  Menu,
 } from '@mui/material';
-import { PersonAdd, Delete as DeleteIcon, GroupAdd } from '@mui/icons-material';
+import { PersonAdd, GroupAdd, MoreVert, ContentCopy } from '@mui/icons-material';
 import { useAuthStore } from '../../store/authStore';
 import { useTenantStore } from '../../store/tenantStore';
-import { getTenantMfaStats } from '../../api/tenant.api';
+import { getTenantMfaStats, adminChangeUserEmail, adminChangeUserPassword } from '../../api/tenant.api';
+import { initiateIdentityVerification, type VerificationMethod } from '../../api/user.api';
 import InviteDialog from '../Dialogs/InviteDialog';
 import CreateUserDialog from '../Dialogs/CreateUserDialog';
+import IdentityVerification from '../common/IdentityVerification';
 
 const TENANT_ROLES = ['OWNER', 'ADMIN', 'MEMBER'] as const;
 
@@ -58,6 +61,34 @@ export default function TenantSection({ onNavigateToTab }: TenantSectionProps) {
   const [vaultLockError, setVaultLockError] = useState('');
   const [createUserOpen, setCreateUserOpen] = useState(false);
   const [togglingUser, setTogglingUser] = useState<string | null>(null);
+
+  // Admin action menu
+  const [menuAnchor, setMenuAnchor] = useState<null | HTMLElement>(null);
+  const [menuTargetUser, setMenuTargetUser] = useState<{ id: string; email: string; name: string } | null>(null);
+
+  // Admin change email dialog
+  const [changeEmailOpen, setChangeEmailOpen] = useState(false);
+  const [changeEmailTarget, setChangeEmailTarget] = useState<{ id: string; name: string } | null>(null);
+  const [newEmail, setNewEmail] = useState('');
+  const [changeEmailPhase, setChangeEmailPhase] = useState<'input' | 'verifying' | 'done'>('input');
+  const [changeEmailVerificationId, setChangeEmailVerificationId] = useState('');
+  const [changeEmailMethod, setChangeEmailMethod] = useState<VerificationMethod>('password');
+  const [changeEmailMetadata, setChangeEmailMetadata] = useState<Record<string, unknown> | undefined>();
+  const [changeEmailLoading, setChangeEmailLoading] = useState(false);
+  const [changeEmailError, setChangeEmailError] = useState('');
+
+  // Admin change password dialog
+  const [changePwdOpen, setChangePwdOpen] = useState(false);
+  const [changePwdTarget, setChangePwdTarget] = useState<{ id: string; name: string } | null>(null);
+  const [newPassword, setNewPassword] = useState('');
+  const [confirmPassword, setConfirmPassword] = useState('');
+  const [changePwdPhase, setChangePwdPhase] = useState<'input' | 'verifying' | 'done'>('input');
+  const [changePwdVerificationId, setChangePwdVerificationId] = useState('');
+  const [changePwdMethod, setChangePwdMethod] = useState<VerificationMethod>('password');
+  const [changePwdMetadata, setChangePwdMetadata] = useState<Record<string, unknown> | undefined>();
+  const [changePwdLoading, setChangePwdLoading] = useState(false);
+  const [changePwdError, setChangePwdError] = useState('');
+  const [recoveryKey, setRecoveryKey] = useState('');
 
   const tenantRole = user?.tenantRole;
   const isAdmin = tenantRole === 'OWNER' || tenantRole === 'ADMIN';
@@ -233,6 +264,124 @@ export default function TenantSection({ onNavigateToTab }: TenantSectionProps) {
       );
     }
     setRemoveTarget(null);
+  };
+
+  const openAdminMenu = (event: React.MouseEvent<HTMLElement>, u: { id: string; email: string; username: string | null }) => {
+    setMenuAnchor(event.currentTarget);
+    setMenuTargetUser({ id: u.id, email: u.email, name: u.username || u.email });
+  };
+
+  const closeAdminMenu = () => {
+    setMenuAnchor(null);
+    setMenuTargetUser(null);
+  };
+
+  const openChangeEmail = () => {
+    if (!menuTargetUser) return;
+    setChangeEmailTarget({ id: menuTargetUser.id, name: menuTargetUser.name });
+    setNewEmail('');
+    setChangeEmailPhase('input');
+    setChangeEmailError('');
+    setChangeEmailOpen(true);
+    closeAdminMenu();
+  };
+
+  const openChangePwd = () => {
+    if (!menuTargetUser) return;
+    setChangePwdTarget({ id: menuTargetUser.id, name: menuTargetUser.name });
+    setNewPassword('');
+    setConfirmPassword('');
+    setChangePwdPhase('input');
+    setChangePwdError('');
+    setRecoveryKey('');
+    setChangePwdOpen(true);
+    closeAdminMenu();
+  };
+
+  const handleAdminEmailSubmit = async () => {
+    if (!newEmail.trim() || !changeEmailTarget) return;
+    setChangeEmailLoading(true);
+    setChangeEmailError('');
+    try {
+      const res = await initiateIdentityVerification('admin-action');
+      setChangeEmailVerificationId(res.verificationId);
+      setChangeEmailMethod(res.method);
+      setChangeEmailMetadata(res.metadata);
+      setChangeEmailPhase('verifying');
+    } catch (err: unknown) {
+      setChangeEmailError(
+        (err as { response?: { data?: { error?: string } } })?.response?.data?.error ||
+        'Failed to initiate verification'
+      );
+    } finally {
+      setChangeEmailLoading(false);
+    }
+  };
+
+  const handleAdminEmailVerified = async (verificationId: string) => {
+    if (!changeEmailTarget || !tenant) return;
+    setChangeEmailLoading(true);
+    setChangeEmailError('');
+    try {
+      await adminChangeUserEmail(tenant.id, changeEmailTarget.id, newEmail.trim(), verificationId);
+      setChangeEmailPhase('done');
+      fetchUsers();
+    } catch (err: unknown) {
+      setChangeEmailError(
+        (err as { response?: { data?: { error?: string } } })?.response?.data?.error ||
+        'Failed to change email'
+      );
+      setChangeEmailPhase('input');
+    } finally {
+      setChangeEmailLoading(false);
+    }
+  };
+
+  const handleAdminPwdSubmit = async () => {
+    if (!newPassword || !changePwdTarget) return;
+    if (newPassword !== confirmPassword) {
+      setChangePwdError('Passwords do not match');
+      return;
+    }
+    if (newPassword.length < 8) {
+      setChangePwdError('Password must be at least 8 characters');
+      return;
+    }
+    setChangePwdLoading(true);
+    setChangePwdError('');
+    try {
+      const res = await initiateIdentityVerification('admin-action');
+      setChangePwdVerificationId(res.verificationId);
+      setChangePwdMethod(res.method);
+      setChangePwdMetadata(res.metadata);
+      setChangePwdPhase('verifying');
+    } catch (err: unknown) {
+      setChangePwdError(
+        (err as { response?: { data?: { error?: string } } })?.response?.data?.error ||
+        'Failed to initiate verification'
+      );
+    } finally {
+      setChangePwdLoading(false);
+    }
+  };
+
+  const handleAdminPwdVerified = async (verificationId: string) => {
+    if (!changePwdTarget || !tenant) return;
+    setChangePwdLoading(true);
+    setChangePwdError('');
+    try {
+      const res = await adminChangeUserPassword(tenant.id, changePwdTarget.id, newPassword, verificationId);
+      setRecoveryKey(res.recoveryKey);
+      setChangePwdPhase('done');
+    } catch (err: unknown) {
+      setChangePwdError(
+        (err as { response?: { data?: { error?: string } } })?.response?.data?.error ||
+        'Failed to change password'
+      );
+      setChangePwdPhase('input');
+    } finally {
+      setChangePwdLoading(false);
+    }
   };
 
   if (loading) {
@@ -514,10 +663,9 @@ export default function TenantSection({ onNavigateToTab }: TenantSectionProps) {
                           {u.id !== user?.id && (
                             <IconButton
                               size="small"
-                              color="error"
-                              onClick={() => setRemoveTarget({ id: u.id, name: u.username || u.email })}
+                              onClick={(e) => openAdminMenu(e, u)}
                             >
-                              <DeleteIcon fontSize="small" />
+                              <MoreVert fontSize="small" />
                             </IconButton>
                           )}
                         </TableCell>
@@ -584,6 +732,166 @@ export default function TenantSection({ onNavigateToTab }: TenantSectionProps) {
         <DialogActions>
           <Button onClick={() => setRemoveTarget(null)}>Cancel</Button>
           <Button onClick={handleRemoveUser} color="error" variant="contained">Remove</Button>
+        </DialogActions>
+      </Dialog>
+
+      {/* Admin actions menu */}
+      <Menu
+        anchorEl={menuAnchor}
+        open={!!menuAnchor}
+        onClose={closeAdminMenu}
+      >
+        <MenuItem onClick={openChangeEmail}>Change Email</MenuItem>
+        <MenuItem onClick={openChangePwd}>Change Password</MenuItem>
+        <MenuItem onClick={() => { if (menuTargetUser) { setRemoveTarget({ id: menuTargetUser.id, name: menuTargetUser.name }); closeAdminMenu(); } }} sx={{ color: 'error.main' }}>
+          Remove
+        </MenuItem>
+      </Menu>
+
+      {/* Admin change email dialog */}
+      <Dialog open={changeEmailOpen} onClose={() => setChangeEmailOpen(false)} maxWidth="sm" fullWidth>
+        <DialogTitle>Change Email — {changeEmailTarget?.name}</DialogTitle>
+        <DialogContent>
+          {changeEmailError && <Alert severity="error" sx={{ mb: 2 }}>{changeEmailError}</Alert>}
+          {changeEmailPhase === 'input' && (
+            <>
+              <DialogContentText sx={{ mb: 2 }}>
+                Enter the new email address for this user. The user&apos;s email will not be verified after the change.
+              </DialogContentText>
+              <TextField
+                label="New Email"
+                type="email"
+                value={newEmail}
+                onChange={(e) => setNewEmail(e.target.value)}
+                fullWidth
+                autoFocus
+              />
+            </>
+          )}
+          {changeEmailPhase === 'verifying' && (
+            <>
+              <DialogContentText sx={{ mb: 2 }}>
+                Verify your identity to proceed.
+              </DialogContentText>
+              <IdentityVerification
+                verificationId={changeEmailVerificationId}
+                method={changeEmailMethod}
+                metadata={changeEmailMetadata}
+                onVerified={handleAdminEmailVerified}
+                onCancel={() => setChangeEmailPhase('input')}
+              />
+            </>
+          )}
+          {changeEmailPhase === 'done' && (
+            <Alert severity="success">
+              Email changed successfully to <strong>{newEmail}</strong>.
+            </Alert>
+          )}
+        </DialogContent>
+        <DialogActions>
+          {changeEmailPhase === 'input' && (
+            <>
+              <Button onClick={() => setChangeEmailOpen(false)}>Cancel</Button>
+              <Button
+                variant="contained"
+                onClick={handleAdminEmailSubmit}
+                disabled={changeEmailLoading || !newEmail.trim()}
+              >
+                {changeEmailLoading ? 'Verifying...' : 'Continue'}
+              </Button>
+            </>
+          )}
+          {changeEmailPhase === 'done' && (
+            <Button onClick={() => setChangeEmailOpen(false)}>Close</Button>
+          )}
+        </DialogActions>
+      </Dialog>
+
+      {/* Admin change password dialog */}
+      <Dialog open={changePwdOpen} onClose={() => { if (changePwdPhase !== 'verifying') setChangePwdOpen(false); }} maxWidth="sm" fullWidth>
+        <DialogTitle>Change Password — {changePwdTarget?.name}</DialogTitle>
+        <DialogContent>
+          {changePwdError && <Alert severity="error" sx={{ mb: 2 }}>{changePwdError}</Alert>}
+          {changePwdPhase === 'input' && (
+            <>
+              <DialogContentText sx={{ mb: 2 }}>
+                Set a new password for this user. This will reset their vault — all stored credentials will be lost.
+              </DialogContentText>
+              <Stack spacing={2}>
+                <TextField
+                  label="New Password"
+                  type="password"
+                  value={newPassword}
+                  onChange={(e) => setNewPassword(e.target.value)}
+                  fullWidth
+                  autoFocus
+                />
+                <TextField
+                  label="Confirm Password"
+                  type="password"
+                  value={confirmPassword}
+                  onChange={(e) => setConfirmPassword(e.target.value)}
+                  fullWidth
+                />
+              </Stack>
+            </>
+          )}
+          {changePwdPhase === 'verifying' && (
+            <>
+              <DialogContentText sx={{ mb: 2 }}>
+                Verify your identity to proceed.
+              </DialogContentText>
+              <IdentityVerification
+                verificationId={changePwdVerificationId}
+                method={changePwdMethod}
+                metadata={changePwdMetadata}
+                onVerified={handleAdminPwdVerified}
+                onCancel={() => setChangePwdPhase('input')}
+              />
+            </>
+          )}
+          {changePwdPhase === 'done' && (
+            <>
+              <Alert severity="success" sx={{ mb: 2 }}>
+                Password changed successfully.
+              </Alert>
+              <Alert severity="warning" sx={{ mb: 2 }}>
+                The user&apos;s vault has been reset. Save the recovery key below — it will not be shown again.
+              </Alert>
+              <TextField
+                label="Recovery Key"
+                value={recoveryKey}
+                fullWidth
+                slotProps={{ input: { readOnly: true } }}
+                sx={{ fontFamily: 'monospace' }}
+              />
+              <Button
+                size="small"
+                startIcon={<ContentCopy />}
+                onClick={() => navigator.clipboard.writeText(recoveryKey)}
+                sx={{ mt: 1 }}
+              >
+                Copy Recovery Key
+              </Button>
+            </>
+          )}
+        </DialogContent>
+        <DialogActions>
+          {changePwdPhase === 'input' && (
+            <>
+              <Button onClick={() => setChangePwdOpen(false)}>Cancel</Button>
+              <Button
+                variant="contained"
+                onClick={handleAdminPwdSubmit}
+                disabled={changePwdLoading || !newPassword || !confirmPassword}
+              >
+                {changePwdLoading ? 'Verifying...' : 'Continue'}
+              </Button>
+            </>
+          )}
+          {changePwdPhase === 'done' && (
+            <Button onClick={() => setChangePwdOpen(false)}>Close</Button>
+          )}
         </DialogActions>
       </Dialog>
 

@@ -139,6 +139,69 @@ export async function sendWelcomeEmail(
   });
 }
 
+export async function sendIdentityVerificationCode(
+  to: string,
+  code: string,
+  purpose: string,
+): Promise<void> {
+  const send = getSendFn();
+  if (!send) {
+    logger.info('========================================');
+    logger.info('IDENTITY VERIFICATION CODE (dev mode):');
+    logger.info(`  To: ${to}`);
+    logger.info(`  Code: ${code}`);
+    logger.info(`  Purpose: ${purpose}`);
+    logger.info('========================================');
+    return;
+  }
+
+  await send({
+    to,
+    subject: 'Identity Verification Code — Arsenale',
+    html: `
+      <h2>Identity Verification</h2>
+      <p>Your verification code is: <strong>${code}</strong></p>
+      <p>This code is needed for: <strong>${purpose}</strong></p>
+      <p>The code expires in 15 minutes.</p>
+      <p>If you did not request this, please secure your account immediately.</p>
+    `,
+    text: `Your identity verification code is: ${code}\n\nPurpose: ${purpose}\nThis code expires in 15 minutes.\nIf you did not request this, please secure your account immediately.`,
+  });
+}
+
+export async function sendEmailChangeCode(
+  to: string,
+  code: string,
+  isOldEmail: boolean,
+): Promise<void> {
+  const label = isOldEmail
+    ? 'Confirm that you want to change your email address'
+    : 'Confirm your new email address';
+
+  const send = getSendFn();
+  if (!send) {
+    logger.info('========================================');
+    logger.info(`EMAIL CHANGE CODE (dev mode — ${isOldEmail ? 'old' : 'new'} email):`);
+    logger.info(`  To: ${to}`);
+    logger.info(`  Code: ${code}`);
+    logger.info('========================================');
+    return;
+  }
+
+  await send({
+    to,
+    subject: 'Email Change Verification — Arsenale',
+    html: `
+      <h2>Email Change Verification</h2>
+      <p>${label}</p>
+      <p>Your verification code is: <strong>${code}</strong></p>
+      <p>The code expires in 15 minutes.</p>
+      <p>If you did not request this, please secure your account immediately.</p>
+    `,
+    text: `${label}\n\nYour verification code is: ${code}\nThis code expires in 15 minutes.\nIf you did not request this, please secure your account immediately.`,
+  });
+}
+
 export function getEmailStatus(): {
   provider: string;
   configured: boolean;

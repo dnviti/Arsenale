@@ -20,13 +20,77 @@ export async function getProfile(): Promise<UserProfile> {
   return res.data;
 }
 
-export async function updateProfile(data: { username?: string; email?: string }): Promise<UserProfile> {
+export async function updateProfile(data: { username?: string }): Promise<UserProfile> {
   const res = await api.put('/user/profile', data);
   return res.data;
 }
 
-export async function changePassword(oldPassword: string, newPassword: string): Promise<{ success: boolean }> {
-  const res = await api.put('/user/password', { oldPassword, newPassword });
+export async function changePassword(
+  oldPassword: string,
+  newPassword: string,
+  verificationId?: string,
+): Promise<{ success: boolean }> {
+  const res = await api.put('/user/password', { oldPassword, newPassword, verificationId });
+  return res.data;
+}
+
+// Identity verification
+
+export type VerificationMethod = 'email' | 'totp' | 'sms' | 'webauthn' | 'password';
+
+export interface IdentityInitiateResponse {
+  verificationId: string;
+  method: VerificationMethod;
+  metadata?: Record<string, unknown>;
+}
+
+export async function initiateIdentityVerification(
+  purpose: string,
+): Promise<IdentityInitiateResponse> {
+  const res = await api.post('/user/identity/initiate', { purpose });
+  return res.data;
+}
+
+export async function confirmIdentityVerification(
+  verificationId: string,
+  payload: { code?: string; credential?: unknown; password?: string },
+): Promise<{ confirmed: boolean }> {
+  const res = await api.post('/user/identity/confirm', { verificationId, ...payload });
+  return res.data;
+}
+
+// Email change
+
+export interface EmailChangeInitResult {
+  flow: 'dual-otp' | 'identity-verification';
+  verificationId?: string;
+  method?: VerificationMethod;
+  metadata?: Record<string, unknown>;
+}
+
+export async function initiateEmailChange(newEmail: string): Promise<EmailChangeInitResult> {
+  const res = await api.post('/user/email-change/initiate', { newEmail });
+  return res.data;
+}
+
+export async function confirmEmailChange(
+  data: { codeOld?: string; codeNew?: string; verificationId?: string },
+): Promise<{ email: string }> {
+  const res = await api.post('/user/email-change/confirm', data);
+  return res.data;
+}
+
+// Password change initiation
+
+export interface PasswordChangeInitResult {
+  skipVerification: boolean;
+  verificationId?: string;
+  method?: VerificationMethod;
+  metadata?: Record<string, unknown>;
+}
+
+export async function initiatePasswordChange(): Promise<PasswordChangeInitResult> {
+  const res = await api.post('/user/password-change/initiate');
   return res.data;
 }
 

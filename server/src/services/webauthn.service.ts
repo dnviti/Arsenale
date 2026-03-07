@@ -219,6 +219,52 @@ export async function verifyAuthentication(
   return verification;
 }
 
+/**
+ * Verify a WebAuthn authentication response using an explicit expected challenge
+ * (instead of reading from the in-memory challenge store).
+ * Used by the identity verification service to avoid conflicts with login MFA challenges.
+ */
+export async function verifyAuthenticationWithChallenge(
+  userId: string,
+  credential: AuthenticationResponseJSON,
+  options: Record<string, unknown>,
+) {
+  const expectedChallenge = (options as { challenge?: string }).challenge;
+  if (!expectedChallenge) throw new AppError('Missing WebAuthn challenge.', 400);
+
+  const stored = await prisma.webAuthnCredential.findFirst({
+    where: { userId, credentialId: credential.id },
+  });
+  if (!stored) throw new AppError('Credential not found.', 400);
+
+  const verification = await verifyAuthenticationResponse({
+    response: credential,
+    expectedChallenge,
+    expectedOrigin: rpOrigin,
+    expectedRPID: rpId,
+    credential: {
+      id: stored.credentialId,
+      publicKey: Buffer.from(stored.publicKey, 'base64url'),
+      counter: Number(stored.counter),
+      transports: stored.transports as AuthenticatorTransportFuture[],
+    },
+  });
+
+  if (!verification.verified) {
+    throw new AppError('WebAuthn authentication failed.', 401);
+  }
+
+  await prisma.webAuthnCredential.update({
+    where: { id: stored.id },
+    data: {
+      counter: verification.authenticationInfo.newCounter,
+      lastUsedAt: new Date(),
+    },
+  });
+
+  return verification;
+}
+
 // ---------------------------------------------------------------------------
 // Credential management (settings)
 // ---------------------------------------------------------------------------
