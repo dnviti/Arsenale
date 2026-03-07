@@ -286,6 +286,13 @@
   Dipendenze: HEALTH-068
   COMPLETATO: Added dedicated /health endpoint in nginx.conf (exact-match location returning JSON {"status":"ok"} with access_log off) and updated Dockerfile HEALTHCHECK CMD to use /health instead of serving the full SPA HTML.
 
+------------------------------------------------------------------------------
+[x] GUARD-100 — Sistema riutilizzabile di verifica identita' per operazioni sensibili
+------------------------------------------------------------------------------
+  Priorita: ALTA
+  Dipendenze: EMAIL-030
+  COMPLETATO: Implemented reusable identity verification system gating sensitive operations (email change, password change, admin user management) behind identity proof. Created centralized identityVerification.service.ts with in-memory session store supporting 5 methods (email OTP, TOTP, SMS, WebAuthn, password) in priority order. Added dual-OTP email change flow, pre-verification password change, admin email/password change with vault reset and recovery key. Built reusable IdentityVerification React component. Added rate limiting on initiate endpoints.
+
 ================================================================================
   SEZIONE B — TASK AGGIUNTIVI SUGGERITI
 ================================================================================

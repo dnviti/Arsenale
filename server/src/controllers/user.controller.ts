@@ -2,17 +2,42 @@ import { Response, NextFunction } from 'express';
 import { z } from 'zod';
 import { AuthRequest } from '../types';
 import * as userService from '../services/user.service';
+import * as identityVerification from '../services/identityVerification.service';
 import * as auditService from '../services/audit.service';
 import { AppError } from '../middleware/error.middleware';
 
 const updateProfileSchema = z.object({
   username: z.string().min(1).max(50).optional(),
-  email: z.string().email().optional(),
 });
 
 const changePasswordSchema = z.object({
-  oldPassword: z.string(),
+  oldPassword: z.string().optional().default(''),
   newPassword: z.string().min(8),
+  verificationId: z.string().uuid().optional(),
+});
+
+const initiateEmailChangeSchema = z.object({
+  newEmail: z.string().email(),
+});
+
+const confirmEmailChangeSchema = z.object({
+  codeOld: z.string().length(6).optional(),
+  codeNew: z.string().length(6).optional(),
+  verificationId: z.string().uuid().optional(),
+}).refine(
+  (d) => (d.codeOld && d.codeNew) || d.verificationId,
+  { message: 'Provide either both OTP codes or a verificationId' },
+);
+
+const initiateIdentitySchema = z.object({
+  purpose: z.enum(['email-change', 'password-change', 'admin-action']),
+});
+
+const confirmIdentitySchema = z.object({
+  verificationId: z.string().uuid(),
+  code: z.string().optional(),
+  credential: z.record(z.string(), z.unknown()).optional(),
+  password: z.string().optional(),
 });
 
 const sshDefaultsSchema = z.object({
@@ -94,10 +119,73 @@ export async function updateProfile(req: AuthRequest, res: Response, next: NextF
 
 export async function changePassword(req: AuthRequest, res: Response, next: NextFunction) {
   try {
-    const { oldPassword, newPassword } = changePasswordSchema.parse(req.body);
-    const result = await userService.changePassword(req.user!.userId, oldPassword, newPassword);
+    const { oldPassword, newPassword, verificationId } = changePasswordSchema.parse(req.body);
+    const result = await userService.changePassword(
+      req.user!.userId, oldPassword, newPassword, verificationId,
+    );
     auditService.log({ userId: req.user!.userId, action: 'PASSWORD_CHANGE', ipAddress: req.ip });
     res.json(result);
+  } catch (err) {
+    if (err instanceof z.ZodError) return next(new AppError(err.issues[0].message, 400));
+    next(err);
+  }
+}
+
+export async function initiateEmailChange(req: AuthRequest, res: Response, next: NextFunction) {
+  try {
+    const { newEmail } = initiateEmailChangeSchema.parse(req.body);
+    const result = await userService.initiateEmailChange(req.user!.userId, newEmail);
+    res.json(result);
+  } catch (err) {
+    if (err instanceof z.ZodError) return next(new AppError(err.issues[0].message, 400));
+    next(err);
+  }
+}
+
+export async function confirmEmailChange(req: AuthRequest, res: Response, next: NextFunction) {
+  try {
+    const data = confirmEmailChangeSchema.parse(req.body);
+    const result = await userService.confirmEmailChange(req.user!.userId, data);
+    auditService.log({
+      userId: req.user!.userId, action: 'PROFILE_EMAIL_CHANGE',
+      details: { newEmail: result.email },
+      ipAddress: req.ip,
+    });
+    res.json(result);
+  } catch (err) {
+    if (err instanceof z.ZodError) return next(new AppError(err.issues[0].message, 400));
+    next(err);
+  }
+}
+
+export async function initiatePasswordChange(req: AuthRequest, res: Response, next: NextFunction) {
+  try {
+    const result = await userService.initiatePasswordChange(req.user!.userId);
+    res.json(result);
+  } catch (err) {
+    next(err);
+  }
+}
+
+export async function initiateIdentity(req: AuthRequest, res: Response, next: NextFunction) {
+  try {
+    const { purpose } = initiateIdentitySchema.parse(req.body);
+    const result = await identityVerification.initiateVerification(req.user!.userId, purpose);
+    res.json(result);
+  } catch (err) {
+    if (err instanceof z.ZodError) return next(new AppError(err.issues[0].message, 400));
+    next(err);
+  }
+}
+
+export async function confirmIdentity(req: AuthRequest, res: Response, next: NextFunction) {
+  try {
+    const { verificationId, code, credential, password } = confirmIdentitySchema.parse(req.body);
+    const confirmed = await identityVerification.confirmVerification(
+      verificationId, req.user!.userId,
+      { code, credential: credential as never, password },
+    );
+    res.json({ confirmed });
   } catch (err) {
     if (err instanceof z.ZodError) return next(new AppError(err.issues[0].message, 400));
     next(err);

@@ -41,6 +41,16 @@ const toggleUserEnabledSchema = z.object({
   enabled: z.boolean(),
 });
 
+const adminChangeEmailSchema = z.object({
+  newEmail: z.string().email(),
+  verificationId: z.string().uuid(),
+});
+
+const adminChangePasswordSchema = z.object({
+  newPassword: z.string().min(8),
+  verificationId: z.string().uuid(),
+});
+
 export async function createTenant(req: AuthRequest, res: Response, next: NextFunction) {
   try {
     const { name } = createTenantSchema.parse(req.body);
@@ -246,6 +256,36 @@ export async function toggleUserEnabled(req: AuthRequest, res: Response, next: N
       ipAddress: req.ip,
     });
 
+    res.json(result);
+  } catch (err) {
+    if (err instanceof z.ZodError) return next(new AppError(err.issues[0].message, 400));
+    next(err);
+  }
+}
+
+export async function adminChangeUserEmail(req: AuthRequest, res: Response, next: NextFunction) {
+  try {
+    const { newEmail, verificationId } = adminChangeEmailSchema.parse(req.body);
+    const tenantId = req.params.id as string;
+    const targetUserId = req.params.userId as string;
+    const result = await tenantService.adminChangeUserEmail(
+      tenantId, req.user!.userId, targetUserId, newEmail, verificationId,
+    );
+    res.json(result);
+  } catch (err) {
+    if (err instanceof z.ZodError) return next(new AppError(err.issues[0].message, 400));
+    next(err);
+  }
+}
+
+export async function adminChangeUserPassword(req: AuthRequest, res: Response, next: NextFunction) {
+  try {
+    const { newPassword, verificationId } = adminChangePasswordSchema.parse(req.body);
+    const tenantId = req.params.id as string;
+    const targetUserId = req.params.userId as string;
+    const result = await tenantService.adminChangeUserPassword(
+      tenantId, req.user!.userId, targetUserId, newPassword, verificationId,
+    );
     res.json(result);
   } catch (err) {
     if (err instanceof z.ZodError) return next(new AppError(err.issues[0].message, 400));

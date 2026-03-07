@@ -29,4 +29,8 @@ router.delete('/:id/users/:userId', requireTenant, requireOwnTenant, requireTena
 router.post('/:id/users', requireTenant, requireOwnTenant, requireTenantRole('ADMIN'), tenantController.createUser);
 router.patch('/:id/users/:userId/enabled', requireTenant, requireOwnTenant, requireTenantRole('ADMIN'), tenantController.toggleUserEnabled);
 
+// Admin identity-verified operations on users
+router.put('/:id/users/:userId/email', requireTenant, requireOwnTenant, requireTenantRole('ADMIN'), tenantController.adminChangeUserEmail);
+router.put('/:id/users/:userId/password', requireTenant, requireOwnTenant, requireTenantRole('ADMIN'), tenantController.adminChangeUserPassword);
+
 export default router;

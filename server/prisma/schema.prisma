@@ -100,9 +100,13 @@ model User {
   webauthnEnabled    Boolean     @default(false)
   vaultAutoLockMinutes Int?
   enabled            Boolean     @default(true)
-  emailVerified      Boolean     @default(false)
-  emailVerifyToken   String?     @unique
-  emailVerifyExpiry  DateTime?
+  emailVerified              Boolean     @default(false)
+  emailVerifyToken           String?     @unique
+  emailVerifyExpiry          DateTime?
+  pendingEmail               String?
+  emailChangeCodeOldHash     String?
+  emailChangeCodeNewHash     String?
+  emailChangeExpiry          DateTime?
   passwordResetTokenHash     String?   @unique
   passwordResetExpiry        DateTime?
   encryptedVaultRecoveryKey  String?
@@ -530,6 +534,9 @@ enum AuditAction {
   TENANT_CREATE_USER
   TENANT_TOGGLE_USER
   APP_CONFIG_UPDATE
+  PROFILE_EMAIL_CHANGE
+  ADMIN_EMAIL_CHANGE
+  ADMIN_PASSWORD_CHANGE
 }
 
 model AuditLog {
