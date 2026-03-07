@@ -2185,6 +2185,19 @@
     MODIFICATO: client/src/store/uiPreferencesStore.ts (tenant audit log filter preferences)
 
 
+------------------------------------------------------------------------------
+[x] GUARD-105 — Blocco connessioni verso indirizzi loopback e IP locali
+------------------------------------------------------------------------------
+  Priorita: ALTA
+  Dipendenze: Nessuna
+  COMPLETATO: Created hostValidation.ts utility with async validateHost() that blocks loopback (127.0.0.0/8, ::1), localhost, wildcard (0.0.0.0, ::), and local network interface IPs. Resolves hostnames via dns.promises to catch DNS aliases pointing to local addresses. Integrated into connection.service.ts (createConnection, updateConnection) and gateway.service.ts (createGateway, updateGateway) with empty-host skip for managed gateways. Returns 400 AppError for blocked hosts.
+
+  File coinvolti:
+    CREATO:     server/src/utils/hostValidation.ts
+    MODIFICATO: server/src/services/connection.service.ts
+    MODIFICATO: server/src/services/gateway.service.ts
+
+
 ================================================================================
   SEZIONE F — PASSWORD KEYCHAIN / SECRET VAULT
 ================================================================================

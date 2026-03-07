@@ -8,6 +8,7 @@ import { ROLE_HIERARCHY } from './permission.service';
 import { tenantScopedTeamFilter } from '../utils/tenantScope';
 import type { ResolvedCredentials, SecretPayload } from '../types';
 import { logger } from '../utils/logger';
+import { validateHost } from '../utils/hostValidation';
 
 const log = logger.child('connection');
 
@@ -72,6 +73,9 @@ export async function createConnection(userId: string, input: CreateConnectionIn
       throw new AppError('SSH_KEY secrets cannot be used with RDP connections', 400);
     }
   }
+
+  // SSRF protection: block loopback and local network addresses
+  await validateHost(input.host);
 
   // Team permission check
   if (input.teamId) {
@@ -155,6 +159,9 @@ export async function updateConnection(
 
   const connection = access.connection;
   const encryptionKey = await permissionService.resolveEncryptionKey(userId, connection.teamId);
+
+  // SSRF protection: block loopback and local network addresses
+  if (input.host !== undefined) await validateHost(input.host);
 
   const data: Record<string, unknown> = {};
 

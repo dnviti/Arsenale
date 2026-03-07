@@ -18,7 +18,39 @@
   SEZIONE B — TASK AGGIUNTIVI SUGGERITI
 ================================================================================
 
+------------------------------------------------------------------------------
+[ ] OSS-104 — Sistema di versionamento semantico e changelog automatico
+------------------------------------------------------------------------------
+  Priorita: MEDIA
+  Dipendenze: Nessuna
 
+  DESCRIZIONE:
+  Implementare un sistema completo di versionamento semantico e generazione
+  automatica del changelog, gestito interamente tramite skill Claude Code e
+  integrato con git. Il sistema deve analizzare i commit convenzionali
+  (feat:, fix:, chore:, ecc.) e i task completati in done.txt per generare
+  automaticamente le voci del changelog nel formato Keep a Changelog,
+  eseguire il bump della versione in tutti i package.json del monorepo,
+  creare commit e tag annotati git.
+
+  DETTAGLI TECNICI:
+  Creazione della skill /release che gestisce l'intero flusso di rilascio:
+    - Pre-flight: verifica working tree pulito e branch develop
+    - Analisi commit da ultimo tag con parsing prefissi convenzionali
+    - Cross-reference con done.txt per descrizioni arricchite dei task
+    - Auto-detection tipo di bump (major/minor/patch) con override manuale
+    - Generazione sezione changelog raggruppata per categoria (Added, Fixed,
+      Changed, Removed, Security)
+    - Aggiornamento CHANGELOG.md con link di confronto GitHub
+    - Bump versione in package.json (root + server + client)
+    - Commit chore(release) e tag annotato vX.Y.Z
+    - Aggiornamento git-publish per propagare i tag con --tags
+    - Skill generica con placeholder nel framework claude-task-development
+    - Aggiornamento project-initialization per configurare /release
+
+  File coinvolti:
+    CREARE:     .claude/skills/release/SKILL.md
+    MODIFICARE: .claude/skills/git-publish/SKILL.md
 
 
 
