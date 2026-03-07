@@ -74,7 +74,8 @@ export async function getAppConfig(
 ) {
   try {
     const selfSignupEnabled = await appConfigService.getSelfSignupEnabled();
-    res.json({ selfSignupEnabled });
+    const selfSignupEnvLocked = appConfigService.isSelfSignupEnvLocked();
+    res.json({ selfSignupEnabled, selfSignupEnvLocked });
   } catch (err) {
     next(err);
   }

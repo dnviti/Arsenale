@@ -23,6 +23,7 @@ export async function sendTestEmail(
 
 export interface AppConfig {
   selfSignupEnabled: boolean;
+  selfSignupEnvLocked: boolean;
 }
 
 export async function getAppConfig(): Promise<AppConfig> {
