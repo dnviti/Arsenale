@@ -56,9 +56,10 @@ interface ConnectionTreeProps {
   onCreateFolder: (parentId?: string, teamId?: string) => void;
   onEditFolder: (folder: Folder) => void;
   onShareFolder: (folderId: string, folderName: string) => void;
+  onViewAuditLog?: (conn: ConnectionData) => void;
 }
 
-export default function ConnectionTree({ onEditConnection, onShareConnection, onConnectAsConnection, onCreateConnection, onCreateFolder, onEditFolder, onShareFolder }: ConnectionTreeProps) {
+export default function ConnectionTree({ onEditConnection, onShareConnection, onConnectAsConnection, onCreateConnection, onCreateFolder, onEditFolder, onShareFolder, onViewAuditLog }: ConnectionTreeProps) {
   const ownConnections = useConnectionsStore((s) => s.ownConnections);
   const sharedConnections = useConnectionsStore((s) => s.sharedConnections);
   const teamConnections = useConnectionsStore((s) => s.teamConnections);
@@ -177,7 +178,15 @@ export default function ConnectionTree({ onEditConnection, onShareConnection, on
     } else if (directConns.length > 5) {
       setBulkOpenTarget({ folderId, connections: directConns });
     } else {
-      directConns.forEach((conn) => openTab(conn));
+      directConns.forEach((conn) => bulkOpenOne(conn));
+    }
+  };
+
+  const bulkOpenOne = (conn: ConnectionData) => {
+    if (conn.defaultCredentialMode === 'domain') {
+      openTab(conn, { username: '', password: '', credentialMode: 'domain' });
+    } else {
+      openTab(conn);
     }
   };
 
@@ -190,13 +199,13 @@ export default function ConnectionTree({ onEditConnection, onShareConnection, on
     if (conns.length > 5) {
       setBulkOpenTarget({ folderId: bulkOpenSubfolderPrompt.folderId, connections: conns });
     } else {
-      conns.forEach((conn) => openTab(conn));
+      conns.forEach((conn) => bulkOpenOne(conn));
     }
   };
 
   const handleConfirmBulkOpen = () => {
     if (!bulkOpenTarget) return;
-    bulkOpenTarget.connections.forEach((conn) => openTab(conn));
+    bulkOpenTarget.connections.forEach((conn) => bulkOpenOne(conn));
     setBulkOpenTarget(null);
   };
 
@@ -370,6 +379,7 @@ export default function ConnectionTree({ onEditConnection, onShareConnection, on
                   onShare={onShareConnection}
                   onConnectAs={onConnectAsConnection}
                   onToggleFavorite={handleToggleFavorite}
+                  onViewAuditLog={onViewAuditLog}
                 />
               ))}
             </List>
@@ -402,6 +412,7 @@ export default function ConnectionTree({ onEditConnection, onShareConnection, on
                   onShare={onShareConnection}
                   onConnectAs={onConnectAsConnection}
                   onToggleFavorite={conn.isOwner ? handleToggleFavorite : undefined}
+                  onViewAuditLog={onViewAuditLog}
                 />
               ))}
             </List>
@@ -446,6 +457,7 @@ export default function ConnectionTree({ onEditConnection, onShareConnection, on
                 onShareConnection={onShareConnection}
                 onConnectAsConnection={onConnectAsConnection}
                 onToggleFavorite={handleToggleFavorite}
+                onViewAuditLog={onViewAuditLog}
                 onCreateConnection={onCreateConnection}
                 onCreateFolder={onCreateFolder}
                 onEditFolder={onEditFolder}
@@ -467,6 +479,7 @@ export default function ConnectionTree({ onEditConnection, onShareConnection, on
                 onShare={onShareConnection}
                 onConnectAs={onConnectAsConnection}
                 onToggleFavorite={handleToggleFavorite}
+                onViewAuditLog={onViewAuditLog}
               />
             ))}
           </List>
@@ -517,6 +530,7 @@ export default function ConnectionTree({ onEditConnection, onShareConnection, on
           onShareConnection={onShareConnection}
           onConnectAsConnection={onConnectAsConnection}
           onToggleFavorite={handleToggleFavorite}
+          onViewAuditLog={onViewAuditLog}
           onCreateConnection={onCreateConnection}
           onCreateFolder={onCreateFolder}
           onEditFolder={onEditFolder}
@@ -561,6 +575,7 @@ export default function ConnectionTree({ onEditConnection, onShareConnection, on
                   onShare={onShareConnection}
                   onConnectAs={onConnectAsConnection}
                   onToggleFavorite={handleToggleFavorite}
+                  onViewAuditLog={onViewAuditLog}
                 />
               ))}
             </List>

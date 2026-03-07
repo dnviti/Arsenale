@@ -11,83 +11,6 @@
 ================================================================================
 
 
-------------------------------------------------------------------------------
-[ ] AUDIT-095 — Vista audit log per singola connessione con filtro utente
-------------------------------------------------------------------------------
-  Priorita: MEDIA
-  Dipendenze: AUDIT-013 (completato), ZT-045 (completato)
-
-  DESCRIZIONE:
-  Aggiungere una vista audit log dedicata per singola connessione, accessibile
-  dal menu contestuale della connessione nella sidebar. Gli utenti normali
-  vedono solo le proprie voci di audit relative a quella connessione; gli admin
-  del tenant (ADMIN/OWNER) vedono tutte le voci di tutti gli utenti e possono
-  filtrare per utente specifico. La vista riprende la stessa struttura tabellare
-  con righe espandibili, chip colorati per azione, filtri avanzati e
-  paginazione gia' presenti nell'AuditLogDialog esistente.
-
-  DETTAGLI TECNICI:
-  1) Schema Prisma — aggiungere indice composito su AuditLog:
-     @@index([targetId, createdAt])
-     per ottimizzare le query filtrate per connectionId.
-
-  2) Service (server/src/services/audit.service.ts):
-     - getConnectionAuditLogs(query): filtra per targetId = connectionId,
-       riusa buildCommonWhereClause per action/date/search/ipAddress/gatewayId.
-       Se non admin, forza userId = utente corrente.
-       Se admin, include join User per username/email, supporta filtro userId.
-       Ritorna PaginatedResponse con TenantAuditLogEntry (include user info).
-     - getConnectionAuditUsers(connectionId): ritorna utenti distinti che
-       hanno voci audit per quella connessione (per il dropdown filtro admin).
-
-  3) Controller (server/src/controllers/audit.controller.ts):
-     - listConnectionLogs: valida connectionId (UUID via Zod), verifica
-       accesso tramite permissionService.canViewConnection(), determina
-       isAdmin da tenantRole, costruisce query e chiama il service.
-     - listConnectionAuditUsers: solo admin, valida connectionId, verifica
-       che la connessione appartenga al tenant dell'utente.
-
-  4) Routes (server/src/routes/audit.routes.ts):
-     GET /api/audit/connection/:connectionId         — log per connessione
-     GET /api/audit/connection/:connectionId/users   — utenti distinti (admin)
-
-  5) API client (client/src/api/audit.api.ts):
-     - getConnectionAuditLogs(connectionId, params) → TenantAuditLogResponse
-     - getConnectionAuditUsers(connectionId) → ConnectionAuditUser[]
-
-  6) UI preferences (client/src/store/uiPreferencesStore.ts):
-     Chiavi: connAuditLogAction, connAuditLogSearch, connAuditLogGatewayId,
-     connAuditLogUserId, connAuditLogSortBy, connAuditLogSortOrder.
-
-  7) Dialog (client/src/components/Dialogs/ConnectionAuditLogDialog.tsx):
-     Full-screen Dialog con SlideUp, AppBar "Activity Log — {connectionName}".
-     Tabella con righe espandibili, chip azione colorati, filtri (search,
-     action, gateway, IP, date range, sort). Se admin: colonna User e
-     Autocomplete utente. Paginazione 25/50/100. Export CSV per admin.
-     Riusa auditConstants.ts (ACTION_LABELS, getActionColor, formatDetails).
-
-  8) Menu contestuale (client/src/components/Sidebar/treeHelpers.tsx):
-     Aggiungere prop onViewAuditLog a ConnectionItemProps e MenuItem
-     "Activity Log" con icona History. Propagare callback attraverso
-     FolderItem, ConnectionTree.tsx e TeamConnectionSection.tsx.
-
-  9) Wiring (client/src/components/Layout/MainLayout.tsx):
-     State connectionAuditTarget, handler per aprire il dialog, render
-     <ConnectionAuditLogDialog> fuori dal blur wrapper.
-
-  File coinvolti:
-    CREARE:     client/src/components/Dialogs/ConnectionAuditLogDialog.tsx
-    MODIFICARE: server/prisma/schema.prisma
-    MODIFICARE: server/src/services/audit.service.ts
-    MODIFICARE: server/src/controllers/audit.controller.ts
-    MODIFICARE: server/src/routes/audit.routes.ts
-    MODIFICARE: client/src/api/audit.api.ts
-    MODIFICARE: client/src/store/uiPreferencesStore.ts
-    MODIFICARE: client/src/components/Sidebar/treeHelpers.tsx
-    MODIFICARE: client/src/components/Sidebar/ConnectionTree.tsx
-    MODIFICARE: client/src/components/Sidebar/TeamConnectionSection.tsx
-    MODIFICARE: client/src/components/Layout/MainLayout.tsx
-
 
 
 
@@ -95,7 +18,39 @@
   SEZIONE B — TASK AGGIUNTIVI SUGGERITI
 ================================================================================
 
+------------------------------------------------------------------------------
+[ ] OSS-104 — Sistema di versionamento semantico e changelog automatico
+------------------------------------------------------------------------------
+  Priorita: MEDIA
+  Dipendenze: Nessuna
 
+  DESCRIZIONE:
+  Implementare un sistema completo di versionamento semantico e generazione
+  automatica del changelog, gestito interamente tramite skill Claude Code e
+  integrato con git. Il sistema deve analizzare i commit convenzionali
+  (feat:, fix:, chore:, ecc.) e i task completati in done.txt per generare
+  automaticamente le voci del changelog nel formato Keep a Changelog,
+  eseguire il bump della versione in tutti i package.json del monorepo,
+  creare commit e tag annotati git.
+
+  DETTAGLI TECNICI:
+  Creazione della skill /release che gestisce l'intero flusso di rilascio:
+    - Pre-flight: verifica working tree pulito e branch develop
+    - Analisi commit da ultimo tag con parsing prefissi convenzionali
+    - Cross-reference con done.txt per descrizioni arricchite dei task
+    - Auto-detection tipo di bump (major/minor/patch) con override manuale
+    - Generazione sezione changelog raggruppata per categoria (Added, Fixed,
+      Changed, Removed, Security)
+    - Aggiornamento CHANGELOG.md con link di confronto GitHub
+    - Bump versione in package.json (root + server + client)
+    - Commit chore(release) e tag annotato vX.Y.Z
+    - Aggiornamento git-publish per propagare i tag con --tags
+    - Skill generica con placeholder nel framework claude-task-development
+    - Aggiornamento project-initialization per configurare /release
+
+  File coinvolti:
+    CREARE:     .claude/skills/release/SKILL.md
+    MODIFICARE: .claude/skills/git-publish/SKILL.md
 
 
 
@@ -753,159 +708,6 @@
 
 
 
-------------------------------------------------------------------------------
-[ ] SSO-075 — User domain credential profile (domain identity)
-------------------------------------------------------------------------------
-  Priorita: MEDIA
-  Dipendenze: SSO-073
-
-  DESCRIZIONE:
-  Permettere agli utenti di configurare una "identita' di dominio" sul loro
-  profilo: nome dominio AD, username di dominio, e opzionalmente una password
-  di dominio salvata cifrata nel vault. Questo profilo serve come source of
-  truth per le credenziali domain quando si usa la modalita' "domain
-  passthrough" (SSO-076). Auto-inferenza: quando un utente SAML/OIDC fa login
-  con un UPN (es. john@contoso.com), il sistema suggerisce automaticamente
-  domain=CONTOSO, username=john. Gli utenti possono anche configurare
-  manualmente la loro identita' di dominio nelle Settings. La password domain,
-  se salvata, e' cifrata con la master key del vault e segue lo stesso
-  lifecycle lock/unlock.
-
-  DETTAGLI TECNICI:
-  Prisma schema (server/prisma/schema.prisma):
-    - Aggiungere al modello User:
-        domainName               String?   // es. "CONTOSO" o "contoso.com"
-        domainUsername           String?   // es. "john.doe"
-        encryptedDomainPassword  String?
-        domainPasswordIV         String?
-        domainPasswordTag        String?
-        domainAutoInferred       Boolean   @default(false)
-    - Aggiungere a AuditAction enum:
-        DOMAIN_PROFILE_UPDATE, DOMAIN_PROFILE_CLEAR
-
-  Server service (server/src/services/domain.service.ts) — NUOVO:
-    - resolveDomainCredentials(userId): restituisce { domain, username,
-      password }. Decifra password da User con vault master key. Lancia
-      errore se vault e' locked.
-    - inferDomainIdentity(email, samlAttributes?): euristica per derivare
-      NETBIOS domain + username:
-        1. SAML claim windowsdomainname -> domain (priorita' massima)
-        2. SAML claim UPN -> split a @ -> domain dal suffisso, username
-           dal prefisso
-        3. Email -> split a @ -> domain = uppercase primo segmento
-           (es. CONTOSO da contoso.com), username = local part
-
-  Server controller (server/src/controllers/user.controller.ts):
-    - GET  /api/user/domain-profile -> getDomainProfile
-    - PUT  /api/user/domain-profile -> updateDomainProfile
-    - DELETE /api/user/domain-profile -> clearDomainProfile
-    - POST /api/user/domain-profile/infer -> inferDomainIdentity
-    - Zod schemas per validazione
-
-  Server routes (server/src/routes/user.routes.ts):
-    - Aggiungere 4 route sotto authenticate middleware
-
-  OAuth service (server/src/services/oauth.service.ts):
-    - findOrCreateOAuthUser: dopo login SAML, se utente non ha domain
-      profile e SAML attributes contengono UPN/domain, auto-impostare
-      domainName + domainUsername con domainAutoInferred=true (solo al
-      primo login, non sovrascrivere config manuale)
-
-  Frontend:
-    - client/src/components/Settings/DomainProfileSection.tsx — NUOVO:
-      - Mostra identita' domain corrente (domain\username) o "Not configured"
-      - Bottone "Auto-detect" -> chiama endpoint infer, mostra suggerimento
-      - Campi: Domain, Username, Password (opzionale, salvata nel vault)
-      - Bottoni Save / Clear
-    - client/src/pages/SettingsPage.tsx: aggiungere DomainProfileSection
-    - client/src/api/user.api.ts: getDomainProfile(), updateDomainProfile(),
-      clearDomainProfile(), inferDomainProfile()
-
-  File coinvolti:
-    MODIFICARE: server/prisma/schema.prisma (User domain fields, AuditAction)
-    CREARE:     server/src/services/domain.service.ts
-    MODIFICARE: server/src/services/user.service.ts (domain profile CRUD)
-    MODIFICARE: server/src/controllers/user.controller.ts (domain endpoints)
-    MODIFICARE: server/src/routes/user.routes.ts (domain routes)
-    MODIFICARE: server/src/services/oauth.service.ts (auto-infer su SAML login)
-    MODIFICARE: server/src/types/index.ts (DomainProfile interface)
-    CREARE:     client/src/components/Settings/DomainProfileSection.tsx
-    MODIFICARE: client/src/api/user.api.ts (domain profile API)
-    MODIFICARE: client/src/pages/SettingsPage.tsx (domain profile section)
-
-
-------------------------------------------------------------------------------
-[ ] SSO-076 — Credential passthrough: domain profile to RDP/SSH connections
-------------------------------------------------------------------------------
-  Priorita: MEDIA
-  Dipendenze: SSO-073, SSO-075
-
-  DESCRIZIONE:
-  Aggiungere una nuova modalita' ConnectAs "Use domain credentials" che applica
-  automaticamente il domain credential profile dell'utente (SSO-075) quando si
-  connette a target RDP o SSH. Per RDP, domain/username/password vengono passati
-  a Guacamole. Per SSH, il formato domain\username viene usato per target Windows.
-  Aggiungere anche un'impostazione per connessione "default credential mode"
-  (saved/domain/prompt) cosi' le connessioni possono essere configurate per
-  usare automaticamente il profilo domain. Quando l'utente clicca Connect su una
-  connessione con defaultCredentialMode='domain', il sistema risolve il domain
-  profile senza mostrare alcun dialog.
-
-  DETTAGLI TECNICI:
-  Prisma schema (server/prisma/schema.prisma):
-    - Aggiungere al modello Connection:
-        defaultCredentialMode  String?  // 'saved' | 'domain' | 'prompt' | null
-
-  Server handler (server/src/socket/rdp.handler.ts):
-    - sessionSchema: aggiungere credentialMode: z.enum(['saved','domain',
-      'manual']).optional()
-    - POST /rdp: quando credentialMode='domain':
-      1. Chiamare domain.service.resolveDomainCredentials(userId)
-      2. Usare domain, username, password restituiti
-      3. Passare a generateGuacamoleToken() con parametro domain
-
-  Server handler (server/src/socket/ssh.handler.ts):
-    - session:start data: aggiungere credentialMode?: string
-    - Quando credentialMode='domain': risolvere da domain.service
-
-  Client dialogs:
-    - client/src/components/Dialogs/ConnectAsDialog.tsx:
-      - Aggiungere quarta radio: 'domain' — "Use domain credentials"
-      - Mostra anteprima read-only domain\username dal profilo
-      - Se profilo non configurato, mostrare helper text con link a Settings
-    - client/src/components/Dialogs/ConnectionDialog.tsx:
-      - Aggiungere select "Default Credential Mode" nelle impostazioni:
-        "Use saved credentials" (default), "Use domain credentials",
-        "Always prompt"
-
-  Client store e viewers:
-    - client/src/store/tabsStore.ts: aggiungere credentialMode? a
-      CredentialOverride
-    - client/src/components/RDP/RdpViewer.tsx: quando credentialMode='domain',
-      POST a /sessions/rdp con { connectionId, credentialMode: 'domain' }
-    - client/src/components/Terminal/SshTerminal.tsx: emettere session:start
-      con { connectionId, credentialMode: 'domain' }
-    - client/src/store/authStore.ts: cacheare domain profile info
-      (domain, username, hasDomainPassword) per ConnectAsDialog
-
-  Comportamento quick-connect:
-    - Doppio click su connessione con defaultCredentialMode='domain':
-      applica credenziali domain automaticamente senza aprire ConnectAsDialog
-    - defaultCredentialMode='prompt': apre sempre ConnectAsDialog
-
-  File coinvolti:
-    MODIFICARE: server/prisma/schema.prisma (Connection.defaultCredentialMode)
-    MODIFICARE: server/src/services/connection.service.ts (CRUD credential mode)
-    MODIFICARE: server/src/socket/rdp.handler.ts (domain credential resolution)
-    MODIFICARE: server/src/socket/ssh.handler.ts (domain credential resolution)
-    MODIFICARE: server/src/types/index.ts (CredentialMode type)
-    MODIFICARE: client/src/store/tabsStore.ts (credentialMode in override)
-    MODIFICARE: client/src/components/Dialogs/ConnectAsDialog.tsx (4a modalita')
-    MODIFICARE: client/src/components/Dialogs/ConnectionDialog.tsx (default mode)
-    MODIFICARE: client/src/components/RDP/RdpViewer.tsx (domain mode)
-    MODIFICARE: client/src/components/Terminal/SshTerminal.tsx (domain mode)
-    MODIFICARE: client/src/store/authStore.ts (domain profile cache)
-    MODIFICARE: client/src/api/connections.api.ts (defaultCredentialMode)
 
 
 ================================================================================
@@ -1012,8 +814,8 @@
   Fase 11 — SSO & Domain Credential Passthrough:
    66. SSO-073  RDP domain field: schema, dialogs, Guacamole token  [COMPLETATO]
    67. SSO-074  SAML 2.0 SSO authentication via Passport.js  [COMPLETATO]
-   68. SSO-075  User domain credential profile (domain identity)
-   69. SSO-076  Credential passthrough: domain profile to connections
+   68. SSO-075  User domain credential profile (domain identity)  [COMPLETATO]
+   69. SSO-076  Credential passthrough: domain profile to connections  [COMPLETATO]
 
 ================================================================================
   NOTE

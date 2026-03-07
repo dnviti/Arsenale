@@ -49,9 +49,9 @@ If the merge has conflicts, abort with `git merge --abort`, switch back to `deve
 ### Step 3: Push both branches
 
 ```bash
-git push origin main
+git push origin main --tags
 git checkout develop
-git push origin develop
+git push origin develop --tags
 ```
 
 ### Step 4: Report

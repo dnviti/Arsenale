@@ -6,6 +6,7 @@ import { config } from '../config';
 import { tcpProbe } from '../utils/tcpProbe';
 import { startMonitor, startInstanceMonitor, stopMonitor, restartMonitor } from './gatewayMonitor.service';
 import { logger } from '../utils/logger';
+import { validateHost } from '../utils/hostValidation';
 
 const log = logger.child('gateway');
 import { removeGatewayInstance } from './managedGateway.service';
@@ -122,6 +123,9 @@ export async function createGateway(
   tenantId: string,
   input: CreateGatewayInput,
 ) {
+  // SSRF protection: block loopback and local network addresses (skip managed gateways with empty host)
+  if (input.host) await validateHost(input.host);
+
   const encData: Record<string, string | null> = {
     encryptedUsername: null,
     usernameIV: null,
@@ -222,6 +226,9 @@ export async function updateGateway(
     where: { id: gatewayId, tenantId },
   });
   if (!existing) throw new AppError('Gateway not found', 404);
+
+  // SSRF protection: block loopback and local network addresses
+  if (input.host) await validateHost(input.host);
 
   const data: Record<string, unknown> = {};
   if (input.name !== undefined) data.name = input.name;

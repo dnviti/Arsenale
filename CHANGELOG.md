@@ -7,6 +7,26 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [1.1.0] - 2026-03-07
+
+### Added
+- SAML 2.0 SSO authentication via Passport.js (SSO-074)
+- User domain credential profile for SSO passthrough (SSO-075)
+- Domain credential passthrough for RDP/SSH connections (SSO-076)
+- Per-connection audit log with user filter (AUDIT-095)
+- Block connections to loopback and local IP addresses (GUARD-105)
+- Reusable identity verification system for sensitive operations
+- Dedicated /health endpoint for client nginx container
+
+### Changed
+- Rename project from Remote Desktop Manager to Arsenale
+
+### Fixed
+- Activate proactive token refresh on page reload for member users
+- Remove inherited EXPOSE 80 from client nginx container
+- Resolve CJS/ESM crash in Docker production build
+- Added logo transparent
+
 ## [1.0.0] - 2026-02-28
 
 ### Added
@@ -79,5 +99,6 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Email verification preventing unverified account login
 - ESLint security plugin enforced in CI
 
-[Unreleased]: https://github.com/dnviti/arsenale/compare/v1.0.0...HEAD
+[Unreleased]: https://github.com/dnviti/arsenale/compare/v1.1.0...HEAD
+[1.1.0]: https://github.com/dnviti/arsenale/compare/v1.0.0...v1.1.0
 [1.0.0]: https://github.com/dnviti/arsenale/releases/tag/v1.0.0

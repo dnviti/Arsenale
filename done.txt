@@ -300,6 +300,20 @@
   Dipendenze: Nessuna
   COMPLETATO: Activated the existing useAuth() hook in ProtectedRoute and AuthRoute (App.tsx) to perform proactive token refresh on page reload. Added loading state to useAuth.ts so routes gate rendering until refresh completes. Vault polling now waits for accessToken before firing, eliminating the race condition that caused MEMBER users to be logged out.
 
+------------------------------------------------------------------------------
+[x] SSO-076 — Credential passthrough: domain profile to RDP/SSH connections
+------------------------------------------------------------------------------
+  Priorita: MEDIA
+  Dipendenze: SSO-073, SSO-075
+  COMPLETATO: Added "Use domain credentials" mode across the full stack. Server: domain credential resolution via resolveDomainCredentials() in session.controller.ts (RDP) and ssh.handler.ts (SSH), with credentialSource audit trail. Schema: defaultCredentialMode field on Connection model. Client: 4th radio in ConnectAsDialog with DOMAIN\username preview, "Default connect behavior" selector in ConnectionDialog, credentialMode passthrough in RdpViewer/SshTerminal, domain profile cache in authStore, and quick-connect/bulk-open respecting defaultCredentialMode in sidebar.
+
+------------------------------------------------------------------------------
+[x] AUDIT-095 — Vista audit log per singola connessione con filtro utente
+------------------------------------------------------------------------------
+  Priorita: MEDIA
+  Dipendenze: AUDIT-013 (completato), ZT-045 (completato)
+  COMPLETATO: Added per-connection audit log accessible via right-click context menu "Activity Log". Backend: composite index @@index([targetId, createdAt]) on AuditLog, getConnectionAuditLogs and getConnectionAuditUsers service functions, controller handlers with permissionService.canViewConnection access checks, routes GET /audit/connection/:connectionId and /users. Frontend: ConnectionAuditLogDialog full-screen dialog with filters, expandable rows, colored action chips, pagination, admin-only user filter Autocomplete and CSV export. Context menu item propagated through treeHelpers, ConnectionTree, TeamConnectionSection to MainLayout.
+
 ================================================================================
   SEZIONE B — TASK AGGIUNTIVI SUGGERITI
 ================================================================================
@@ -2171,6 +2185,19 @@
     MODIFICATO: client/src/store/uiPreferencesStore.ts (tenant audit log filter preferences)
 
 
+------------------------------------------------------------------------------
+[x] GUARD-105 — Blocco connessioni verso indirizzi loopback e IP locali
+------------------------------------------------------------------------------
+  Priorita: ALTA
+  Dipendenze: Nessuna
+  COMPLETATO: Created hostValidation.ts utility with async validateHost() that blocks loopback (127.0.0.0/8, ::1), localhost, wildcard (0.0.0.0, ::), and local network interface IPs. Resolves hostnames via dns.promises to catch DNS aliases pointing to local addresses. Integrated into connection.service.ts (createConnection, updateConnection) and gateway.service.ts (createGateway, updateGateway) with empty-host skip for managed gateways. Returns 400 AppError for blocked hosts.
+
+  File coinvolti:
+    CREATO:     server/src/utils/hostValidation.ts
+    MODIFICATO: server/src/services/connection.service.ts
+    MODIFICATO: server/src/services/gateway.service.ts
+
+
 ================================================================================
   SEZIONE F — PASSWORD KEYCHAIN / SECRET VAULT
 ================================================================================
@@ -2531,3 +2558,37 @@
     MODIFICATO: client/src/api/oauth.api.ts (SAML types and functions)
     MODIFICATO: client/src/components/OAuthButtons.tsx (SAML button)
     MODIFICATO: client/src/components/Settings/LinkedAccountsSection.tsx (SAML support)
+
+------------------------------------------------------------------------------
+[x] SSO-075 — User domain credential profile (domain identity)
+------------------------------------------------------------------------------
+  Priorita: MEDIA
+  Dipendenze: SSO-073
+  COMPLETATO: Added domain identity profile to User model (domainName, domainUsername,
+    encrypted domain password via AES-256-GCM). Created domain.service.ts with CRUD,
+    vault-encrypted password storage, resolveDomainCredentials for SSO-076, and SAML
+    auto-inference (UPN/domain claim parsing). Added GET/PUT/DELETE /user/domain-profile
+    endpoints. Integrated SAML auto-inference in oauth.service.ts (fire-and-forget on
+    login). Added domain password cleanup to passwordReset.service.ts. Created
+    DomainProfileSection.tsx in Settings Security tab with edit/clear/vault awareness.
+
+  DESCRIZIONE:
+  Permettere agli utenti di configurare una "identita' di dominio" sul loro
+  profilo: nome dominio AD, username di dominio, e opzionalmente una password
+  di dominio salvata cifrata nel vault. Questo profilo serve come source of
+  truth per le credenziali domain quando si usa la modalita' "domain
+  passthrough" (SSO-076). Auto-inferenza: quando un utente SAML/OIDC fa login
+  con un UPN (es. john@contoso.com), il sistema suggerisce automaticamente
+  domain=CONTOSO, username=john.
+
+  File coinvolti:
+    MODIFICATO: server/prisma/schema.prisma (User domain fields, AuditAction enum)
+    CREATO:     server/src/services/domain.service.ts
+    MODIFICATO: server/src/controllers/user.controller.ts (domain profile handlers)
+    MODIFICATO: server/src/routes/user.routes.ts (domain profile routes)
+    MODIFICATO: server/src/services/oauth.service.ts (SAML auto-inference)
+    MODIFICATO: server/src/services/passwordReset.service.ts (domain password cleanup)
+    MODIFICATO: server/src/types/index.ts (DomainProfile interface)
+    CREATO:     client/src/components/Settings/DomainProfileSection.tsx
+    MODIFICATO: client/src/api/user.api.ts (DomainProfile API)
+    MODIFICATO: client/src/components/Dialogs/SettingsDialog.tsx (Security tab integration)
