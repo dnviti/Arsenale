@@ -131,11 +131,12 @@ export async function initTenantVault(
   const tenantKey = generateTenantMasterKey();
   const encKeyForInitiator = encryptTenantKey(tenantKey, initiatorMasterKey);
 
-  // Find all tenant users with unlocked vaults (besides initiator)
-  const tenantUsers = await prisma.user.findMany({
-    where: { tenantId, id: { not: initiatorUserId } },
-    select: { id: true },
+  // Find all tenant members with unlocked vaults (besides initiator)
+  const tenantMembers = await prisma.tenantMember.findMany({
+    where: { tenantId, userId: { not: initiatorUserId } },
+    select: { userId: true },
   });
+  const tenantUsers = tenantMembers.map((m) => ({ id: m.userId }));
 
   await prisma.$transaction(async (tx) => {
     await tx.tenant.update({
@@ -193,11 +194,10 @@ export async function distributeTenantKeyToUser(
     throw new AppError('User already has the tenant vault key', 400);
   }
 
-  const targetUser = await prisma.user.findUnique({
-    where: { id: targetUserId },
-    select: { tenantId: true },
+  const targetMembership = await prisma.tenantMember.findUnique({
+    where: { tenantId_userId: { tenantId, userId: targetUserId } },
   });
-  if (targetUser?.tenantId !== tenantId) {
+  if (!targetMembership) {
     throw new AppError('User is not a member of this tenant', 400);
   }
 
@@ -273,11 +273,12 @@ export async function createSecret(
     if (!perm.allowed) throw new AppError('Insufficient team role to create secrets', 403);
   }
   if (input.scope === 'TENANT') {
-    const user = await prisma.user.findUnique({
-      where: { id: userId },
-      select: { tenantRole: true },
-    });
-    if (user?.tenantRole !== 'OWNER' && user?.tenantRole !== 'ADMIN') {
+    const effectiveTenantId = input.tenantId || tenantId;
+    const membership = effectiveTenantId ? await prisma.tenantMember.findUnique({
+      where: { tenantId_userId: { tenantId: effectiveTenantId, userId } },
+      select: { role: true },
+    }) : null;
+    if (membership?.role !== 'OWNER' && membership?.role !== 'ADMIN') {
       throw new AppError('Only admins and owners can create tenant-scoped secrets', 403);
     }
   }

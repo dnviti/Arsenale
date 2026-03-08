@@ -96,10 +96,11 @@ export async function processKeyRotations(): Promise<void> {
       const pushOk = pushResults.filter((r) => r.ok).length;
       const pushFailed = pushResults.filter((r) => !r.ok).length;
 
-      const owner = await prisma.user.findFirst({
-        where: { tenantId, tenantRole: 'OWNER' },
-        select: { id: true },
+      const ownerMembership = await prisma.tenantMember.findFirst({
+        where: { tenantId, role: 'OWNER' },
+        select: { userId: true },
       });
+      const owner = ownerMembership ? { id: ownerMembership.userId } : null;
 
       if (owner) {
         auditService.log({

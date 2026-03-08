@@ -31,7 +31,7 @@ model Tenant {
   createdAt                    DateTime @default(now())
   updatedAt          DateTime @updatedAt
 
-  users              User[]
+  members            TenantMember[]
   teams              Team[]
   gateways           Gateway[]
   gatewayTemplates   GatewayTemplate[]
@@ -120,12 +120,10 @@ model User {
   vaultRecoveryKeySalt       String?
   failedLoginAttempts Int         @default(0)
   lockedUntil         DateTime?
-  tenantId           String?
-  tenantRole         TenantRole?
   createdAt          DateTime    @default(now())
   updatedAt          DateTime    @updatedAt
 
-  tenant        Tenant?            @relation(fields: [tenantId], references: [id])
+  tenantMemberships  TenantMember[]
   connections   Connection[]
   folders       Folder[]
   sharedWithMe  SharedConnection[] @relation("SharedWith")
@@ -547,6 +545,7 @@ enum AuditAction {
   ADMIN_PASSWORD_CHANGE
   DOMAIN_PROFILE_UPDATE
   DOMAIN_PROFILE_CLEAR
+  TENANT_SWITCH
 }
 
 model AuditLog {
@@ -702,6 +701,22 @@ model VaultFolder {
   @@index([userId, scope])
   @@index([teamId])
   @@index([tenantId])
+}
+
+model TenantMember {
+  id        String     @id @default(uuid())
+  tenantId  String
+  userId    String
+  role      TenantRole @default(MEMBER)
+  isActive  Boolean    @default(false)
+  joinedAt  DateTime   @default(now())
+  updatedAt DateTime   @updatedAt
+
+  tenant Tenant @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  user   User   @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([tenantId, userId])
+  @@index([userId, isActive])
 }
 
 model TenantVaultMember {

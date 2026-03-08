@@ -18,11 +18,20 @@ export interface TenantUser {
   email: string;
   username: string | null;
   avatarData: string | null;
-  tenantRole: string;
+  role: string;
   totpEnabled: boolean;
   smsMfaEnabled: boolean;
   enabled: boolean;
   createdAt: string;
+}
+
+export interface TenantMembership {
+  tenantId: string;
+  name: string;
+  slug: string;
+  role: string;
+  isActive: boolean;
+  joinedAt: string;
 }
 
 export interface CreateUserData {
@@ -38,7 +47,7 @@ export interface CreateUserResult {
     id: string;
     email: string;
     username: string | null;
-    tenantRole: string;
+    role: string;
     createdAt: string;
   };
   recoveryKey: string;
@@ -138,6 +147,20 @@ export async function adminChangeUserEmail(
   verificationId: string,
 ): Promise<{ id: string; email: string }> {
   const res = await api.put(`/tenants/${tenantId}/users/${userId}/email`, { newEmail, verificationId });
+  return res.data;
+}
+
+export async function getMyTenants(): Promise<TenantMembership[]> {
+  const res = await api.get('/tenants/mine/all');
+  return res.data;
+}
+
+export async function switchTenant(tenantId: string): Promise<{
+  accessToken: string;
+  csrfToken: string;
+  user: { id: string; email: string; username: string | null; avatarData: string | null; tenantId?: string; tenantRole?: string };
+}> {
+  const res = await api.post('/auth/switch-tenant', { tenantId });
   return res.data;
 }
 

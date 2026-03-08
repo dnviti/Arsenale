@@ -21,12 +21,16 @@ async function resolveVaultTtl(userId: string): Promise<number> {
     where: { id: userId },
     select: {
       vaultAutoLockMinutes: true,
-      tenant: { select: { vaultAutoLockMaxMinutes: true } },
+      tenantMemberships: {
+        where: { isActive: true },
+        take: 1,
+        include: { tenant: { select: { vaultAutoLockMaxMinutes: true } } },
+      },
     },
   });
 
   const userPref = user?.vaultAutoLockMinutes; // null = server default, 0 = never
-  const tenantMax = user?.tenant?.vaultAutoLockMaxMinutes; // null = no enforcement
+  const tenantMax = user?.tenantMemberships[0]?.tenant.vaultAutoLockMaxMinutes; // null = no enforcement
 
   let effective = userPref ?? config.vaultTtlMinutes;
 
@@ -206,7 +210,11 @@ export async function getAutoLockPreference(userId: string) {
     where: { id: userId },
     select: {
       vaultAutoLockMinutes: true,
-      tenant: { select: { vaultAutoLockMaxMinutes: true } },
+      tenantMemberships: {
+        where: { isActive: true },
+        take: 1,
+        include: { tenant: { select: { vaultAutoLockMaxMinutes: true } } },
+      },
     },
   });
 
@@ -215,7 +223,7 @@ export async function getAutoLockPreference(userId: string) {
   return {
     autoLockMinutes: user?.vaultAutoLockMinutes ?? null,
     effectiveMinutes: effective,
-    tenantMaxMinutes: user?.tenant?.vaultAutoLockMaxMinutes ?? null,
+    tenantMaxMinutes: user?.tenantMemberships[0]?.tenant.vaultAutoLockMaxMinutes ?? null,
   };
 }
 
@@ -228,9 +236,15 @@ export async function setAutoLockPreference(userId: string, autoLockMinutes: num
   // Check tenant enforcement
   const user = await prisma.user.findUnique({
     where: { id: userId },
-    select: { tenant: { select: { vaultAutoLockMaxMinutes: true } } },
+    select: {
+      tenantMemberships: {
+        where: { isActive: true },
+        take: 1,
+        include: { tenant: { select: { vaultAutoLockMaxMinutes: true } } },
+      },
+    },
   });
-  const tenantMax = user?.tenant?.vaultAutoLockMaxMinutes;
+  const tenantMax = user?.tenantMemberships[0]?.tenant.vaultAutoLockMaxMinutes;
   if (tenantMax !== null && tenantMax !== undefined && tenantMax > 0) {
     if (autoLockMinutes === 0) {
       throw new AppError(`Your organization enforces a maximum vault auto-lock of ${tenantMax} minutes. "Never" is not allowed.`, 403);

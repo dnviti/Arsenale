@@ -72,6 +72,7 @@ export async function login(req: Request, res: Response, next: NextFunction) {
         accessToken: result.accessToken,
         csrfToken,
         user: result.user,
+        tenantMemberships: result.tenantMemberships,
       });
     }
   } catch (err) {
@@ -95,7 +96,7 @@ export async function verifyTotp(req: Request, res: Response, next: NextFunction
     auditService.log({ userId: result.user.id, action: 'LOGIN_TOTP', ipAddress: req.ip });
     setRefreshTokenCookie(res, result.refreshToken);
     const csrfToken = setCsrfCookie(res);
-    res.json({ accessToken: result.accessToken, csrfToken, user: result.user });
+    res.json({ accessToken: result.accessToken, csrfToken, user: result.user, tenantMemberships: result.tenantMemberships });
   } catch (err) {
     if (err instanceof z.ZodError) {
       return next(new AppError('Invalid code format', 400));
@@ -140,7 +141,7 @@ export async function verifySms(req: Request, res: Response, next: NextFunction)
     auditService.log({ userId: result.user.id, action: 'LOGIN_SMS', ipAddress: req.ip });
     setRefreshTokenCookie(res, result.refreshToken);
     const csrfToken = setCsrfCookie(res);
-    res.json({ accessToken: result.accessToken, csrfToken, user: result.user });
+    res.json({ accessToken: result.accessToken, csrfToken, user: result.user, tenantMemberships: result.tenantMemberships });
   } catch (err) {
     if (err instanceof z.ZodError) return next(new AppError('Invalid code format', 400));
     if (err instanceof Error) {
@@ -183,7 +184,7 @@ export async function verifyWebAuthn(req: Request, res: Response, next: NextFunc
     auditService.log({ userId: result.user.id, action: 'LOGIN_WEBAUTHN', ipAddress: req.ip });
     setRefreshTokenCookie(res, result.refreshToken);
     const csrfToken = setCsrfCookie(res);
-    res.json({ accessToken: result.accessToken, csrfToken, user: result.user });
+    res.json({ accessToken: result.accessToken, csrfToken, user: result.user, tenantMemberships: result.tenantMemberships });
   } catch (err) {
     if (err instanceof z.ZodError) return next(new AppError('Invalid request', 400));
     if (err instanceof AppError) return next(err);
@@ -301,7 +302,7 @@ export async function mfaSetupVerify(req: Request, res: Response, next: NextFunc
     auditService.log({ userId: result.user.id, action: 'LOGIN', ipAddress: req.ip });
     setRefreshTokenCookie(res, result.refreshToken);
     const csrfToken = setCsrfCookie(res);
-    res.json({ accessToken: result.accessToken, csrfToken, user: result.user });
+    res.json({ accessToken: result.accessToken, csrfToken, user: result.user, tenantMemberships: result.tenantMemberships });
   } catch (err) {
     if (err instanceof z.ZodError) return next(new AppError('Invalid code format', 400));
     if (err instanceof AppError) return next(err);
@@ -309,6 +310,41 @@ export async function mfaSetupVerify(req: Request, res: Response, next: NextFunc
       if (err.message.includes('token')) return next(new AppError(err.message, 401));
       if (err.message === 'Invalid TOTP code') return next(new AppError(err.message, 401));
     }
+    next(err);
+  }
+}
+
+// --- Tenant Switch ---
+
+const switchTenantSchema = z.object({
+  tenantId: z.string().uuid(),
+});
+
+export async function switchTenant(req: Request, res: Response, next: NextFunction) {
+  try {
+    const { tenantId } = switchTenantSchema.parse(req.body);
+    const userId = (req as any).user?.userId;
+    if (!userId) return next(new AppError('Authentication required', 401));
+
+    const result = await authService.switchTenant(userId, tenantId);
+
+    auditService.log({
+      userId,
+      action: 'TENANT_SWITCH',
+      targetType: 'Tenant',
+      targetId: tenantId,
+      ipAddress: req.ip,
+    });
+
+    setRefreshTokenCookie(res, result.refreshToken);
+    const csrfToken = setCsrfCookie(res);
+    res.json({
+      accessToken: result.accessToken,
+      csrfToken,
+      user: result.user,
+    });
+  } catch (err) {
+    if (err instanceof z.ZodError) return next(new AppError(err.issues[0].message, 400));
     next(err);
   }
 }

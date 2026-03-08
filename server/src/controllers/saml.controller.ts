@@ -111,8 +111,8 @@ export function handleSamlCallback(req: Request, res: Response, next: NextFuncti
         email: result.user.email,
         username: result.user.username || '',
         avatarData: result.user.avatarData || '',
-        tenantId: result.user.tenantId || '',
-        tenantRole: result.user.tenantRole || '',
+        tenantId: tokens.user.tenantId || '',
+        tenantRole: tokens.user.tenantRole || '',
       });
 
       res.redirect(`${config.clientUrl}/oauth/callback?${params.toString()}`);

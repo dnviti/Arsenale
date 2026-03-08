@@ -37,6 +37,7 @@ interface UiPreferences {
   connAuditLogUserId: string;
   connAuditLogSortBy: string;
   connAuditLogSortOrder: string;
+  lastActiveTenantId: string;
 }
 
 interface UiPreferencesState extends UiPreferences {
@@ -81,6 +82,7 @@ const defaults: UiPreferences = {
   connAuditLogUserId: '',
   connAuditLogSortBy: 'createdAt',
   connAuditLogSortOrder: 'desc',
+  lastActiveTenantId: '',
 };
 
 export const useUiPreferencesStore = create<UiPreferencesState>()(

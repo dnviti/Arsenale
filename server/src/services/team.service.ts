@@ -206,12 +206,10 @@ export async function addMember(
   if (!team) throw new AppError('Team not found', 404);
 
   // Verify target user is in the same tenant
-  const targetUser = await prisma.user.findUnique({
-    where: { id: targetUserId },
-    select: { tenantId: true },
+  const targetMembership = await prisma.tenantMember.findUnique({
+    where: { tenantId_userId: { tenantId: team.tenantId, userId: targetUserId } },
   });
-  if (!targetUser) throw new AppError('User not found', 404);
-  if (targetUser.tenantId !== team.tenantId) {
+  if (!targetMembership) {
     throw new AppError('User is not a member of this organization', 400);
   }
 

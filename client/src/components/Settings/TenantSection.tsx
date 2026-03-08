@@ -624,7 +624,7 @@ export default function TenantSection({ onNavigateToTab }: TenantSectionProps) {
                       <TableCell>
                         {isAdmin && u.id !== user?.id ? (
                           <Select
-                            value={u.tenantRole}
+                            value={u.role}
                             size="small"
                             onChange={(e) => handleRoleChange(u.id, e.target.value)}
                             sx={{ minWidth: 110 }}
@@ -634,7 +634,7 @@ export default function TenantSection({ onNavigateToTab }: TenantSectionProps) {
                             ))}
                           </Select>
                         ) : (
-                          <Chip label={u.tenantRole} size="small" variant="outlined" />
+                          <Chip label={u.role} size="small" variant="outlined" />
                         )}
                       </TableCell>
                       <TableCell>

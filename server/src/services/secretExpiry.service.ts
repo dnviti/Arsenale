@@ -45,14 +45,14 @@ async function getRecipientUserIds(secret: {
   }
 
   if (secret.scope === 'TENANT' && secret.tenantId) {
-    const admins = await prisma.user.findMany({
+    const admins = await prisma.tenantMember.findMany({
       where: {
         tenantId: secret.tenantId,
-        tenantRole: { in: ['OWNER', 'ADMIN'] },
+        role: { in: ['OWNER', 'ADMIN'] },
       },
-      select: { id: true },
+      select: { userId: true },
     });
-    return admins.length > 0 ? admins.map((a) => a.id) : [secret.userId];
+    return admins.length > 0 ? admins.map((a) => a.userId) : [secret.userId];
   }
 
   return [secret.userId];

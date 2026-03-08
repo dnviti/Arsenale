@@ -105,14 +105,29 @@ export async function issueTokens(user: {
   email: string;
   username: string | null;
   avatarData: string | null;
-  tenantId?: string | null;
-  tenantRole?: string | null;
 }, tokenFamily?: string) {
+  // Fetch all tenant memberships for the user
+  const allMemberships = await prisma.tenantMember.findMany({
+    where: { userId: user.id },
+    include: { tenant: { select: { id: true, name: true, slug: true } } },
+    orderBy: { joinedAt: 'asc' },
+  });
+
+  // Resolve active membership, auto-activating if exactly one exists
+  let activeMembership = allMemberships.find((m) => m.isActive);
+  if (!activeMembership && allMemberships.length === 1) {
+    await prisma.tenantMember.update({
+      where: { id: allMemberships[0].id },
+      data: { isActive: true },
+    });
+    activeMembership = { ...allMemberships[0], isActive: true };
+  }
+
   const payload: AuthPayload = {
     userId: user.id,
     email: user.email,
-    ...(user.tenantId && { tenantId: user.tenantId }),
-    ...(user.tenantRole && { tenantRole: user.tenantRole as AuthPayload['tenantRole'] }),
+    ...(activeMembership && { tenantId: activeMembership.tenantId }),
+    ...(activeMembership && { tenantRole: activeMembership.role as AuthPayload['tenantRole'] }),
   };
   const accessToken = jwt.sign(payload, config.jwtSecret, {
     expiresIn: config.jwtExpiresIn as string,
@@ -138,16 +153,62 @@ export async function issueTokens(user: {
       email: user.email,
       username: user.username,
       avatarData: user.avatarData,
-      tenantId: user.tenantId ?? undefined,
-      tenantRole: user.tenantRole ?? undefined,
+      tenantId: activeMembership?.tenantId,
+      tenantRole: activeMembership?.role,
     },
+    tenantMemberships: allMemberships.map((m) => ({
+      tenantId: m.tenant.id,
+      name: m.tenant.name,
+      slug: m.tenant.slug,
+      role: m.role,
+      isActive: m.isActive,
+    })),
   };
+}
+
+export async function switchTenant(userId: string, targetTenantId: string) {
+  // Verify the user has a membership in the target tenant
+  const membership = await prisma.tenantMember.findUnique({
+    where: { tenantId_userId: { tenantId: targetTenantId, userId } },
+  });
+  if (!membership) {
+    throw new AppError('You are not a member of this organization', 403);
+  }
+
+  // Transactionally deactivate all memberships and activate the target
+  await prisma.$transaction([
+    prisma.tenantMember.updateMany({
+      where: { userId, isActive: true },
+      data: { isActive: false },
+    }),
+    prisma.tenantMember.update({
+      where: { tenantId_userId: { tenantId: targetTenantId, userId } },
+      data: { isActive: true },
+    }),
+  ]);
+
+  // Revoke all existing refresh tokens
+  await prisma.refreshToken.deleteMany({ where: { userId } });
+
+  // Issue fresh tokens
+  const user = await prisma.user.findUniqueOrThrow({
+    where: { id: userId },
+    select: { id: true, email: true, username: true, avatarData: true },
+  });
+
+  return issueTokens(user);
 }
 
 export async function login(email: string, password: string, ipAddress?: string | string[]) {
   const user = await prisma.user.findUnique({
     where: { email },
-    include: { tenant: { select: { mfaRequired: true } } },
+    include: {
+      tenantMemberships: {
+        where: { isActive: true },
+        take: 1,
+        include: { tenant: { select: { mfaRequired: true } } },
+      },
+    },
   });
   if (!user) {
     auditService.log({
@@ -276,7 +337,8 @@ export async function login(email: string, password: string, ipAddress?: string 
   }
 
   // Check tenant mandatory MFA policy
-  if (user.tenant?.mfaRequired && !user.totpEnabled && !user.smsMfaEnabled && !user.webauthnEnabled) {
+  const activeTenantMembership = user.tenantMemberships[0];
+  if (activeTenantMembership?.tenant.mfaRequired && !user.totpEnabled && !user.smsMfaEnabled && !user.webauthnEnabled) {
     const setupToken = jwt.sign(
       { userId: user.id, purpose: 'mfa-setup' },
       config.jwtSecret,
@@ -479,8 +541,6 @@ export async function refreshAccessToken(refreshToken: string) {
             email: stored.user.email,
             username: stored.user.username,
             avatarData: stored.user.avatarData,
-            tenantId: stored.user.tenantId,
-            tenantRole: stored.user.tenantRole,
           },
           stored.tokenFamily,
         );
@@ -535,8 +595,6 @@ export async function refreshAccessToken(refreshToken: string) {
       email: stored.user.email,
       username: stored.user.username,
       avatarData: stored.user.avatarData,
-      tenantId: stored.user.tenantId,
-      tenantRole: stored.user.tenantRole,
     },
     stored.tokenFamily,
   );
@@ -663,7 +721,6 @@ export async function verifyMfaSetupDuringLogin(tempToken: string, code: string)
     where: { id: decoded.userId },
     select: {
       id: true, email: true, username: true, avatarData: true,
-      tenantId: true, tenantRole: true,
     },
   });
   if (!user) throw new Error('User not found');

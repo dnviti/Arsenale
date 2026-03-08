@@ -56,10 +56,10 @@ export async function createTenant(req: AuthRequest, res: Response, next: NextFu
     const { name } = createTenantSchema.parse(req.body);
     const tenant = await tenantService.createTenant(req.user!.userId, name);
 
-    // Fetch updated user and issue fresh tokens with tenantId embedded
+    // Issue fresh tokens — issueTokens resolves tenantId from active TenantMember
     const updatedUser = await prisma.user.findUniqueOrThrow({
       where: { id: req.user!.userId },
-      select: { id: true, email: true, username: true, avatarData: true, tenantId: true, tenantRole: true },
+      select: { id: true, email: true, username: true, avatarData: true },
     });
     const tokens = await authService.issueTokens(updatedUser);
 
@@ -259,6 +259,15 @@ export async function toggleUserEnabled(req: AuthRequest, res: Response, next: N
     res.json(result);
   } catch (err) {
     if (err instanceof z.ZodError) return next(new AppError(err.issues[0].message, 400));
+    next(err);
+  }
+}
+
+export async function listMyTenants(req: AuthRequest, res: Response, next: NextFunction) {
+  try {
+    const result = await tenantService.listUserTenants(req.user!.userId);
+    res.json(result);
+  } catch (err) {
     next(err);
   }
 }

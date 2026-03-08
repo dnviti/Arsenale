@@ -34,15 +34,20 @@ export async function shareConnection(
     throw new AppError('Cannot share with yourself', 400);
   }
 
-  // Tenant boundary check (bidirectional)
-  const actingUser = await prisma.user.findUnique({
-    where: { id: actingUserId },
+  // Tenant boundary check (bidirectional) — both users must share at least one tenant
+  const actingMemberships = await prisma.tenantMember.findMany({
+    where: { userId: actingUserId },
     select: { tenantId: true },
   });
-  const actingTenantId = actingUser?.tenantId ?? null;
-  const targetTenantId = targetUser.tenantId ?? null;
-  if (actingTenantId || targetTenantId) {
-    if (actingTenantId !== targetTenantId) {
+  const targetMemberships = await prisma.tenantMember.findMany({
+    where: { userId: targetUser.id },
+    select: { tenantId: true },
+  });
+  const actingTenantIds = new Set(actingMemberships.map((m) => m.tenantId));
+  const targetTenantIds = new Set(targetMemberships.map((m) => m.tenantId));
+  if (actingTenantIds.size > 0 || targetTenantIds.size > 0) {
+    const hasCommon = [...actingTenantIds].some((id) => targetTenantIds.has(id));
+    if (!hasCommon) {
       throw new AppError('Cannot share with users outside your organization', 400);
     }
   }

@@ -11,6 +11,9 @@ router.use(authenticate);
 // Create tenant (any authenticated user without a tenant)
 router.post('/', tenantController.createTenant);
 
+// List all tenants the user belongs to
+router.get('/mine/all', tenantController.listMyTenants);
+
 // Get my tenant details (requires tenant membership)
 router.get('/mine', requireTenant, tenantController.getMyTenant);
 

@@ -4,11 +4,26 @@ type UserInfo = { id: string; email: string; username: string | null; avatarData
 
 type MfaMethod = 'totp' | 'sms' | 'webauthn';
 
+export interface TenantMembershipInfo {
+  tenantId: string;
+  name: string;
+  slug: string;
+  role: string;
+  isActive: boolean;
+}
+
+export type AuthSuccessResponse = {
+  accessToken: string;
+  csrfToken: string;
+  user: UserInfo;
+  tenantMemberships?: TenantMembershipInfo[];
+};
+
 export type LoginResponse =
   | { requiresMFA: true; requiresTOTP?: boolean; methods: MfaMethod[]; tempToken: string }
   | { mfaSetupRequired: true; tempToken: string }
   | { requiresTOTP: true; tempToken: string }
-  | { requiresTOTP?: false; accessToken: string; csrfToken: string; user: UserInfo };
+  | (AuthSuccessResponse & { requiresTOTP?: false });
 
 export async function loginApi(email: string, password: string): Promise<LoginResponse> {
   const res = await api.post('/auth/login', { email, password });
@@ -17,7 +32,7 @@ export async function loginApi(email: string, password: string): Promise<LoginRe
 
 export async function verifyTotpApi(tempToken: string, code: string) {
   const res = await api.post('/auth/verify-totp', { tempToken, code });
-  return res.data as { accessToken: string; csrfToken: string; user: UserInfo };
+  return res.data as AuthSuccessResponse;
 }
 
 export async function requestSmsCodeApi(tempToken: string) {
@@ -27,7 +42,7 @@ export async function requestSmsCodeApi(tempToken: string) {
 
 export async function verifySmsApi(tempToken: string, code: string) {
   const res = await api.post('/auth/verify-sms', { tempToken, code });
-  return res.data as { accessToken: string; csrfToken: string; user: UserInfo };
+  return res.data as AuthSuccessResponse;
 }
 
 export async function mfaSetupInitApi(tempToken: string) {
@@ -37,7 +52,7 @@ export async function mfaSetupInitApi(tempToken: string) {
 
 export async function mfaSetupVerifyApi(tempToken: string, code: string) {
   const res = await api.post('/auth/mfa-setup/verify', { tempToken, code });
-  return res.data as { accessToken: string; csrfToken: string; user: UserInfo };
+  return res.data as AuthSuccessResponse;
 }
 
 export async function requestWebAuthnOptionsApi(tempToken: string) {
@@ -47,7 +62,7 @@ export async function requestWebAuthnOptionsApi(tempToken: string) {
 
 export async function verifyWebAuthnApi(tempToken: string, credential: unknown) {
   const res = await api.post('/auth/verify-webauthn', { tempToken, credential });
-  return res.data as { accessToken: string; csrfToken: string; user: UserInfo };
+  return res.data as AuthSuccessResponse;
 }
 
 export async function registerApi(email: string, password: string) {

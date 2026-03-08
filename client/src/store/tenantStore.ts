@@ -1,21 +1,27 @@
 import { create } from 'zustand';
 import {
-  TenantData, TenantUser, CreateUserData, CreateUserResult,
+  TenantData, TenantUser, TenantMembership, CreateUserData, CreateUserResult,
   getMyTenant, createTenant as createTenantApi,
   updateTenant as updateTenantApi, deleteTenant as deleteTenantApi,
   listTenantUsers, inviteUser as inviteUserApi,
   updateUserRole as updateUserRoleApi, removeUser as removeUserApi,
   createTenantUser, toggleUserEnabled as toggleUserEnabledApi,
+  getMyTenants, switchTenant as switchTenantApi,
 } from '../api/tenant.api';
 import { useAuthStore } from './authStore';
+import { useTabsStore } from './tabsStore';
+import { useConnectionsStore } from './connectionsStore';
 
 interface TenantState {
   tenant: TenantData | null;
   users: TenantUser[];
+  memberships: TenantMembership[];
   loading: boolean;
   usersLoading: boolean;
 
   fetchTenant: () => Promise<void>;
+  fetchMemberships: () => Promise<void>;
+  switchTenant: (tenantId: string) => Promise<void>;
   createTenant: (name: string) => Promise<TenantData>;
   updateTenant: (data: { name?: string; defaultSessionTimeoutSeconds?: number; mfaRequired?: boolean; vaultAutoLockMaxMinutes?: number | null }) => Promise<void>;
   deleteTenant: () => Promise<void>;
@@ -31,8 +37,28 @@ interface TenantState {
 export const useTenantStore = create<TenantState>((set, get) => ({
   tenant: null,
   users: [],
+  memberships: [],
   loading: false,
   usersLoading: false,
+
+  fetchMemberships: async () => {
+    try {
+      const memberships = await getMyTenants();
+      set({ memberships });
+    } catch {
+      set({ memberships: [] });
+    }
+  },
+
+  switchTenant: async (tenantId) => {
+    const { accessToken, csrfToken, user } = await switchTenantApi(tenantId);
+    useAuthStore.getState().setAuth(accessToken, csrfToken, user);
+    await useTabsStore.getState().clearAll();
+    useConnectionsStore.getState().reset();
+    await get().fetchTenant();
+    await get().fetchMemberships();
+    await useConnectionsStore.getState().fetchConnections();
+  },
 
   fetchTenant: async () => {
     set({ loading: true });
@@ -120,5 +146,5 @@ export const useTenantStore = create<TenantState>((set, get) => ({
     await get().fetchUsers();
   },
 
-  reset: () => set({ tenant: null, users: [], loading: false, usersLoading: false }),
+  reset: () => set({ tenant: null, users: [], memberships: [], loading: false, usersLoading: false }),
 }));

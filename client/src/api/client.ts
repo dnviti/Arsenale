@@ -13,7 +13,7 @@ api.interceptors.request.use((config) => {
   if (accessToken) {
     config.headers.Authorization = `Bearer ${accessToken}`;
   }
-  if (csrfToken && (config.url?.includes('/auth/refresh') || config.url?.includes('/auth/logout'))) {
+  if (csrfToken && (config.url?.includes('/auth/refresh') || config.url?.includes('/auth/logout') || config.url?.includes('/auth/switch-tenant'))) {
     config.headers['X-CSRF-Token'] = csrfToken;
   }
   return config;

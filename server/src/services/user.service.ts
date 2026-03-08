@@ -328,7 +328,7 @@ export async function searchUsers(
   teamId?: string
 ) {
   const where: Prisma.UserWhereInput = {
-    tenantId,
+    tenantMemberships: { some: { tenantId } },
     id: { not: currentUserId },
     OR: [
       { email: { contains: query, mode: 'insensitive' } },

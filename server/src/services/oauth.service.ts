@@ -18,8 +18,6 @@ interface FindOrCreateResult {
     username: string | null;
     avatarData: string | null;
     vaultSetupComplete: boolean;
-    tenantId: string | null;
-    tenantRole: string | null;
   };
   isNewUser: boolean;
 }
@@ -41,7 +39,7 @@ export async function findOrCreateOAuthUser(
       user: {
         select: {
           id: true, email: true, username: true, avatarData: true,
-          vaultSetupComplete: true, tenantId: true, tenantRole: true, enabled: true,
+          vaultSetupComplete: true, enabled: true,
         },
       },
     },
@@ -78,7 +76,7 @@ export async function findOrCreateOAuthUser(
     where: { email: profile.email },
     select: {
       id: true, email: true, username: true, avatarData: true,
-      vaultSetupComplete: true, tenantId: true, tenantRole: true, enabled: true,
+      vaultSetupComplete: true, enabled: true,
     },
   });
 
@@ -132,7 +130,7 @@ export async function findOrCreateOAuthUser(
       },
       select: {
         id: true, email: true, username: true, avatarData: true,
-        vaultSetupComplete: true, tenantId: true, tenantRole: true,
+        vaultSetupComplete: true,
       },
     });
 

@@ -43,10 +43,9 @@ async function ensureUniqueSlug(baseSlug: string, excludeId?: string): Promise<s
 export async function createTenant(userId: string, name: string) {
   const user = await prisma.user.findUnique({
     where: { id: userId },
-    select: { tenantId: true },
+    select: { id: true },
   });
   if (!user) throw new AppError('User not found', 404);
-  if (user.tenantId) throw new AppError('You already belong to an organization', 400);
 
   const slug = await ensureUniqueSlug(generateSlug(name));
 
@@ -54,9 +53,14 @@ export async function createTenant(userId: string, name: string) {
     const t = await tx.tenant.create({
       data: { name, slug },
     });
-    await tx.user.update({
-      where: { id: userId },
-      data: { tenantId: t.id, tenantRole: 'OWNER' },
+    // Deactivate any existing active membership
+    await tx.tenantMember.updateMany({
+      where: { userId, isActive: true },
+      data: { isActive: false },
+    });
+    // Create OWNER membership for the new tenant
+    await tx.tenantMember.create({
+      data: { tenantId: t.id, userId, role: 'OWNER', isActive: true },
     });
     return t;
   });
@@ -90,7 +94,7 @@ export async function getTenant(tenantId: string) {
   const tenant = await prisma.tenant.findUnique({
     where: { id: tenantId },
     include: {
-      _count: { select: { users: true, teams: true } },
+      _count: { select: { members: true, teams: true } },
     },
   });
   if (!tenant) throw new AppError('Organization not found', 404);
@@ -102,7 +106,7 @@ export async function getTenant(tenantId: string) {
     mfaRequired: tenant.mfaRequired,
     defaultSessionTimeoutSeconds: tenant.defaultSessionTimeoutSeconds,
     vaultAutoLockMaxMinutes: tenant.vaultAutoLockMaxMinutes,
-    userCount: tenant._count.users,
+    userCount: tenant._count.members,
     teamCount: tenant._count.teams,
     createdAt: tenant.createdAt,
     updatedAt: tenant.updatedAt,
@@ -166,11 +170,7 @@ export async function deleteTenant(tenantId: string) {
     await tx.team.deleteMany({
       where: { tenantId },
     });
-    // Unset tenant reference on all users (don't delete the users)
-    await tx.user.updateMany({
-      where: { tenantId },
-      data: { tenantId: null, tenantRole: null },
-    });
+    // TenantMember records are cascade-deleted with the tenant
     // Delete the tenant
     await tx.tenant.delete({ where: { id: tenantId } });
   });
@@ -179,42 +179,56 @@ export async function deleteTenant(tenantId: string) {
 }
 
 export async function getTenantMfaStats(tenantId: string) {
-  const users = await prisma.user.findMany({
+  const members = await prisma.tenantMember.findMany({
     where: { tenantId },
-    select: { id: true, totpEnabled: true, smsMfaEnabled: true },
+    include: { user: { select: { totpEnabled: true, smsMfaEnabled: true } } },
   });
 
-  const total = users.length;
-  const withoutMfa = users.filter((u) => !u.totpEnabled && !u.smsMfaEnabled).length;
+  const total = members.length;
+  const withoutMfa = members.filter((m) => !m.user.totpEnabled && !m.user.smsMfaEnabled).length;
 
   return { total, withoutMfa };
 }
 
 export async function listTenantUsers(tenantId: string) {
-  const users = await prisma.user.findMany({
+  const members = await prisma.tenantMember.findMany({
     where: { tenantId },
-    select: {
-      id: true,
-      email: true,
-      username: true,
-      avatarData: true,
-      tenantRole: true,
-      totpEnabled: true,
-      smsMfaEnabled: true,
-      enabled: true,
-      createdAt: true,
+    include: {
+      user: {
+        select: {
+          id: true,
+          email: true,
+          username: true,
+          avatarData: true,
+          totpEnabled: true,
+          smsMfaEnabled: true,
+          enabled: true,
+          createdAt: true,
+        },
+      },
     },
-    orderBy: { email: 'asc' },
   });
 
   // Sort by role hierarchy: OWNER first, then ADMIN, then MEMBER
   const roleOrder: Record<string, number> = { OWNER: 0, ADMIN: 1, MEMBER: 2 };
-  return users.sort((a, b) => {
-    const aOrder = a.tenantRole ? (roleOrder[a.tenantRole] ?? 3) : 3;
-    const bOrder = b.tenantRole ? (roleOrder[b.tenantRole] ?? 3) : 3;
-    if (aOrder !== bOrder) return aOrder - bOrder;
-    return (a.email ?? '').localeCompare(b.email ?? '');
-  });
+  return members
+    .map((m) => ({
+      id: m.user.id,
+      email: m.user.email,
+      username: m.user.username,
+      avatarData: m.user.avatarData,
+      role: m.role,
+      totpEnabled: m.user.totpEnabled,
+      smsMfaEnabled: m.user.smsMfaEnabled,
+      enabled: m.user.enabled,
+      createdAt: m.user.createdAt,
+    }))
+    .sort((a, b) => {
+      const aOrder = roleOrder[a.role] ?? 3;
+      const bOrder = roleOrder[b.role] ?? 3;
+      if (aOrder !== bOrder) return aOrder - bOrder;
+      return (a.email ?? '').localeCompare(b.email ?? '');
+    });
 }
 
 export async function inviteUser(tenantId: string, email: string, role: 'ADMIN' | 'MEMBER') {
@@ -223,16 +237,15 @@ export async function inviteUser(tenantId: string, email: string, role: 'ADMIN' 
     throw new AppError('User not found. They must register first.', 404);
   }
 
-  if (targetUser.tenantId) {
-    if (targetUser.tenantId === tenantId) {
-      throw new AppError('User is already a member of this organization', 400);
-    }
-    throw new AppError('User already belongs to another organization', 400);
+  const existingMembership = await prisma.tenantMember.findUnique({
+    where: { tenantId_userId: { tenantId, userId: targetUser.id } },
+  });
+  if (existingMembership) {
+    throw new AppError('User is already a member of this organization', 400);
   }
 
-  await prisma.user.update({
-    where: { id: targetUser.id },
-    data: { tenantId, tenantRole: role },
+  await prisma.tenantMember.create({
+    data: { tenantId, userId: targetUser.id, role, isActive: false },
   });
 
   return {
@@ -249,15 +262,15 @@ export async function updateUserRole(
   newRole: 'OWNER' | 'ADMIN' | 'MEMBER',
   actingUserId: string
 ) {
-  const targetUser = await prisma.user.findFirst({
-    where: { id: targetUserId, tenantId },
+  const membership = await prisma.tenantMember.findUnique({
+    where: { tenantId_userId: { tenantId, userId: targetUserId } },
   });
-  if (!targetUser) throw new AppError('User not found in this organization', 404);
+  if (!membership) throw new AppError('User not found in this organization', 404);
 
   // Prevent demoting the last OWNER
-  if (targetUser.tenantRole === 'OWNER' && newRole !== 'OWNER') {
-    const ownerCount = await prisma.user.count({
-      where: { tenantId, tenantRole: 'OWNER' },
+  if (membership.role === 'OWNER' && newRole !== 'OWNER') {
+    const ownerCount = await prisma.tenantMember.count({
+      where: { tenantId, role: 'OWNER' },
     });
     if (ownerCount <= 1) {
       throw new AppError('Cannot change role of the last owner. Transfer ownership first.', 400);
@@ -265,34 +278,34 @@ export async function updateUserRole(
   }
 
   // Prevent self-demotion if last OWNER
-  if (targetUserId === actingUserId && targetUser.tenantRole === 'OWNER' && newRole !== 'OWNER') {
-    const ownerCount = await prisma.user.count({
-      where: { tenantId, tenantRole: 'OWNER' },
+  if (targetUserId === actingUserId && membership.role === 'OWNER' && newRole !== 'OWNER') {
+    const ownerCount = await prisma.tenantMember.count({
+      where: { tenantId, role: 'OWNER' },
     });
     if (ownerCount <= 1) {
       throw new AppError('Cannot demote yourself as the last owner', 400);
     }
   }
 
-  const updated = await prisma.user.update({
-    where: { id: targetUserId },
-    data: { tenantRole: newRole },
-    select: { id: true, email: true, username: true, tenantRole: true },
+  const updated = await prisma.tenantMember.update({
+    where: { tenantId_userId: { tenantId, userId: targetUserId } },
+    data: { role: newRole },
+    include: { user: { select: { id: true, email: true, username: true } } },
   });
 
-  return updated;
+  return { id: updated.user.id, email: updated.user.email, username: updated.user.username, role: updated.role };
 }
 
 export async function removeUser(tenantId: string, targetUserId: string, actingUserId: string) {
-  const targetUser = await prisma.user.findFirst({
-    where: { id: targetUserId, tenantId },
+  const membership = await prisma.tenantMember.findUnique({
+    where: { tenantId_userId: { tenantId, userId: targetUserId } },
   });
-  if (!targetUser) throw new AppError('User not found in this organization', 404);
+  if (!membership) throw new AppError('User not found in this organization', 404);
 
   // Prevent removing the last OWNER
-  if (targetUser.tenantRole === 'OWNER') {
-    const ownerCount = await prisma.user.count({
-      where: { tenantId, tenantRole: 'OWNER' },
+  if (membership.role === 'OWNER') {
+    const ownerCount = await prisma.tenantMember.count({
+      where: { tenantId, role: 'OWNER' },
     });
     if (ownerCount <= 1) {
       throw new AppError('Cannot remove the last owner', 400);
@@ -312,10 +325,9 @@ export async function removeUser(tenantId: string, targetUserId: string, actingU
         team: { tenantId },
       },
     });
-    // Unset tenant
-    await tx.user.update({
-      where: { id: targetUserId },
-      data: { tenantId: null, tenantRole: null },
+    // Remove tenant membership
+    await tx.tenantMember.delete({
+      where: { tenantId_userId: { tenantId, userId: targetUserId } },
     });
   });
 
@@ -330,11 +342,11 @@ export async function createUser(
   // Check for existing user
   const existing = await prisma.user.findUnique({ where: { email: data.email } });
   if (existing) {
-    if (existing.tenantId === tenantId) {
+    const existingMembership = await prisma.tenantMember.findUnique({
+      where: { tenantId_userId: { tenantId, userId: existing.id } },
+    });
+    if (existingMembership) {
       throw new AppError('User is already a member of this organization', 400);
-    }
-    if (existing.tenantId) {
-      throw new AppError('A user with this email already belongs to another organization', 400);
     }
     throw new AppError('A user with this email already exists', 409);
   }
@@ -352,37 +364,42 @@ export async function createUser(
   const recoveryKey = generateRecoveryKey();
   const recoveryResult = await encryptMasterKeyWithRecovery(masterKey, recoveryKey);
 
-  const user = await prisma.user.create({
-    data: {
-      email: data.email,
-      username: data.username || null,
-      passwordHash,
-      vaultSalt,
-      encryptedVaultKey: encryptedVault.ciphertext,
-      vaultKeyIV: encryptedVault.iv,
-      vaultKeyTag: encryptedVault.tag,
-      encryptedVaultRecoveryKey: recoveryResult.encrypted.ciphertext,
-      vaultRecoveryKeyIV: recoveryResult.encrypted.iv,
-      vaultRecoveryKeyTag: recoveryResult.encrypted.tag,
-      vaultRecoveryKeySalt: recoveryResult.salt,
-      emailVerified: true,
-      tenantId,
-      tenantRole: data.role,
-    },
-    select: {
-      id: true,
-      email: true,
-      username: true,
-      tenantRole: true,
-      createdAt: true,
-    },
+  const result = await prisma.$transaction(async (tx) => {
+    const user = await tx.user.create({
+      data: {
+        email: data.email,
+        username: data.username || null,
+        passwordHash,
+        vaultSalt,
+        encryptedVaultKey: encryptedVault.ciphertext,
+        vaultKeyIV: encryptedVault.iv,
+        vaultKeyTag: encryptedVault.tag,
+        encryptedVaultRecoveryKey: recoveryResult.encrypted.ciphertext,
+        vaultRecoveryKeyIV: recoveryResult.encrypted.iv,
+        vaultRecoveryKeyTag: recoveryResult.encrypted.tag,
+        vaultRecoveryKeySalt: recoveryResult.salt,
+        emailVerified: true,
+      },
+      select: {
+        id: true,
+        email: true,
+        username: true,
+        createdAt: true,
+      },
+    });
+
+    const membership = await tx.tenantMember.create({
+      data: { tenantId, userId: user.id, role: data.role, isActive: false },
+    });
+
+    return { ...user, role: membership.role };
   });
 
   // Zero sensitive data
   masterKey.fill(0);
   derivedKey.fill(0);
 
-  return { user, recoveryKey };
+  return { user: result, recoveryKey };
 }
 
 export async function toggleUserEnabled(
@@ -391,10 +408,10 @@ export async function toggleUserEnabled(
   enabled: boolean,
   actingUserId: string,
 ) {
-  const targetUser = await prisma.user.findFirst({
-    where: { id: targetUserId, tenantId },
+  const membership = await prisma.tenantMember.findUnique({
+    where: { tenantId_userId: { tenantId, userId: targetUserId } },
   });
-  if (!targetUser) {
+  if (!membership) {
     throw new AppError('User not found in this organization', 404);
   }
 
@@ -402,11 +419,12 @@ export async function toggleUserEnabled(
     throw new AppError('Cannot disable your own account', 400);
   }
 
-  if (!enabled && targetUser.tenantRole === 'OWNER') {
-    const enabledOwnerCount = await prisma.user.count({
-      where: { tenantId, tenantRole: 'OWNER', enabled: true },
+  if (!enabled && membership.role === 'OWNER') {
+    // Count enabled owners by joining TenantMember with User
+    const enabledOwners = await prisma.tenantMember.count({
+      where: { tenantId, role: 'OWNER', user: { enabled: true } },
     });
-    if (enabledOwnerCount <= 1) {
+    if (enabledOwners <= 1) {
       throw new AppError('Cannot disable the last active owner', 400);
     }
   }
@@ -418,7 +436,6 @@ export async function toggleUserEnabled(
       id: true,
       email: true,
       username: true,
-      tenantRole: true,
       enabled: true,
     },
   });
@@ -430,7 +447,7 @@ export async function toggleUserEnabled(
     });
   }
 
-  return updated;
+  return { ...updated, role: membership.role };
 }
 
 // ---------------------------------------------------------------------------
@@ -446,18 +463,20 @@ export async function adminChangeUserEmail(
 ) {
   identityVerification.consumeVerification(verificationId, actingUserId, 'admin-action');
 
-  const actingUser = await prisma.user.findFirst({
-    where: { id: actingUserId, tenantId },
-    select: { tenantRole: true },
+  const actingMembership = await prisma.tenantMember.findUnique({
+    where: { tenantId_userId: { tenantId, userId: actingUserId } },
   });
-  if (!actingUser || (actingUser.tenantRole !== 'ADMIN' && actingUser.tenantRole !== 'OWNER')) {
+  if (!actingMembership || (actingMembership.role !== 'ADMIN' && actingMembership.role !== 'OWNER')) {
     throw new AppError('Insufficient permissions', 403);
   }
 
-  const targetUser = await prisma.user.findFirst({
-    where: { id: targetUserId, tenantId },
+  const targetMembership = await prisma.tenantMember.findUnique({
+    where: { tenantId_userId: { tenantId, userId: targetUserId } },
+    include: { user: { select: { email: true } } },
   });
-  if (!targetUser) throw new AppError('User not found in this organization', 404);
+  if (!targetMembership) throw new AppError('User not found in this organization', 404);
+
+  const oldEmail = targetMembership.user.email;
 
   const existing = await prisma.user.findUnique({ where: { email: newEmail } });
   if (existing && existing.id !== targetUserId) {
@@ -467,7 +486,7 @@ export async function adminChangeUserEmail(
   const updated = await prisma.user.update({
     where: { id: targetUserId },
     data: { email: newEmail, emailVerified: false },
-    select: { id: true, email: true, username: true, tenantRole: true },
+    select: { id: true, email: true, username: true },
   });
 
   auditService.log({
@@ -475,7 +494,7 @@ export async function adminChangeUserEmail(
     action: 'ADMIN_EMAIL_CHANGE',
     targetType: 'User',
     targetId: targetUserId,
-    details: { newEmail, oldEmail: targetUser.email },
+    details: { newEmail, oldEmail },
   });
 
   return updated;
@@ -490,18 +509,17 @@ export async function adminChangeUserPassword(
 ) {
   identityVerification.consumeVerification(verificationId, actingUserId, 'admin-action');
 
-  const actingUser = await prisma.user.findFirst({
-    where: { id: actingUserId, tenantId },
-    select: { tenantRole: true },
+  const actingMembership = await prisma.tenantMember.findUnique({
+    where: { tenantId_userId: { tenantId, userId: actingUserId } },
   });
-  if (!actingUser || (actingUser.tenantRole !== 'ADMIN' && actingUser.tenantRole !== 'OWNER')) {
+  if (!actingMembership || (actingMembership.role !== 'ADMIN' && actingMembership.role !== 'OWNER')) {
     throw new AppError('Insufficient permissions', 403);
   }
 
-  const targetUser = await prisma.user.findFirst({
-    where: { id: targetUserId, tenantId },
+  const targetMembership = await prisma.tenantMember.findUnique({
+    where: { tenantId_userId: { tenantId, userId: targetUserId } },
   });
-  if (!targetUser) throw new AppError('User not found in this organization', 404);
+  if (!targetMembership) throw new AppError('User not found in this organization', 404);
 
   const passwordHash = await bcrypt.hash(newPassword, BCRYPT_ROUNDS);
 
@@ -609,4 +627,23 @@ export async function adminChangeUserPassword(
   logger.verbose(`Admin ${actingUserId} reset password for user ${targetUserId}`);
 
   return { recoveryKey };
+}
+
+export async function listUserTenants(userId: string) {
+  const memberships = await prisma.tenantMember.findMany({
+    where: { userId },
+    include: {
+      tenant: { select: { id: true, name: true, slug: true } },
+    },
+    orderBy: { joinedAt: 'asc' },
+  });
+
+  return memberships.map((m) => ({
+    tenantId: m.tenant.id,
+    name: m.tenant.name,
+    slug: m.tenant.slug,
+    role: m.role,
+    isActive: m.isActive,
+    joinedAt: m.joinedAt,
+  }));
 }

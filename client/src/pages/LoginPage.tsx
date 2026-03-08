@@ -2,16 +2,20 @@ import { useState, useEffect, useRef } from 'react';
 import { useNavigate, Link as RouterLink, useSearchParams } from 'react-router-dom';
 import {
   Box, Card, CardContent, TextField, Button, Typography, Alert, Link, Stack, CircularProgress,
+  List, ListItemButton, ListItemIcon, ListItemText,
 } from '@mui/material';
+import { Business, CheckCircle } from '@mui/icons-material';
 import { QRCodeSVG } from 'qrcode.react';
-import { loginApi, verifyTotpApi, requestSmsCodeApi, verifySmsApi, mfaSetupInitApi, mfaSetupVerifyApi, requestWebAuthnOptionsApi, verifyWebAuthnApi } from '../api/auth.api';
+import { loginApi, verifyTotpApi, requestSmsCodeApi, verifySmsApi, mfaSetupInitApi, mfaSetupVerifyApi, requestWebAuthnOptionsApi, verifyWebAuthnApi, type AuthSuccessResponse, type TenantMembershipInfo } from '../api/auth.api';
+import { switchTenant as switchTenantApi } from '../api/tenant.api';
 import { startAuthentication } from '@simplewebauthn/browser';
 import { resendVerificationEmail } from '../api/email.api';
 import { useAuthStore } from '../store/authStore';
 import { useVaultStore } from '../store/vaultStore';
+import { useUiPreferencesStore } from '../store/uiPreferencesStore';
 import OAuthButtons from '../components/OAuthButtons';
 
-type Step = 'credentials' | 'mfa-choice' | 'totp' | 'sms' | 'webauthn' | 'mfa-setup';
+type Step = 'credentials' | 'mfa-choice' | 'totp' | 'sms' | 'webauthn' | 'mfa-setup' | 'tenant-select';
 
 export default function LoginPage() {
   const [email, setEmail] = useState('');
@@ -29,6 +33,9 @@ export default function LoginPage() {
   const [mfaSetupCode, setMfaSetupCode] = useState('');
   const [showResend, setShowResend] = useState(false);
   const [resendCountdown, setResendCountdown] = useState(0);
+  const [pendingLoginData, setPendingLoginData] = useState<AuthSuccessResponse | null>(null);
+  const [tenantMemberships, setTenantMemberships] = useState<TenantMembershipInfo[]>([]);
+  const [selectedTenantId, setSelectedTenantId] = useState('');
   const countdownRef = useRef<ReturnType<typeof setInterval>>(undefined);
   const navigate = useNavigate();
   const [searchParams, setSearchParams] = useSearchParams();
@@ -90,10 +97,53 @@ export default function LoginPage() {
     return () => clearInterval(countdownRef.current);
   }, [resendCountdown > 0]);
 
-  const completeLogin = (data: { accessToken: string; csrfToken: string; user: { id: string; email: string; username: string | null; avatarData: string | null } }) => {
+  const completeLogin = (data: AuthSuccessResponse) => {
+    const memberships = data.tenantMemberships ?? [];
+
+    if (memberships.length >= 2) {
+      setPendingLoginData(data);
+      setTenantMemberships(memberships);
+
+      const lastId = useUiPreferencesStore.getState().lastActiveTenantId;
+      const preselect = memberships.find((m) => m.tenantId === lastId)
+        ?? memberships.find((m) => m.isActive)
+        ?? memberships[0];
+      setSelectedTenantId(preselect.tenantId);
+
+      setStep('tenant-select');
+      return;
+    }
+
     setAuth(data.accessToken, data.csrfToken, data.user);
     setVaultUnlocked(true);
+    if (memberships.length === 1) {
+      useUiPreferencesStore.getState().set('lastActiveTenantId', memberships[0].tenantId);
+    }
     navigate('/');
+  };
+
+  const handleTenantConfirm = async () => {
+    if (!pendingLoginData || !selectedTenantId) return;
+    setError('');
+    setLoading(true);
+    try {
+      setAuth(pendingLoginData.accessToken, pendingLoginData.csrfToken, pendingLoginData.user);
+      setVaultUnlocked(true);
+
+      const activeMembership = tenantMemberships.find((m) => m.isActive);
+      if (!activeMembership || activeMembership.tenantId !== selectedTenantId) {
+        const result = await switchTenantApi(selectedTenantId);
+        setAuth(result.accessToken, result.csrfToken, result.user);
+      }
+
+      useUiPreferencesStore.getState().set('lastActiveTenantId', selectedTenantId);
+      navigate('/');
+    } catch (err: unknown) {
+      const msg = (err as { response?: { data?: { error?: string } } })?.response?.data?.error || 'Failed to select organization';
+      setError(msg);
+    } finally {
+      setLoading(false);
+    }
   };
 
   const handleSubmit = async (e: React.FormEvent) => {
@@ -296,6 +346,7 @@ export default function LoginPage() {
       case 'sms': return 'Enter the 6-digit code sent to your phone';
       case 'webauthn': return 'Verify your identity with your security key or passkey';
       case 'mfa-setup': return 'Your organization requires two-factor authentication';
+      case 'tenant-select': return 'Select the organization you want to work in';
     }
   })();
 
@@ -575,6 +626,38 @@ export default function LoginPage() {
                   </Button>
                 </Box>
               )}
+            </Box>
+          )}
+
+          {step === 'tenant-select' && (
+            <Box>
+              <List disablePadding>
+                {tenantMemberships.map((m) => (
+                  <ListItemButton
+                    key={m.tenantId}
+                    selected={m.tenantId === selectedTenantId}
+                    onClick={() => setSelectedTenantId(m.tenantId)}
+                    sx={{ borderRadius: 1, mb: 0.5 }}
+                  >
+                    <ListItemIcon sx={{ minWidth: 40 }}>
+                      <Business />
+                    </ListItemIcon>
+                    <ListItemText primary={m.name} secondary={m.role} />
+                    {m.tenantId === selectedTenantId && (
+                      <CheckCircle color="primary" fontSize="small" />
+                    )}
+                  </ListItemButton>
+                ))}
+              </List>
+              <Button
+                fullWidth
+                variant="contained"
+                onClick={handleTenantConfirm}
+                disabled={loading || !selectedTenantId}
+                sx={{ mt: 2, mb: 1 }}
+              >
+                {loading ? 'Selecting...' : 'Continue'}
+              </Button>
             </Box>
           )}
         </CardContent>

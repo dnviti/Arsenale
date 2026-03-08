@@ -288,9 +288,9 @@ export async function terminateSession(req: AuthRequest, res: Response, next: Ne
     const sessionId = req.params.sessionId as string;
     const session = await prisma.activeSession.findUnique({
       where: { id: sessionId },
-      include: { user: { select: { tenantId: true } } },
+      include: { user: { select: { tenantMemberships: { where: { isActive: true }, take: 1, select: { tenantId: true } } } } },
     });
-    if (!session || session.user?.tenantId !== req.user!.tenantId) {
+    if (!session || session.user?.tenantMemberships[0]?.tenantId !== req.user!.tenantId) {
       throw new AppError('Session not found', 404);
     }
     await sessionService.endSession(sessionId, 'admin_terminated');

@@ -15,6 +15,7 @@ interface ConnectionsState {
   fetchFolders: () => Promise<void>;
   toggleFavorite: (connectionId: string) => Promise<void>;
   moveConnection: (connectionId: string, targetFolderId: string | null) => Promise<void>;
+  reset: () => void;
 }
 
 export const useConnectionsStore = create<ConnectionsState>((set, get) => ({
@@ -67,6 +68,15 @@ export const useConnectionsStore = create<ConnectionsState>((set, get) => ({
       // Silently fail; the star just does not toggle
     }
   },
+
+  reset: () => set({
+    ownConnections: [],
+    sharedConnections: [],
+    teamConnections: [],
+    folders: [],
+    teamFolders: [],
+    loading: false,
+  }),
 
   moveConnection: async (connectionId, targetFolderId) => {
     const prevOwn = get().ownConnections;

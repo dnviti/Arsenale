@@ -44,7 +44,7 @@ export async function checkAndCloseInactiveSessions(): Promise<number> {
       where: { status: { in: ['ACTIVE', 'IDLE'] } },
       include: {
         gateway: { select: { id: true, name: true, inactivityTimeoutSeconds: true } },
-        user: { select: { tenant: { select: { defaultSessionTimeoutSeconds: true } } } },
+        user: { select: { tenantMemberships: { where: { isActive: true }, take: 1, include: { tenant: { select: { defaultSessionTimeoutSeconds: true } } } } } },
       },
     });
 
@@ -54,7 +54,7 @@ export async function checkAndCloseInactiveSessions(): Promise<number> {
     for (const session of sessions) {
       const effectiveTimeout =
         session.gateway?.inactivityTimeoutSeconds ??
-        session.user?.tenant?.defaultSessionTimeoutSeconds ??
+        session.user?.tenantMemberships[0]?.tenant.defaultSessionTimeoutSeconds ??
         config.sessionInactivityTimeoutSeconds;
 
       const inactiveMs = now - session.lastActivityAt.getTime();

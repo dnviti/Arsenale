@@ -5,6 +5,7 @@ import { smsLoginRateLimiter } from '../middleware/smsRateLimit.middleware';
 import { loginRateLimiter } from '../middleware/loginRateLimit.middleware';
 import { forgotPasswordLimiter, resetPasswordLimiter, resetSmsLimiter } from '../middleware/resetRateLimit.middleware';
 import { validateCsrf } from '../middleware/csrf.middleware';
+import { authenticate } from '../middleware/auth.middleware';
 
 const registrationRateLimiter = rateLimit({
   windowMs: 60 * 60 * 1000,
@@ -34,5 +35,6 @@ router.post('/reset-password/request-sms', resetSmsLimiter, authController.reque
 router.post('/reset-password/complete', resetPasswordLimiter, authController.completePasswordReset);
 router.post('/refresh', validateCsrf, authController.refresh);
 router.post('/logout', validateCsrf, authController.logout);
+router.post('/switch-tenant', authenticate, validateCsrf, authController.switchTenant);
 
 export default router;

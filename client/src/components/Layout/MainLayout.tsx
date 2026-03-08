@@ -26,6 +26,7 @@ import AuditLogDialog from '../Dialogs/AuditLogDialog';
 import KeychainDialog from '../Dialogs/KeychainDialog';
 import ConnectionAuditLogDialog from '../Dialogs/ConnectionAuditLogDialog';
 
+import TenantSwitcher from './TenantSwitcher';
 import NotificationBell from './NotificationBell';
 import { useAuthStore } from '../../store/authStore';
 import { useVaultStore } from '../../store/vaultStore';
@@ -176,6 +177,7 @@ export default function MainLayout() {
           <Typography variant="h6" sx={{ flexGrow: 0, mr: 2 }}>
             Arsenale
           </Typography>
+          <TenantSwitcher onCreateOrg={() => handleOpenSettings('organization')} />
           <Chip
             icon={vaultUnlocked ? <LockOpenIcon /> : <LockIcon />}
             label={vaultUnlocked ? 'Vault Unlocked' : 'Vault Locked'}

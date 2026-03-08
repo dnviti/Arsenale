@@ -326,13 +326,13 @@ export async function canManageSecret(
 
   // TENANT: ADMIN or OWNER only
   if (secret.scope === 'TENANT' && secret.tenantId) {
-    const user = await prisma.user.findUnique({
-      where: { id: userId },
-      select: { tenantId: true, tenantRole: true },
+    const membership = await prisma.tenantMember.findUnique({
+      where: { tenantId_userId: { tenantId: secret.tenantId, userId } },
+      select: { role: true },
     });
     if (
-      user?.tenantId === secret.tenantId &&
-      (user.tenantRole === 'OWNER' || user.tenantRole === 'ADMIN')
+      membership &&
+      (membership.role === 'OWNER' || membership.role === 'ADMIN')
     ) {
       return { allowed: true, secret, accessType: 'tenant' };
     }

@@ -236,7 +236,7 @@ export async function getTenantAuditLogs(query: TenantAuditLogQuery): Promise<Pa
   const skip = (page - 1) * limit;
 
   const where: Prisma.AuditLogWhereInput = {
-    user: { tenantId: query.tenantId },
+    user: { tenantMemberships: { some: { tenantId: query.tenantId } } },
     ...(query.userId && { userId: query.userId }),
     ...buildCommonWhereClause(query),
   };
@@ -379,11 +379,11 @@ export async function getConnectionAuditUsers(connectionId: string): Promise<Con
 }
 
 export async function getTenantAuditGateways(tenantId: string): Promise<AuditGateway[]> {
-  const userIds = await prisma.user.findMany({
+  const members = await prisma.tenantMember.findMany({
     where: { tenantId },
-    select: { id: true },
+    select: { userId: true },
   });
-  const ids = userIds.map((u) => u.id);
+  const ids = members.map((m) => m.userId);
   if (ids.length === 0) return [];
 
   const rows = await prisma.auditLog.findMany({

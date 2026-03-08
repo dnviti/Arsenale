@@ -133,154 +133,6 @@
     MODIFICARE: client/src/components/Settings/TenantAuditLogSection.tsx
 
 
-------------------------------------------------------------------------------
-[ ] TENANT-096 — Appartenenza utente a organizzazioni multiple con context switching
-------------------------------------------------------------------------------
-  Priorita: ALTA
-  Dipendenze: TENANT-020
-
-  DESCRIZIONE:
-  Attualmente ogni utente puo' appartenere a una sola organizzazione tramite
-  i campi User.tenantId e User.tenantRole. Questo task trasforma il modello
-  in una relazione many-to-many tramite una nuova tabella TenantMember,
-  consentendo agli utenti di essere membri di piu' organizzazioni
-  contemporaneamente e di crearne di proprie indipendentemente dalle
-  appartenenze esistenti. Il JWT continua a trasportare tenantId/tenantRole
-  del tenant attivo; il cambio di contesto avviene tramite un endpoint
-  dedicato che ri-emette i token. La migrazione e' retrocompatibile:
-  prima si crea TenantMember e si popolano i dati, poi si aggiorna il
-  codice, infine si rimuovono le colonne legacy da User.
-
-  DETTAGLI TECNICI:
-
-  1. Schema Prisma — nuovo modello TenantMember:
-    - server/prisma/schema.prisma: aggiungere modello TenantMember con campi
-      id (uuid PK), tenantId, userId, role (TenantRole), isActive (Boolean,
-      default false), joinedAt, updatedAt. Constraint @@unique([tenantId,
-      userId]) e @@index([userId, isActive]). onDelete: Cascade su entrambe
-      le FK.
-    - Rimuovere User.tenantId, User.tenantRole e relazione User.tenant.
-    - Sostituire Tenant.users con Tenant.members (TenantMember[]).
-    - Aggiungere User.tenantMemberships (TenantMember[]).
-    - TenantVaultMember resta separato (distribuzione chiavi vault, non
-      membership).
-
-  2. Migrazione dati:
-    - Migration SQL: CREATE TABLE TenantMember, poi INSERT INTO
-      TenantMember (tenantId, userId, role, isActive) SELECT tenantId,
-      id, tenantRole, true FROM User WHERE tenantId IS NOT NULL.
-    - In fase successiva (dopo validazione deploy): DROP COLUMN tenantId,
-      tenantRole da User.
-
-  3. Backend — Auth Service (server/src/services/auth.service.ts):
-    - issueTokens(): risolvere tenantId/tenantRole dalla riga TenantMember
-      con isActive=true invece che da User.tenantId/tenantRole.
-    - refreshAccessToken(): stessa modifica per il refresh.
-    - Nuova funzione switchTenant(userId, targetTenantId): validare
-      TenantMember esiste, flippare isActive (disattivare vecchio, attivare
-      nuovo), revocare tutti i refresh token esistenti, emettere nuova
-      coppia di token. Ritorna { accessToken, refreshToken, csrfToken, user }.
-    - Login: se nessun TenantMember ha isActive=true, attivare il primo
-      disponibile automaticamente.
-
-  4. Backend — Auth Controller e Routes:
-    - server/src/controllers/auth.controller.ts: aggiungere handler
-      switchTenant con validazione Zod ({ tenantId: z.string().uuid() }).
-    - server/src/routes/auth.routes.ts: aggiungere POST /auth/switch-tenant
-      con middleware authenticate.
-
-  5. Backend — Tenant Service (server/src/services/tenant.service.ts):
-    - createTenant(): creare TenantMember(role=OWNER, isActive=true) invece
-      di aggiornare User.tenantId/tenantRole. Se l'utente ha gia' un tenant
-      attivo, disattivare quello e attivare il nuovo.
-    - inviteUser(): RIMUOVERE il check "user already belongs to another
-      org". Creare TenantMember(isActive=false). Verificare solo che non
-      esista gia' un TenantMember per (tenantId, userId).
-    - removeUser(): eliminare riga TenantMember. Se era isActive, attivare
-      automaticamente un'altra membership (o nessuna).
-    - updateUserRole(): aggiornare TenantMember.role. Conteggio OWNER via
-      TenantMember.count({ tenantId, role: OWNER }).
-    - listTenantUsers(): query su TenantMember con include user.
-    - deleteTenant(): cascade gestisce TenantMember automaticamente.
-    - createUser(): creare User + TenantMember nella stessa transazione.
-    - Nuova: listUserTenants(userId) — elenco di tutte le membership
-      dell'utente con dettagli tenant (id, name, slug, role, isActive).
-
-  6. Backend — Tenant Routes e Controller:
-    - server/src/routes/tenant.routes.ts: aggiungere
-      GET /tenants/mine/all (lista tutti i tenant dell'utente).
-    - server/src/controllers/tenant.controller.ts: handler listMyTenants.
-      Aggiornare createTenant per ri-emettere token dal nuovo
-      TenantMember attivo.
-
-  7. Backend — Servizi impattati:
-    - server/src/services/oauth.service.ts: findOrCreateOAuthUser() deve
-      risolvere tenant attivo da TenantMember invece di User.tenantId.
-    - server/src/services/scheduler.service.ts: query OWNER via
-      TenantMember invece di User.tenantRole.
-    - server/src/services/permission.service.ts: canManageSecret() query
-      ruolo tenant da TenantMember.
-    - server/src/services/vault.service.ts: resolveVaultTtl() e
-      setAutoLockPreference() — lookup tenant via TenantMember attivo.
-
-  8. Middleware tenant — nessuna modifica strutturale:
-    - server/src/middleware/tenant.middleware.ts: requireTenant,
-      requireTenantRole, requireOwnTenant leggono da req.user (JWT).
-      Poiche' il JWT continua a contenere tenantId/tenantRole, funzionano
-      senza modifiche.
-
-  9. Frontend — API layer:
-    - client/src/api/tenant.api.ts: aggiungere listMyTenants() e
-      switchTenant(tenantId). Interfaccia TenantMembership { tenantId,
-      tenantName, tenantSlug, role, isActive }.
-    - client/src/api/auth.api.ts: aggiungere switchTenant(tenantId) se
-      endpoint sotto /auth.
-
-  10. Frontend — Store:
-    - client/src/store/tenantStore.ts: aggiungere stato
-      tenants: TenantMembership[], azione fetchMyTenants(), azione
-      switchTenant(tenantId) che chiama API, riceve nuovi token, aggiorna
-      authStore e ricarica dati tenant/team/connessioni.
-    - client/src/store/uiPreferencesStore.ts: aggiungere chiave
-      lastActiveTenantId per ricordare l'ultimo tenant selezionato.
-
-  11. Frontend — UI components:
-    - TenantSwitcher.tsx (NUOVO): dropdown compatto nell'AppBar che mostra
-      tutti i tenant dell'utente con badge "Attivo", azione switch, e
-      link a "Crea organizzazione".
-    - client/src/components/Layout/MainLayout.tsx: integrare TenantSwitcher
-      nell'AppBar; aggiornare logica "no tenant" per mostrare switcher
-      invece di alert.
-    - client/src/components/Settings/TenantSection.tsx: permettere
-      creazione org anche se l'utente appartiene gia' a un'altra;
-      mostrare lista tenant con indicatore attivo.
-
-  12. Socket — riconnessione su switch:
-    - Al cambio tenant, il client deve disconnettere e riconnettere i
-      socket (SSH namespace, gateway monitor) per aggiornare il contesto
-      JWT nelle room.
-
-  File coinvolti:
-    CREARE:     client/src/components/Layout/TenantSwitcher.tsx
-    MODIFICARE: server/prisma/schema.prisma
-    MODIFICARE: server/src/services/auth.service.ts
-    MODIFICARE: server/src/services/tenant.service.ts
-    MODIFICARE: server/src/services/oauth.service.ts
-    MODIFICARE: server/src/services/scheduler.service.ts
-    MODIFICARE: server/src/services/permission.service.ts
-    MODIFICARE: server/src/services/vault.service.ts
-    MODIFICARE: server/src/controllers/auth.controller.ts
-    MODIFICARE: server/src/controllers/tenant.controller.ts
-    MODIFICARE: server/src/routes/auth.routes.ts
-    MODIFICARE: server/src/routes/tenant.routes.ts
-    MODIFICARE: server/src/types/index.ts
-    MODIFICARE: client/src/api/tenant.api.ts
-    MODIFICARE: client/src/store/tenantStore.ts
-    MODIFICARE: client/src/store/uiPreferencesStore.ts
-    MODIFICARE: client/src/components/Layout/MainLayout.tsx
-    MODIFICARE: client/src/components/Settings/TenantSection.tsx
-
-
 
 
 ================================================================================
@@ -1210,5 +1062,478 @@
   - Le credenziali HCV NON vengono mai persistite in Arsenale — solo cache in-memory
   - Pattern di riferimento: server/src/services/crypto.service.ts (vault sessions)
   - Libreria: node-vault o chiamate fetch dirette (API REST semplice)
+
+
+================================================================================
+  SEZIONE G — IP ADDRESS INTELLIGENCE (Scouted 2026-03-07)
+================================================================================
+
+------------------------------------------------------------------------------
+[ ] GEO-106 — IP geolocation enrichment with MaxMind GeoLite2
+------------------------------------------------------------------------------
+  Priorita: ALTA
+  Dipendenze: Nessuna
+
+  DESCRIZIONE:
+  Enrich every audit log entry with country, city, and coordinates at write
+  time using the MaxMind GeoLite2 local database (.mmdb file). No external
+  API calls, sub-millisecond lookups, zero privacy leakage. Display country
+  flags and location text alongside IPs in all audit UIs. Add country filter.
+
+  DETTAGLI TECNICI:
+  1) npm dependency: maxmind (pure JS reader, no native bindings)
+  2) GeoLite2-City DB (~70MB) downloaded separately (free MaxMind license key),
+     path configured via GEOIP_DB_PATH env var (optional, geo disabled if missing)
+  3) New service: server/src/services/geoip.service.ts — singleton, opens .mmdb
+     at startup, exposes lookup(ip): { country, countryCode, city, lat, lng } | null
+  4) Prisma schema: add geoCountry String?, geoCity String?, geoCoords Float[]
+     to AuditLog model + @@index([geoCountry])
+  5) Modify audit.service.ts log(): call geoip.lookup(ip) synchronously and
+     populate geo fields in prisma.auditLog.create() data
+  6) Extend API response types (server + client) with geoCountry, geoCity, geoCoords
+  7) UI: all 3 audit tables (AuditLogDialog, TenantAuditLogSection,
+     ConnectionAuditLogDialog) — show flag emoji + city next to IP address
+  8) New country filter dropdown populated from GET /audit/countries endpoint
+  9) CSV export: add Country and City columns
+  10) Helper script scripts/update-geodb.sh for downloading/updating the DB file
+
+  NOTE:
+  - Foundational feature — GEO-107, SEC-108 depend on this
+  - Graceful degradation: if .mmdb file not found, geo fields are null, UI unchanged
+  - Private/unresolvable IPs return null (no error)
+
+------------------------------------------------------------------------------
+[ ] GEO-107 — Audit log geolocation map visualization
+------------------------------------------------------------------------------
+  Priorita: BASSA
+  Dipendenze: GEO-106
+
+  DESCRIZIONE:
+  Interactive world map in the Tenant Audit Log showing geographic distribution
+  of login/session events. Markers sized by event count, color-coded by action
+  type. Click a marker to filter the table by that location. Toggle between
+  list and map views.
+
+  DETTAGLI TECNICI:
+  1) npm dependency: react-simple-maps (SVG-based, works offline, no tile server
+     — ideal for self-hosted deployments)
+  2) New component: client/src/components/Audit/AuditGeoMap.tsx — ComposableMap
+     with Geographies (world) and Marker circles, tooltips on hover (city,
+     country, event count, last activity)
+  3) New API endpoint: GET /api/audit/tenant/geo-summary (admin-only) — returns
+     aggregated { points: [{ lat, lng, country, city, count, lastSeen }] },
+     filtered by tenant users, default last 30 days
+  4) TenantAuditLogSection: add ToggleButtonGroup (List/Map icons) above table,
+     persist view mode in uiPreferencesStore (tenantAuditLogViewMode)
+  5) Click-to-filter: clicking a marker sets country filter and switches to
+     table view showing events from that location
+  6) Color-coding: LOGIN events green, LOGIN_FAILURE red, SESSION_START blue
+
+  NOTE:
+  - react-simple-maps bundles a TopoJSON world map (~150KB), no external tiles
+  - Consider lazy-loading the map component to avoid bundle size impact
+
+------------------------------------------------------------------------------
+[ ] SEC-108 — Impossible travel detection with admin alerts
+------------------------------------------------------------------------------
+  Priorita: ALTA
+  Dipendenze: GEO-106
+
+  DESCRIZIONE:
+  Detect when consecutive login events for the same user originate from
+  geographically distant locations in impossibly short timeframes (e.g., Rome
+  then Tokyo in 10 minutes). Automatically notify tenant admins via existing
+  notification system and flag the event in audit log UIs with a warning badge.
+
+  DETTAGLI TECNICI:
+  1) New service: server/src/services/impossibleTravel.service.ts — Haversine
+     distance calculation between two geo coordinate pairs
+  2) Triggered after auth-related audit writes (LOGIN, LOGIN_OAUTH, LOGIN_TOTP,
+     LOGIN_SMS, LOGIN_WEBAUTHN, SESSION_START) as fire-and-forget in audit.service.ts
+  3) Logic: query user's previous auth event with geoCoords, calculate
+     distance_km / time_hours, flag if > threshold (default 900 km/h)
+  4) Configurable via IMPOSSIBLE_TRAVEL_SPEED_KMH env var (default 900)
+  5) Prisma schema: add flags String[] @default([]) to AuditLog model
+  6) On detection: write 'IMPOSSIBLE_TRAVEL' to flags of suspicious entry,
+     create notification for tenant ADMIN/OWNER users via notification.service
+  7) Add IMPOSSIBLE_TRAVEL_DETECTED to NotificationType enum
+  8) UI: warning icon next to action chip for flagged entries in all 3 audit
+     tables + "Show flagged only" toggle filter
+  9) Notification message includes: user name/email, two locations, timeframe
+
+  NOTE:
+  - Haversine formula: a=sin²(dlat/2)+cos(lat1)*cos(lat2)*sin²(dlon/2), d=2R*atan2(sqrt(a),sqrt(1-a))
+  - 900 km/h threshold = faster than commercial aviation
+  - VPN users may trigger false positives — consider a "dismiss" action on notifications
+
+------------------------------------------------------------------------------
+[ ] GUARD-109 — Tenant-level IP allowlist with audit flagging
+------------------------------------------------------------------------------
+  Priorita: MEDIA
+  Dipendenze: Nessuna
+
+  DESCRIZIONE:
+  Allow tenant admins to define trusted IP addresses and CIDR ranges. When
+  enabled, logins from IPs outside the allowlist are either flagged in the
+  audit log (soft mode) or blocked entirely (hard mode). Network-level access
+  control without requiring VPN, complementing GUARD-105 (loopback guard).
+
+  DETTAGLI TECNICI:
+  1) Prisma schema: add to Tenant model — ipAllowlistEnabled Boolean @default(false),
+     ipAllowlistMode String @default("flag") (values: "flag"|"block"),
+     ipAllowlistEntries String[] @default([]) (CIDR strings like "10.0.0.0/8")
+  2) New utility: server/src/utils/ipAllowlist.ts — isIpInCidr(ip, cidr) using
+     Node.js net module (no external dependency), isIpAllowed(ip, entries[])
+  3) Shared function enforceIpAllowlist(tenantId, ip) called in all auth paths:
+     auth.controller.ts, oauth.controller.ts, saml.controller.ts,
+     webauthn.controller.ts, smsMfa.controller.ts
+  4) Block mode: reject with 403 + audit log LOGIN_FAILURE { reason: 'ip_not_allowed' }
+  5) Flag mode: allow login but add 'UNTRUSTED_IP' to audit entry flags array
+     (uses flags field from SEC-108, or details JSON if SEC-108 not yet implemented)
+  6) API endpoints: PUT /api/tenant/ip-allowlist and GET /api/tenant/ip-allowlist
+     (Admin/Owner only), validate entries are valid IP/CIDR
+  7) New Settings section: client/src/components/Settings/IpAllowlistSection.tsx
+     — toggle, mode selector, chip-based CIDR input with validation, "Test IP" button
+  8) Render in SettingsDialog under Organization/Administration tab
+  9) Audit log entry TENANT_UPDATE when allowlist is modified
+
+  NOTE:
+  - Pattern: similar to existing SelfSignupSection.tsx in Settings
+  - CIDR validation: check format with regex + verify base address is valid
+  - Warning banner in UI when switching to block mode explaining consequences
+  - Devolutions Hub offers equivalent functionality
+
+
+================================================================================
+  SEZIONE H — EXTENDED ROLES & EXTERNAL USER MANAGEMENT (Scouted 2026-03-07)
+================================================================================
+
+------------------------------------------------------------------------------
+[ ] ROLE-110 — Ruoli tenant estesi: AUDITOR, CONSULTANT, GUEST, OPERATOR
+------------------------------------------------------------------------------
+  Priorita: ALTA
+  Dipendenze: TENANT-096
+
+  DESCRIZIONE:
+  Aggiungere 4 nuovi valori all'enum TenantRole per coprire personas comuni
+  in ambienti enterprise: OPERATOR (gestione infrastruttura senza admin
+  utenti), CONSULTANT (accesso connessioni assegnate, no creazione),
+  AUDITOR (sola lettura audit log e sessioni), GUEST (sola visualizzazione
+  info connessioni condivise, no connessione). Gerarchia espansa:
+  OWNER(4) > ADMIN(3) > OPERATOR(2) > MEMBER(1) > CONSULTANT(0.5) >
+  AUDITOR(0.3) > GUEST(0.1).
+
+  DETTAGLI TECNICI:
+  1) Schema Prisma (server/prisma/schema.prisma): aggiungere OPERATOR,
+     CONSULTANT, AUDITOR, GUEST all'enum TenantRole. Migrazione con
+     ALTER TYPE "TenantRole" ADD VALUE per ciascuno.
+
+  2) Middleware tenant (server/src/middleware/tenant.middleware.ts):
+     - Espandere ROLE_HIERARCHY con i nuovi valori numerici
+     - Ampliare tipo parametro requireTenantRole per accettare tutti i ruoli
+     - Nuovo middleware requireTenantRoleAny(...roles) per accesso non
+       gerarchico (es. audit routes accettano ADMIN + AUDITOR ma non MEMBER)
+
+  3) Routes (aggiornamento selettivo):
+     - audit.routes.ts: lettura audit -> requireTenantRoleAny('ADMIN', 'OWNER', 'AUDITOR')
+     - session.routes.ts: viste sessioni read-only -> permettere AUDITOR e OPERATOR
+     - gateway.routes.ts: gestione gateway -> requireTenantRole('OPERATOR')
+     - User management routes -> restano requireTenantRole('ADMIN')
+
+  4) Tipi (server/src/types/index.ts): espandere unione AuthPayload.tenantRole
+
+  5) Controller (server/src/controllers/tenant.controller.ts): espandere
+     z.enum negli schemi Zod per invite/create/updateRole
+
+  6) Client — utility ruoli centralizzata:
+     - CREARE client/src/utils/roles.ts: funzioni isAtLeast(role, minRole),
+       canViewAudit(role), canConnect(role), mappe label/colore per ruolo
+     - Aggiornare TenantSection.tsx, InviteDialog.tsx, CreateUserDialog.tsx:
+       nuovi ruoli nei selettori
+     - Aggiornare SettingsDialog.tsx: mostrare tab audit per AUDITOR,
+       tab gateway per OPERATOR
+     - Aggiornare GatewaySection.tsx, KeychainDialog.tsx,
+       ConnectionAuditLogDialog.tsx: usare helpers da roles.ts al posto
+       di isAdmin inline
+
+  File coinvolti:
+    MODIFICARE: server/prisma/schema.prisma
+    MODIFICARE: server/src/types/index.ts
+    MODIFICARE: server/src/middleware/tenant.middleware.ts
+    MODIFICARE: server/src/routes/audit.routes.ts
+    MODIFICARE: server/src/routes/session.routes.ts
+    MODIFICARE: server/src/routes/gateway.routes.ts
+    MODIFICARE: server/src/controllers/tenant.controller.ts
+    MODIFICARE: server/src/controllers/audit.controller.ts
+    CREARE:     client/src/utils/roles.ts
+    MODIFICARE: client/src/components/Settings/TenantSection.tsx
+    MODIFICARE: client/src/components/Settings/GatewaySection.tsx
+    MODIFICARE: client/src/components/Dialogs/InviteDialog.tsx
+    MODIFICARE: client/src/components/Dialogs/CreateUserDialog.tsx
+    MODIFICARE: client/src/components/Dialogs/SettingsDialog.tsx
+    MODIFICARE: client/src/components/Dialogs/KeychainDialog.tsx
+    MODIFICARE: client/src/components/Dialogs/ConnectionAuditLogDialog.tsx
+    MODIFICARE: client/src/api/tenant.api.ts
+
+  NOTE:
+  - Il middleware requireTenantRole usa gia' confronto numerico — i ruoli
+    esistenti (MEMBER, ADMIN, OWNER) richiedono zero modifiche ai route guard
+    correnti, i nuovi ruoli vengono automaticamente esclusi dalle route che
+    richiedono MEMBER come minimo
+  - Devolutions RDM, Termius e JumpCloud offrono ruoli simili (Guest,
+    Consultant/Editor, Auditor) come standard di mercato
+  - Compatibile con TENANT-096 (multi-org): ruolo letto da TenantMember, non User
+
+
+------------------------------------------------------------------------------
+[ ] ROLE-111 — Membership a tempo limitato con scadenza automatica
+------------------------------------------------------------------------------
+  Priorita: ALTA
+  Dipendenze: ROLE-110, TENANT-096
+
+  DESCRIZIONE:
+  Aggiungere campo opzionale expiresAt a TenantMember e TeamMember per
+  consentire accesso a tempo limitato. Uno scheduler revoca automaticamente
+  le membership scadute. Critico per consulenti, contractor e auditor
+  esterni che necessitano accesso temporaneo. Difesa in profondita':
+  la validazione avviene sia a livello JWT (token refresh) sia via
+  scheduler batch (cleanup e audit).
+
+  DETTAGLI TECNICI:
+  1) Schema Prisma (server/prisma/schema.prisma):
+     - Aggiungere expiresAt DateTime? a TenantMember e TeamMember
+     - Aggiungere @@index([expiresAt]) su entrambi
+     - Aggiungere TENANT_MEMBERSHIP_EXPIRED e TEAM_MEMBERSHIP_EXPIRED
+       all'enum AuditAction
+
+  2) Scheduler (server/src/services/scheduler.service.ts):
+     - Nuovo cron job startMembershipExpirationJob() ogni 5 minuti
+     - Logica: query membership con expiresAt <= now() e non gia' disattivate,
+       per TenantMember: disattivare (isActive=false), rimuovere da tutti
+       i team del tenant, log audit TENANT_MEMBERSHIP_EXPIRED
+     - Per TeamMember: rimuovere record, log TEAM_MEMBERSHIP_EXPIRED
+
+  3) Auth service (server/src/services/auth.service.ts):
+     - issueTokens()/refreshAccessToken(): aggiungere filtro
+       expiresAt: { OR: [null, { gt: new Date() }] } alla query
+       TenantMember — previene uso di membership scadute anche prima
+       dell'esecuzione dello scheduler
+
+  4) Tenant service (server/src/services/tenant.service.ts):
+     - inviteUser()/createUser(): accettare parametro opzionale expiresAt
+     - Nuovo: updateMembershipExpiry(tenantId, userId, expiresAt)
+     - listTenantUsers(): includere expiresAt, indicare stato scaduto
+
+  5) Team service (server/src/services/team.service.ts):
+     - addMember(): accettare parametro opzionale expiresAt
+     - Nuovo: updateMemberExpiry(teamId, userId, expiresAt)
+
+  6) Routes/Controllers:
+     - PATCH /tenants/:id/users/:userId/expiry
+     - PATCH /teams/:id/members/:userId/expiry
+     - Espandere schemi Zod invite/create con expiresAt opzionale
+
+  7) Client:
+     - InviteDialog.tsx/CreateUserDialog.tsx: date picker opzionale
+       "Accesso scade il"
+     - TenantSection.tsx: colonna "Scadenza" nella tabella utenti, badge
+       "Scaduto", azione context menu per impostare/rimuovere scadenza
+     - TeamSection.tsx: stesso pattern per membri team
+
+  File coinvolti:
+    MODIFICARE: server/prisma/schema.prisma
+    MODIFICARE: server/src/services/scheduler.service.ts
+    MODIFICARE: server/src/services/auth.service.ts
+    MODIFICARE: server/src/services/tenant.service.ts
+    MODIFICARE: server/src/services/team.service.ts
+    MODIFICARE: server/src/controllers/tenant.controller.ts
+    MODIFICARE: server/src/controllers/team.controller.ts
+    MODIFICARE: server/src/routes/tenant.routes.ts
+    MODIFICARE: server/src/routes/team.routes.ts
+    MODIFICARE: server/src/index.ts
+    MODIFICARE: client/src/components/Dialogs/InviteDialog.tsx
+    MODIFICARE: client/src/components/Dialogs/CreateUserDialog.tsx
+    MODIFICARE: client/src/components/Settings/TenantSection.tsx
+    MODIFICARE: client/src/components/Settings/TeamSection.tsx
+    MODIFICARE: client/src/api/tenant.api.ts
+    MODIFICARE: client/src/api/team.api.ts
+    MODIFICARE: client/src/store/tenantStore.ts
+    MODIFICARE: client/src/store/teamStore.ts
+
+  NOTE:
+  - JumpCloud offre Time-Based Access Control (TBAC) con revoca automatica
+    come feature premium — questa implementazione lo porta in Arsenale
+  - Lo scheduler e' best-effort; la difesa primaria e' nel token refresh
+    (nessun token valido = nessun accesso, anche se lo scheduler e' in ritardo)
+  - Compatibile con il cron framework existente (node-cron in scheduler.service.ts)
+
+
+------------------------------------------------------------------------------
+[ ] ROLE-112 — Flag di permesso granulari con override per utente
+------------------------------------------------------------------------------
+  Priorita: MEDIA
+  Dipendenze: ROLE-110, TENANT-096
+
+  DESCRIZIONE:
+  Aggiungere campo permissionOverrides (JSON) a TenantMember per consentire
+  agli admin di attivare/disattivare capacita' specifiche per singolo utente,
+  oltre a quanto previsto dal ruolo base. Ogni ruolo built-in ha un set
+  predefinito di flag; gli override sovrascrivono singoli flag senza
+  cambiare il ruolo. Es: un MEMBER puo' ottenere canViewAuditLog senza
+  diventare ADMIN, un CONSULTANT puo' perdere canShareConnections.
+
+  Flag iniziali:
+    canConnect, canCreateConnections, canManageConnections,
+    canViewCredentials, canShareConnections, canViewAuditLog,
+    canManageSessions, canManageGateways, canManageUsers,
+    canManageSecrets, canManageTenantSettings
+
+  Default per ruolo:
+    OWNER:      tutti abilitati
+    ADMIN:      tutti tranne canManageTenantSettings
+    OPERATOR:   canConnect, canCreate/Manage Connections/Credentials,
+                canShare, canViewAuditLog, canManageSessions, canManageGateways,
+                canManageSecrets
+    MEMBER:     canConnect, canCreate/Manage Connections/Credentials,
+                canShare, canManageSecrets
+    CONSULTANT: canConnect
+    AUDITOR:    canViewAuditLog, canManageSessions
+    GUEST:      (nessun flag attivo)
+
+  DETTAGLI TECNICI:
+  1) Schema Prisma: aggiungere permissionOverrides Json? a TenantMember.
+     Formato: { "canViewAuditLog": true, "canManageGateways": false }.
+     Solo flag overridden sono salvati; assenti = default del ruolo.
+
+  2) Nuovo servizio (server/src/services/rolePermission.service.ts):
+     - ROLE_DEFAULTS: Record<TenantRole, Record<PermissionFlag, boolean>>
+     - resolvePermissions(role, overrides?): merge default + override
+     - hasPermission(userId, tenantId, flag): fetch TenantMember, risolvi, controlla
+     - Cache in-memory con TTL 30s (Map, chiave userId:tenantId),
+       invalidata su cambio ruolo/override
+
+  3) Middleware (server/src/middleware/tenant.middleware.ts):
+     - Nuovo requirePermission(...flags) — supplementa (non sostituisce)
+       requireTenantRole. Le route possono usare uno o entrambi.
+
+  4) Routes (migrazione graduale delle route chiave):
+     - audit.routes.ts -> requirePermission('canViewAuditLog')
+     - session.routes.ts -> requirePermission('canManageSessions')
+     - gateway.routes.ts -> requirePermission('canManageGateways')
+     - User management -> requirePermission('canManageUsers')
+
+  5) Tenant service/controller/routes:
+     - PATCH /:id/users/:userId/permissions — set override
+     - Validazione: OWNER non puo' avere permessi ridotti; non si puo'
+       concedere un permesso che il concedente non possiede
+
+  6) Client:
+     - CREARE client/src/components/Settings/PermissionEditor.tsx: griglia
+       toggle con indicazione default del ruolo, override evidenziati
+     - Integrare in context menu utente in TenantSection.tsx ("Edit Permissions")
+     - Aggiornare client/src/utils/roles.ts con tipi flag e mapping default
+
+  File coinvolti:
+    MODIFICARE: server/prisma/schema.prisma
+    CREARE:     server/src/services/rolePermission.service.ts
+    MODIFICARE: server/src/middleware/tenant.middleware.ts
+    MODIFICARE: server/src/routes/audit.routes.ts
+    MODIFICARE: server/src/routes/session.routes.ts
+    MODIFICARE: server/src/routes/gateway.routes.ts
+    MODIFICARE: server/src/routes/tenant.routes.ts
+    MODIFICARE: server/src/services/tenant.service.ts
+    MODIFICARE: server/src/controllers/tenant.controller.ts
+    MODIFICARE: server/src/types/index.ts
+    MODIFICARE: client/src/utils/roles.ts
+    CREARE:     client/src/components/Settings/PermissionEditor.tsx
+    MODIFICARE: client/src/components/Settings/TenantSection.tsx
+    MODIFICARE: client/src/api/tenant.api.ts
+    MODIFICARE: client/src/store/tenantStore.ts
+
+  NOTE:
+  - Devolutions RDM offre funzionalita' simile con "section-level permission
+    control" che consente override granulari per utente
+  - Il campo JSON evita esplosione di colonne booleane nello schema e
+    supporta aggiunta di nuovi flag senza migrazioni
+  - La cache 30s bilancia performance e consistenza — un cambio permesso
+    diventa effettivo al massimo in 30 secondi
+
+
+------------------------------------------------------------------------------
+[ ] ROLE-113 — Flusso invito guest esterno con onboarding self-service
+------------------------------------------------------------------------------
+  Priorita: MEDIA
+  Dipendenze: ROLE-110, ROLE-111
+
+  DESCRIZIONE:
+  Flusso semplificato per invitare utenti esterni (consulenti, auditor,
+  vendor) che non hanno ancora un account. L'admin invia un invito via
+  email con link di setup; l'utente esterno crea il proprio account
+  direttamente con il ruolo e la scadenza pre-configurati dall'admin.
+  Distinto dall'invito esistente (che richiede pre-registrazione) e dalla
+  creazione utente admin (che richiede password impostata dall'admin).
+
+  DETTAGLI TECNICI:
+  1) Schema Prisma — nuovo modello TenantInvitation:
+     - id (uuid PK), tenantId, email, role (TenantRole),
+       membershipExpiresAt DateTime? (scadenza membership post-accettazione),
+       inviteToken String @unique, invitedById, acceptedAt DateTime?,
+       inviteExpiresAt DateTime (scadenza link, default 7 giorni), createdAt
+     - Aggiungere TENANT_INVITE_SEND e TENANT_INVITE_ACCEPT all'enum AuditAction
+
+  2) Nuovo servizio (server/src/services/invitation.service.ts):
+     - createInvitation(tenantId, email, role, expiresAt, invitedById):
+       crea TenantInvitation, genera token sicuro, invia email con link setup
+     - acceptInvitation(token, password?): valida token non scaduto; se utente
+       non esiste, crea account con password (vault setup, recovery key);
+       crea TenantMember con ruolo e scadenza; marca invito come accettato
+     - listPendingInvitations(tenantId), revokeInvitation(id)
+
+  3) Routes:
+     - POST /tenants/:id/invitations (ADMIN) — crea invito
+     - GET /tenants/:id/invitations (ADMIN) — lista inviti pendenti
+     - DELETE /tenants/:id/invitations/:invId (ADMIN) — revoca invito
+     - GET /auth/invitation/:token (pubblico) — valida token, ritorna info
+       (nome tenant, ruolo, scadenza, se utente esiste gia')
+     - POST /auth/invitation/:token/accept (pubblico) — accetta invito
+
+  4) Email (server/src/services/email.ts):
+     - Nuovo template sendInvitationEmail(email, tenantName, inviterName,
+       role, url, expiresAt)
+
+  5) Client:
+     - CREARE client/src/pages/InvitationAcceptPage.tsx: mostra info tenant,
+       ruolo, scadenza; form registrazione se non loggato, conferma se loggato
+       (nuova route /invite/:token — giustificata perche' acceduta da
+       utenti non autenticati via link email)
+     - CREARE client/src/components/Dialogs/GuestInviteDialog.tsx: selettore
+       ruolo (CONSULTANT, AUDITOR, GUEST, MEMBER), date picker scadenza
+       obbligatorio (default 30 giorni), input email
+     - TenantSection.tsx: sezione "Inviti Pendenti" con azione revoca
+     - App.tsx: aggiungere route /invite/:token
+
+  File coinvolti:
+    MODIFICARE: server/prisma/schema.prisma
+    CREARE:     server/src/services/invitation.service.ts
+    MODIFICARE: server/src/routes/tenant.routes.ts
+    MODIFICARE: server/src/routes/auth.routes.ts
+    MODIFICARE: server/src/controllers/tenant.controller.ts
+    MODIFICARE: server/src/controllers/auth.controller.ts
+    MODIFICARE: server/src/services/email.ts
+    CREARE:     client/src/pages/InvitationAcceptPage.tsx
+    CREARE:     client/src/components/Dialogs/GuestInviteDialog.tsx
+    MODIFICARE: client/src/components/Settings/TenantSection.tsx
+    MODIFICARE: client/src/api/tenant.api.ts
+    MODIFICARE: client/src/store/tenantStore.ts
+    MODIFICARE: client/src/App.tsx
+
+  NOTE:
+  - Ordine implementazione: ROLE-110 -> ROLE-111 -> ROLE-112 -> ROLE-113
+  - L'invito guest e' l'unico caso che giustifica una nuova route pagina
+    (accesso da utenti non autenticati via email)
+  - Il token di invito e' distinto dall'ExternalSecretShare gia' esistente:
+    quello condivide secrets senza login, questo crea account con membership
+  - Modello ispirato a JumpCloud temporary access e Devolutions guest invite
+
 
 ================================================================================
