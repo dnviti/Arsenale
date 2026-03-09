@@ -10,6 +10,27 @@
 ================================================================================
 
 ------------------------------------------------------------------------------
+[x] REC-115 — Fix percorso volume condiviso per registrazioni Guacamole
+------------------------------------------------------------------------------
+  Priorita: ALTA
+  Dipendenze: REC-070
+  COMPLETATO: Fixed recording path translation to always convert config.recordingPath to /recordings for guacd tokens (both RDP and VNC), not just for managed gateways. Updated compose.dev.yml with recording volume mount and pinned guacd image. Clarified .env.example RECORDING_PATH documentation for production vs dev.
+
+------------------------------------------------------------------------------
+[x] REC-119 — Fix registrazione RDP schermo nero su Windows (disable-gfx non applicato)
+------------------------------------------------------------------------------
+  Priorita: ALTA
+  Dipendenze: REC-118
+  COMPLETATO: Pinned guacd image to 1.6.0 (compose.yml + config.ts default), added disable-glyph-caching/disable-bitmap-caching/disable-offscreen-caching when recording is active in rdp.service.ts, added debug logging for recording settings in session.controller.ts, documented ORCHESTRATOR_GUACD_IMAGE minimum version in .env.example.
+
+------------------------------------------------------------------------------
+[x] REC-118 — Fix layout player registrazioni SSH e playback RDP
+------------------------------------------------------------------------------
+  Priorita: ALTA
+  Dipendenze: REC-070
+  COMPLETATO: Fixed SSH recording player layout (removed FitAddon, added scrollback/convertEol, ResizeObserver-based responsive sizing, xterm-viewport background override), RDP recording server settings (recording-exclude-output/mouse, disable-gfx, force reconnect resize method when recording), and RDP playback scaling (dual-axis Math.min scale, 0-dimension guard, requestAnimationFrame deferred scale, flexbox centering instead of margin:auto).
+
+------------------------------------------------------------------------------
 [x] OAUTH-116 — Fix: route catch-all OAuth intercetta verify-email
 ------------------------------------------------------------------------------
   Priorita: ALTA

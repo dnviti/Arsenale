@@ -250,6 +250,30 @@ async function main() {
         }
       });
 
+      // Log configured guacd image version — guacamole-lite doesn't expose
+      // the actual guacd version from the handshake, so we log the configured
+      // image to help operators verify disable-gfx support (requires >= 1.6.0,
+      // GUACAMOLE-377).
+      const guacdImage = config.orchestratorGuacdImage;
+      const versionMatch = guacdImage.match(/:(\d+\.\d+\.\d+)/);
+      if (versionMatch) {
+        const [major, minor] = versionMatch[1].split('.').map(Number);
+        const meetsMinimum = major > 1 || (major === 1 && minor >= 6);
+        if (!meetsMinimum) {
+          logger.warn(
+            `[guacd] Configured image ${guacdImage} is below minimum version 1.6.0 — ` +
+            `disable-gfx will not work and RDP recordings may show a black screen`
+          );
+        } else {
+          logger.info(`[guacd] Configured image: ${guacdImage} (disable-gfx supported)`);
+        }
+      } else {
+        logger.warn(
+          `[guacd] Could not determine version from image "${guacdImage}" — ` +
+          `ensure guacd >= 1.6.0 for RDP recording support (disable-gfx)`
+        );
+      }
+
       logger.info(
         `Guacamole WebSocket server listening on port ${config.guacamoleWsPort}`
       );

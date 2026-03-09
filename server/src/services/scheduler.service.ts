@@ -1,4 +1,4 @@
-import cron from 'node-cron';
+import cron, { type ScheduledTask } from 'node-cron';
 import { config } from '../config';
 import { logger } from '../utils/logger';
 import prisma from '../lib/prisma';
@@ -6,7 +6,7 @@ import * as sshKeyService from './sshkey.service';
 import * as gatewayService from './gateway.service';
 import * as auditService from './audit.service';
 
-let rotationTask: cron.ScheduledTask | null = null;
+let rotationTask: ScheduledTask | null = null;
 
 export function startKeyRotationJob(): void {
   const cronExpr = config.keyRotationCron;

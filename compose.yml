@@ -21,7 +21,7 @@ services:
       - arsenale_net
 
   guacd:
-    image: guacamole/guacd
+    image: ${ORCHESTRATOR_GUACD_IMAGE:-guacamole/guacd:1.6.0}
     security_opt:
       - label:disable
     volumes:

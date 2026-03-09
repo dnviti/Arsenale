@@ -1,4 +1,5 @@
 import { Response, NextFunction } from 'express';
+import { readFile, stat } from 'fs/promises';
 import { z } from 'zod';
 import { AuthRequest } from '../types';
 import * as recordingService from '../services/recording.service';
@@ -68,6 +69,96 @@ export async function streamRecording(req: AuthRequest, res: Response, next: Nex
   } catch (err) {
     next(err);
   }
+}
+
+/**
+ * Parse a .guac recording file and return instruction statistics.
+ * Useful for diagnosing black-screen recording issues.
+ */
+export async function analyzeRecording(req: AuthRequest, res: Response, next: NextFunction) {
+  try {
+    const recording = await recordingService.getRecording(req.params.id as string, req.user!.userId);
+    if (!recording) throw new AppError('Recording not found', 404);
+    if (recording.format !== 'guac') throw new AppError('Only .guac recordings can be analyzed', 400);
+
+    const fileStat = await stat(recording.filePath).catch(() => null);
+    if (!fileStat) throw new AppError('Recording file not found on disk', 404);
+
+    // Read the file (limit to 10MB to avoid memory issues)
+    const maxBytes = 10 * 1024 * 1024;
+    const buf = await readFile(recording.filePath);
+    const content = buf.slice(0, maxBytes).toString('ascii');
+
+    const instructions: Record<string, number> = {};
+    let displayWidth = 0;
+    let displayHeight = 0;
+    let hasLayer0Image = false;
+
+    // Parse guacamole instructions: LENGTH.OPCODE,LENGTH.ARG1,...;
+    let pos = 0;
+    while (pos < content.length) {
+      // Find instruction end
+      const semi = content.indexOf(';', pos);
+      if (semi === -1) break;
+      const raw = content.substring(pos, semi + 1);
+      pos = semi + 1;
+
+      // Extract opcode (first element: LENGTH.OPCODE)
+      const dotIdx = raw.indexOf('.');
+      if (dotIdx === -1) continue;
+      const opcodeLen = parseInt(raw.substring(0, dotIdx), 10);
+      if (isNaN(opcodeLen)) continue;
+      const opcode = raw.substring(dotIdx + 1, dotIdx + 1 + opcodeLen);
+
+      instructions[opcode] = (instructions[opcode] || 0) + 1;
+
+      // Extract display dimensions from 'size' instruction for layer 0
+      if (opcode === 'size') {
+        const parts = parseGuacArgs(raw);
+        if (parts.length >= 3 && parts[0] === '0') {
+          displayWidth = parseInt(parts[1], 10) || displayWidth;
+          displayHeight = parseInt(parts[2], 10) || displayHeight;
+        }
+      }
+
+      // Check if any 'img' instruction targets layer 0
+      if (opcode === 'img' && !hasLayer0Image) {
+        const parts = parseGuacArgs(raw);
+        if (parts.length >= 2 && parts[1] === '0') {
+          hasLayer0Image = true;
+        }
+      }
+    }
+
+    res.json({
+      fileSize: fileStat.size,
+      truncated: buf.length > maxBytes,
+      instructions,
+      syncCount: instructions['sync'] || 0,
+      displayWidth,
+      displayHeight,
+      hasLayer0Image,
+    });
+  } catch (err) {
+    next(err);
+  }
+}
+
+/** Extract argument values from a guacamole instruction string. */
+function parseGuacArgs(instruction: string): string[] {
+  const args: string[] = [];
+  let pos = 0;
+  while (pos < instruction.length) {
+    const dotIdx = instruction.indexOf('.', pos);
+    if (dotIdx === -1) break;
+    const len = parseInt(instruction.substring(pos, dotIdx), 10);
+    if (isNaN(len)) break;
+    const value = instruction.substring(dotIdx + 1, dotIdx + 1 + len);
+    args.push(value);
+    pos = dotIdx + 1 + len + 1; // skip past value + comma/semicolon
+  }
+  // First arg is the opcode; return the rest
+  return args.slice(1);
 }
 
 export async function deleteRecording(req: AuthRequest, res: Response, next: NextFunction) {

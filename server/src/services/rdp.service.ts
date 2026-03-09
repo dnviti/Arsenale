@@ -124,8 +124,14 @@ export function generateGuacamoleToken(params: RdpConnectionParams): string {
     settings['recording-exclude-mouse'] = 'false';
     // Force legacy graphics pipeline — guacd cannot record the GFX/AVC444
     // channel used by modern Windows, resulting in a black screen recording.
+    // Requires guacd >= 1.6.0 (GUACAMOLE-377).
     settings['disable-gfx'] = 'true';
     settings['enable-wallpaper'] = 'true';
+    // Additional caching disables to force the classic graphics pipeline
+    // even when disable-gfx alone is insufficient (older RDP servers/drivers).
+    settings['disable-glyph-caching'] = 'true';
+    settings['disable-bitmap-caching'] = 'true';
+    settings['disable-offscreen-caching'] = 'true';
   }
 
   if (params.enableDrive && params.drivePath) {

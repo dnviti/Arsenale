@@ -9,50 +9,8 @@
   SEZIONE A — TASK RICHIESTI (Core Features)
 ================================================================================
 
-------------------------------------------------------------------------------
-[~] REC-118 — Fix layout player registrazioni SSH e playback RDP
-------------------------------------------------------------------------------
-  Priorita: ALTA
-  Dipendenze: REC-070
 
-  DESCRIZIONE:
-  Il player di registrazione presenta tre problemi critici:
-  1) SSH: il contenuto del terminale viene renderizzato in fondo al viewport
-     invece che dall'alto, con enorme spazio vuoto sopra — causato da FitAddon
-     che sovrascrive le dimensioni originali della registrazione.
-  2) SSH: impossibile scrollare l'output — overflow:hidden blocca lo scroll.
-  3) RDP: si vede solo il cursore del mouse su sfondo nero, nessun contenuto
-     desktop — probabilmente causato da resize-method 'display-update' che
-     impedisce a guacd di catturare il framebuffer iniziale nella registrazione.
 
-  DETTAGLI TECNICI:
-  Fix SSH (client-side):
-    - Rimuovere completamente FitAddon da SshPlayer — il terminale deve usare
-      le dimensioni originali dell'header asciicast (cols/rows)
-    - Aggiungere scrollback: 5000 e convertEol: true alle opzioni Terminal
-    - Cambiare container da overflow:'hidden' a overflow:'auto' con
-      alignItems:'flex-start' per allineare il terminale in alto
-    - Override CSS .xterm-viewport background per coerenza visiva
-
-  Fix RDP recording (server-side):
-    - Aggiungere esplicitamente recording-exclude-output:'false' e
-      recording-exclude-mouse:'false' nei settings guacd (rdp.service.ts
-      e vnc.service.ts)
-    - Forzare resizeMethod a 'reconnect' quando recording e' attivo
-      (session.controller.ts) — display-update puo' lasciare la registrazione
-      senza contenuto grafico iniziale
-
-  Fix RDP playback (client-side):
-    - Scalare il display Guacamole per width E height (attualmente solo width)
-    - Gestire il caso in cui le dimensioni display sono 0 al momento di onload
-    - Rimuovere regola CSS margin:auto che interferisce con i layer Guacamole
-
-  File coinvolti:
-    MODIFICARE: client/src/components/Recording/SshPlayer.tsx
-    MODIFICARE: client/src/components/Recording/GuacPlayer.tsx
-    MODIFICARE: server/src/services/rdp.service.ts
-    MODIFICARE: server/src/services/vnc.service.ts
-    MODIFICARE: server/src/controllers/session.controller.ts
 
 
 ================================================================================

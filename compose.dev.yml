@@ -19,7 +19,9 @@ services:
       retries: 5
 
   # guacd:
-  #   image: guacamole/guacd
+  #   image: guacamole/guacd:1.6.0
+  #   volumes:
+  #     - ${RECORDING_PATH:-./data/recordings}:/recordings
   #   networks:
   #     - arsenale-dev
   #   restart: unless-stopped

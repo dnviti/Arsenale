@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState, useCallback } from 'react';
-import Guacamole from 'guacamole-common-js';
+import * as Guacamole from '@glokon/guacamole-common-js';
 import { Box, IconButton, Slider, Typography, Stack, Select, MenuItem } from '@mui/material';
 import PlayArrowIcon from '@mui/icons-material/PlayArrow';
 import PauseIcon from '@mui/icons-material/Pause';
@@ -63,7 +63,7 @@ export default function GuacPlayer({ recordingId, onError }: GuacPlayerProps) {
 
     recording.onplay = () => setPlaying(true);
     recording.onpause = () => setPlaying(false);
-    recording.onseek = (pos: number) => setCurrentTime(pos / 1000);
+    recording.onseek = (pos) => setCurrentTime(pos / 1000);
 
     recording.onerror = (message: string) => {
       onError?.(message || 'Failed to load recording');
@@ -97,11 +97,24 @@ export default function GuacPlayer({ recordingId, onError }: GuacPlayerProps) {
     });
   }, []);
 
+  // Speed control: at non-1x speeds, drive playback via periodic seek
+  // (guacamole-common-js 1.6.0 removed the playbackSpeed property)
   useEffect(() => {
-    if (recordingRef.current && loaded) {
-      recordingRef.current.playbackSpeed = speed;
-    }
-  }, [speed, loaded]);
+    if (!playing || speed === 1 || !recordingRef.current) return;
+    const recording = recordingRef.current;
+    const stepMs = 100;
+    const interval = setInterval(() => {
+      const pos = recording.getPosition();
+      const dur = recording.getDuration();
+      const advance = pos + stepMs * speed;
+      if (advance < dur) {
+        recording.seek(advance);
+      } else {
+        recording.seek(dur);
+      }
+    }, stepMs);
+    return () => clearInterval(interval);
+  }, [playing, speed]);
 
   // Periodic time update during playback
   useEffect(() => {

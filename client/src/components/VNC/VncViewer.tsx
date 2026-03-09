@@ -1,6 +1,6 @@
 import { useEffect, useRef, useState } from 'react';
 import { Box, CircularProgress, Typography, Alert } from '@mui/material';
-import Guacamole from 'guacamole-common-js';
+import * as Guacamole from '@glokon/guacamole-common-js';
 import { io } from 'socket.io-client';
 import api from '../../api/client';
 import { useAuthStore } from '../../store/authStore';
@@ -153,10 +153,11 @@ export default function VncViewer({ connectionId, tabId: _tabId, isActive = true
         display.addEventListener('contextmenu', preventContextMenu);
 
         const mouse = new Guacamole.Mouse(display);
-        mouse.onEach(['mousedown', 'mouseup', 'mousemove'], (e: Guacamole.Mouse.Event) => {
+        mouse.onEach(['mousedown', 'mouseup', 'mousemove'], (e) => {
+          const mouseEvent = e as Guacamole.Mouse.Event;
           if (activeRef.current) {
-            e.preventDefault();
-            client.sendMouseState(e.state);
+            mouseEvent.preventDefault();
+            client.sendMouseState(mouseEvent.state);
           }
         });
 

@@ -154,10 +154,8 @@ export async function createRdpSession(req: AuthRequest, res: Response, next: Ne
         // Make dirs writable by guacd container (runs as different UID)
         await chmod(recDir, 0o777);
         await chmod(path.dirname(recDir), 0o777);
-        // guacd inside a managed container sees /recordings/...; server sees config.recordingPath/...
-        const guacdPath = gateway?.isManaged
-          ? recFilePath.replace(config.recordingPath, '/recordings')
-          : recFilePath;
+        // All guacd instances mount recordings at /recordings (compose volume or managed bind mount)
+        const guacdPath = recFilePath.replace(config.recordingPath, '/recordings');
         rdpRecording = { recordingPath: path.dirname(guacdPath), recordingName: path.basename(guacdPath) };
         rdpRecordingId = await startRecording({
           userId: req.user!.userId,
@@ -169,6 +167,7 @@ export async function createRdpSession(req: AuthRequest, res: Response, next: Ne
           height: mergedRdp.height,
         });
         logger.info(`[recording] Started RDP recording ${rdpRecordingId} for connection ${connectionId} (gateway: ${recGatewayDir})`);
+        logger.debug(`[recording] RDP recording settings: resizeMethod=${mergedRdp.resizeMethod}, width=${mergedRdp.width}, height=${mergedRdp.height}, path=${rdpRecording?.recordingPath}/${rdpRecording?.recordingName}, guacdImage=${config.orchestratorGuacdImage}, disable-gfx=true`);
       } catch (recErr) {
         logger.error('Failed to start RDP recording:', recErr);
       }
@@ -325,9 +324,8 @@ export async function createVncSession(req: AuthRequest, res: Response, next: Ne
         // Make dirs writable by guacd container (runs as different UID)
         await chmod(recDir, 0o777);
         await chmod(path.dirname(recDir), 0o777);
-        const guacdPath = gateway?.isManaged
-          ? recFilePath.replace(config.recordingPath, '/recordings')
-          : recFilePath;
+        // All guacd instances mount recordings at /recordings (compose volume or managed bind mount)
+        const guacdPath = recFilePath.replace(config.recordingPath, '/recordings');
         vncRecording = { recordingPath: path.dirname(guacdPath), recordingName: path.basename(guacdPath) };
         vncRecordingId = await startRecording({
           userId: req.user!.userId,

@@ -1,7 +1,7 @@
 import { useEffect, useRef, useState, useMemo } from 'react';
 import { Box, CircularProgress, Typography, Alert } from '@mui/material';
 import { FolderOpen as FolderOpenIcon } from '@mui/icons-material';
-import Guacamole from 'guacamole-common-js';
+import * as Guacamole from '@glokon/guacamole-common-js';
 import { io } from 'socket.io-client';
 import api from '../../api/client';
 import { useAuthStore } from '../../store/authStore';
@@ -190,10 +190,11 @@ export default function RdpViewer({ connectionId, tabId: _tabId, isActive = true
 
         // Mouse events — only forward when this viewer is active
         const mouse = new Guacamole.Mouse(display);
-        mouse.onEach(['mousedown', 'mouseup', 'mousemove'], (e: Guacamole.Mouse.Event) => {
+        mouse.onEach(['mousedown', 'mouseup', 'mousemove'], (e) => {
+          const mouseEvent = e as Guacamole.Mouse.Event;
           if (activeRef.current) {
-            e.preventDefault();
-            client.sendMouseState(e.state);
+            mouseEvent.preventDefault();
+            client.sendMouseState(mouseEvent.state);
           }
         });
 

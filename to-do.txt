@@ -12,55 +12,79 @@
 
 
 
+
+
 ------------------------------------------------------------------------------
-[ ] REC-115 — Fix percorso volume condiviso per registrazioni Guacamole
+[ ] REC-171 — Conversione registrazioni Guacamole in video con guacenc
 ------------------------------------------------------------------------------
-  Priorita: ALTA
-  Dipendenze: REC-070
+  Priorita: MEDIA
+  Dipendenze: REC-070, REC-115
 
   DESCRIZIONE:
-  Le registrazioni delle sessioni RDP/VNC falliscono sistematicamente perche'
-  il server non riesce a trovare i file .guac scritti da guacd. Il problema
-  e' un disallineamento tra il percorso configurato nel server
-  (config.recordingPath = /app/data/recordings o path locale in dev) e il
-  punto di mount del volume condiviso (arsenale_recordings montato su
-  /recordings). Quando la sessione termina, completeGuacRecording() tenta
-  di fare stat() sul percorso salvato nel DB, che non corrisponde al mount
-  del volume Docker. Risultato: tutte le registrazioni vengono marcate ERROR.
+  Le registrazioni RDP e VNC vengono salvate in formato .guac (formato binario
+  nativo di Guacamole), riproducibile solo tramite il player guacamole-common-js.
+  Per consentire il download come file video standard (MP4), riproducibile su
+  qualsiasi lettore multimediale, si implementa la conversione on-demand
+  server-side tramite guacenc in un container sidecar dedicato.
+  guacenc converte i file .guac in video MPEG-4 usando le librerie FFmpeg
+  (libavcodec, libavutil, libswscale). La conversione avviene solo quando
+  l'utente richiede il download video, per risparmiare spazio disco e CPU.
 
   DETTAGLI TECNICI:
-  Il flusso attuale presenta il seguente disallineamento:
-    1. buildRecordingPath() genera: config.recordingPath + /gateway/user/file.guac
-    2. Per container managed, session.controller sostituisce config.recordingPath
-       con /recordings per il token guacd (guacdPath)
-    3. guacd scrive in /recordings/... (volume condiviso)
-    4. Il DB salva il percorso server-side (config.recordingPath/...)
-    5. completeGuacRecording() chiama fsp.stat(recording.filePath) → FILE NOT FOUND
 
-  Soluzione proposta — allineare config.recordingPath al mount del volume:
-    - config.ts: impostare recordingPath di default su /recordings (match con
-      compose.yml volume mount) oppure aggiungere una variabile separata
-      RECORDING_VOLUME_PATH per il percorso interno al container
-    - recording.service.ts: assicurarsi che buildRecordingPath() e tutte le
-      operazioni su file (stat, createReadStream, unlink) usino il percorso
-      corretto del volume condiviso
-    - session.controller.ts: rimuovere o semplificare la logica di
-      sostituzione del percorso (config.recordingPath → /recordings) dato
-      che saranno gia' allineati
-    - compose.yml: verificare che il volume arsenale_recordings sia montato
-      in modo coerente su server e guacd
-    - Gestire il caso dev (senza Docker): quando il server gira localmente,
-      recordingPath deve puntare a una directory locale accessibile sia dal
-      server che da guacd (bind mount su compose.dev)
+  1. Docker — Container sidecar guacenc:
+     - Creare Dockerfile basato su debian/ubuntu con guacamole-server (solo
+       guacenc) e dipendenze FFmpeg (libavcodec-dev, libavutil-dev,
+       libswscale-dev).
+     - Il container monta lo stesso volume arsenale_recordings in /recordings.
+     - Esporre un piccolo HTTP server (o usare un semplice script invocato
+       via docker exec) per accettare richieste di conversione.
+     - Approccio consigliato: container con un microservizio HTTP minimale
+       (es. bash + socat, o un piccolo script Node/Python) che ascolta su
+       una porta interna (es. 3003) e accetta:
+         POST /convert { filePath, width, height }
+       Esegue: guacenc -s WxH <filePath>
+       Risponde con il path del file .m4v generato.
+     - In alternativa, il container puo' essere invocato dal server Node.js
+       via Docker API/SDK o child_process docker exec.
+
+  2. Backend — Nuovo endpoint di conversione ed export video:
+     - Route: GET /api/recordings/:id/video
+     - Controller: aggiungere metodo exportVideo() in recording.controller.ts
+     - Service: aggiungere funzione convertToVideo(recordingId) che:
+       a) Verifica che il recording esista, sia COMPLETE e formato 'guac'
+       b) Controlla se il file .m4v convertito esiste gia' (cache)
+       c) Se non esiste, invia richiesta al sidecar guacenc per la
+          conversione (HTTP call o docker exec)
+       d) Attende completamento (con timeout configurabile, default 120s)
+       e) Verifica la creazione del file .m4v e lo streamma in risposta
+          con Content-Type: video/mp4 e Content-Disposition: attachment
+     - Configurazione in config.ts:
+       GUACENC_SERVICE_URL (default: 'http://guacenc:3003')
+       GUACENC_TIMEOUT_MS (default: 120000)
+
+  3. Frontend — Pulsante "Download Video" nella UI registrazioni:
+     - In RecordingsDialog.tsx aggiungere azione "Download MP4" per le
+       registrazioni con formato 'guac' (RDP/VNC).
+     - Indicatore di caricamento durante la conversione (puo' richiedere
+       diversi secondi per registrazioni lunghe).
+     - Aggiungere funzione exportRecordingVideo(id) in recordings.api.ts
+       che scarica il blob e attiva il download nel browser.
+
+  4. Cleanup — Gestione file .m4v convertiti:
+     - I file .m4v vanno inclusi nel cleanup periodico
+       (cleanupExpiredRecordings) insieme ai file .guac.
 
   File coinvolti:
-    MODIFICARE: server/src/config.ts
-    MODIFICARE: server/src/services/recording.service.ts
-    MODIFICARE: server/src/controllers/session.controller.ts
+    CREARE:     docker/guacenc/Dockerfile
+    CREARE:     docker/guacenc/server.sh (o server.py — microservizio conversione)
     MODIFICARE: compose.yml
-    MODIFICARE: server/src/services/managedGateway.service.ts
-    MODIFICARE: .env.example
-
+    MODIFICARE: server/src/config.ts
+    MODIFICARE: server/src/routes/recording.routes.ts
+    MODIFICARE: server/src/controllers/recording.controller.ts
+    MODIFICARE: server/src/services/recording.service.ts
+    MODIFICARE: client/src/components/Recording/RecordingsDialog.tsx
+    MODIFICARE: client/src/api/recordings.api.ts
 
 
 ================================================================================
