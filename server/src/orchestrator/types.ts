@@ -37,6 +37,10 @@ export interface ContainerConfig {
   /** Kubernetes namespace override. When set, the K8s provider deploys into
    *  this namespace (creating it if needed) instead of the global default. */
   namespace?: string;
+  /** Host bind mounts (e.g., shared recording volume). Format: 'hostPath:containerPath' */
+  binds?: string[];
+  /** Container user (e.g., '0:0'). Useful in rootless Podman to map container UID 0 to host user. */
+  user?: string;
 }
 
 export interface ContainerInfo {

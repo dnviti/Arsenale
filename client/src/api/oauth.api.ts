@@ -37,7 +37,7 @@ export async function setupVaultPassword(vaultPassword: string): Promise<void> {
 }
 
 export function initiateOAuthLogin(provider: string): void {
-  window.location.href = `/api/auth/${provider.toLowerCase()}`;
+  window.location.href = `/api/auth/oauth/${provider.toLowerCase()}`;
 }
 
 export function initiateOAuthLink(provider: string): void {

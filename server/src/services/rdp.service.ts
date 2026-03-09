@@ -2,6 +2,11 @@ import crypto from 'crypto';
 import { config } from '../config';
 import type { RdpSettings } from '../types';
 
+export interface RecordingParams {
+  recordingPath: string;
+  recordingName: string;
+}
+
 export interface RdpConnectionParams {
   host: string;
   port: number;
@@ -13,10 +18,12 @@ export interface RdpConnectionParams {
   rdpSettings?: Partial<RdpSettings>;
   guacdHost?: string;
   guacdPort?: number;
+  recording?: RecordingParams;
   metadata?: {
     userId: string;
     connectionId: string;
     ipAddress?: string;
+    recordingId?: string;
   };
 }
 
@@ -108,6 +115,12 @@ export function generateGuacamoleToken(params: RdpConnectionParams): string {
   if (rdp.serverLayout) settings['server-layout'] = rdp.serverLayout;
   if (rdp.console) settings.console = 'true';
   if (rdp.timezone) settings.timezone = rdp.timezone;
+
+  if (params.recording) {
+    settings['recording-path'] = params.recording.recordingPath;
+    settings['recording-name'] = params.recording.recordingName;
+    settings['create-recording-path'] = 'true';
+  }
 
   if (params.enableDrive && params.drivePath) {
     settings['enable-drive'] = 'true';

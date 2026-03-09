@@ -10,6 +10,13 @@
 ================================================================================
 
 ------------------------------------------------------------------------------
+[x] OAUTH-116 — Fix: route catch-all OAuth intercetta verify-email
+------------------------------------------------------------------------------
+  Priorita: ALTA
+  Dipendenze: Nessuna
+  COMPLETATO: Fixed OAuth catch-all /:provider route intercepting verify-email and other auth GET routes. Prefixed dynamic provider routes with /oauth/ in oauth.routes.ts, updated client initiateOAuthLogin redirect URL, and updated default callback URLs in config.ts and .env.example for google, microsoft, github, and oidc providers.
+
+------------------------------------------------------------------------------
 [x] AUDIT-082 — Redesign UI audit log con righe espandibili e ricerca avanzata
 ------------------------------------------------------------------------------
   Priorita: MEDIA
@@ -317,6 +324,13 @@
 ================================================================================
   SEZIONE B — TASK AGGIUNTIVI SUGGERITI
 ================================================================================
+
+------------------------------------------------------------------------------
+[x] REC-070 — Registrazione e riproduzione sessioni SSH e RDP
+------------------------------------------------------------------------------
+  Priorita: MEDIA
+  Dipendenze: ORCH-060 (session tracking)
+  COMPLETATO: Implemented SSH and RDP/VNC session recording. SSH sessions captured as asciicast v2 format (.cast) via AsciicastWriter in ssh.handler.ts. RDP/VNC sessions recorded natively by guacd via recording-path/recording-name token parameters. Created SessionRecording Prisma model, recording service (start/complete/list/delete/stream), REST API routes, RecordingsDialog with SshPlayer (xterm.js replay with play/pause/seek/speed) and GuacPlayer components. Migration 20260309102635_rec_070.
 
 ------------------------------------------------------------------------------
 [x] DOCK-099 — Rimuovere esposizione porta 80 dal container client nginx

@@ -87,6 +87,13 @@ function requireMasterKey(userId: string): Buffer {
   return key;
 }
 
+export async function getDefaultGateway(tenantId: string, type: GatewayType) {
+  return prisma.gateway.findFirst({
+    where: { tenantId, type, isDefault: true },
+    select: { id: true, type: true, host: true, port: true, isManaged: true, lbStrategy: true },
+  });
+}
+
 export async function listGateways(tenantId: string) {
   const gateways = await prisma.gateway.findMany({
     where: { tenantId },

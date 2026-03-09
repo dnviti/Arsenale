@@ -23,7 +23,7 @@ RUN printf '#!/bin/sh\nexec node /app/dist/cli.js "$@"\n' > /usr/local/bin/arsen
 RUN addgroup -S appgroup && adduser -S appuser -G appgroup \
     && chown -R appuser:appgroup /app
 
-RUN mkdir -p /guacd-drive && chmod 1777 /guacd-drive
+RUN mkdir -p /guacd-drive /recordings && chmod 1777 /guacd-drive /recordings
 
 USER appuser
 

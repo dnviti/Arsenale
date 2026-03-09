@@ -26,6 +26,7 @@ services:
       - label:disable
     volumes:
       - arsenale_drive:/guacd-drive
+      - arsenale_recordings:/recordings
     restart: unless-stopped
     healthcheck:
       test: ["CMD-SHELL", "nc -z localhost 4822 || exit 1"]
@@ -59,6 +60,7 @@ services:
       - .env.prod
     volumes:
       - arsenale_drive:/guacd-drive
+      - arsenale_recordings:/recordings
       - /run/user/1000/podman/podman.sock:/run/user/1000/podman/podman.sock
     restart: unless-stopped
     networks:
@@ -111,6 +113,7 @@ services:
 volumes:
   pgdata:
   arsenale_drive:
+  arsenale_recordings:
 
 networks:
   arsenale_net:

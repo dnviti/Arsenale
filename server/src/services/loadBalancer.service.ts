@@ -7,6 +7,7 @@ export interface SelectedInstance {
   id: string;
   host: string;
   port: number;
+  containerName: string;
 }
 
 export interface RoutingDecision extends SelectedInstance {
@@ -34,6 +35,7 @@ export async function selectInstance(
       id: true,
       host: true,
       port: true,
+      containerName: true,
       _count: {
         select: {
           sessions: {
@@ -72,6 +74,7 @@ export async function selectInstance(
     id: selected.id,
     host: selected.host,
     port: selected.port,
+    containerName: selected.containerName,
     strategy,
     candidateCount: instances.length,
     selectedSessionCount: selected._count.sessions,

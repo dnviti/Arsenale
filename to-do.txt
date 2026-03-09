@@ -11,6 +11,54 @@
 ================================================================================
 
 
+------------------------------------------------------------------------------
+[ ] REC-115 — Fix percorso volume condiviso per registrazioni Guacamole
+------------------------------------------------------------------------------
+  Priorita: ALTA
+  Dipendenze: REC-070
+
+  DESCRIZIONE:
+  Le registrazioni delle sessioni RDP/VNC falliscono sistematicamente perche'
+  il server non riesce a trovare i file .guac scritti da guacd. Il problema
+  e' un disallineamento tra il percorso configurato nel server
+  (config.recordingPath = /app/data/recordings o path locale in dev) e il
+  punto di mount del volume condiviso (arsenale_recordings montato su
+  /recordings). Quando la sessione termina, completeGuacRecording() tenta
+  di fare stat() sul percorso salvato nel DB, che non corrisponde al mount
+  del volume Docker. Risultato: tutte le registrazioni vengono marcate ERROR.
+
+  DETTAGLI TECNICI:
+  Il flusso attuale presenta il seguente disallineamento:
+    1. buildRecordingPath() genera: config.recordingPath + /gateway/user/file.guac
+    2. Per container managed, session.controller sostituisce config.recordingPath
+       con /recordings per il token guacd (guacdPath)
+    3. guacd scrive in /recordings/... (volume condiviso)
+    4. Il DB salva il percorso server-side (config.recordingPath/...)
+    5. completeGuacRecording() chiama fsp.stat(recording.filePath) → FILE NOT FOUND
+
+  Soluzione proposta — allineare config.recordingPath al mount del volume:
+    - config.ts: impostare recordingPath di default su /recordings (match con
+      compose.yml volume mount) oppure aggiungere una variabile separata
+      RECORDING_VOLUME_PATH per il percorso interno al container
+    - recording.service.ts: assicurarsi che buildRecordingPath() e tutte le
+      operazioni su file (stat, createReadStream, unlink) usino il percorso
+      corretto del volume condiviso
+    - session.controller.ts: rimuovere o semplificare la logica di
+      sostituzione del percorso (config.recordingPath → /recordings) dato
+      che saranno gia' allineati
+    - compose.yml: verificare che il volume arsenale_recordings sia montato
+      in modo coerente su server e guacd
+    - Gestire il caso dev (senza Docker): quando il server gira localmente,
+      recordingPath deve puntare a una directory locale accessibile sia dal
+      server che da guacd (bind mount su compose.dev)
+
+  File coinvolti:
+    MODIFICARE: server/src/config.ts
+    MODIFICARE: server/src/services/recording.service.ts
+    MODIFICARE: server/src/controllers/session.controller.ts
+    MODIFICARE: compose.yml
+    MODIFICARE: server/src/services/managedGateway.service.ts
+    MODIFICARE: .env.example
 
 
 
@@ -102,99 +150,6 @@
 
 
 
-------------------------------------------------------------------------------
-[ ] REC-070 — Registrazione e riproduzione sessioni SSH e RDP
-------------------------------------------------------------------------------
-  Priorita: MEDIA
-  Dipendenze: ORCH-060 (session tracking)
-
-  DESCRIZIONE:
-  Registrare le sessioni SSH e RDP per compliance, formazione e audit
-  avanzato. Per le sessioni RDP, Guacamole supporta la registrazione
-  nativa server-side tramite parametri nel token (recording-path,
-  recording-name). Per SSH, i dati del terminale possono essere catturati
-  come stream I/O con timestamp (formato asciinema/asciicast v2) e
-  riprodotti in-browser con xterm.js. Le registrazioni creano una traccia
-  di audit immutabile, complementare ai log testuali gia' esistenti.
-  Questa e' una delle funzionalita' enterprise piu' richieste (presente
-  in Devolutions RDM, Teleport, HashiCorp Boundary).
-
-  DETTAGLI TECNICI:
-  Prisma (server/prisma/schema.prisma):
-    - Nuovo modello SessionRecording:
-        model SessionRecording {
-          id              String   @id @default(uuid())
-          userId          String
-          connectionId    String
-          protocol        String   // SSH | RDP | VNC
-          filePath        String   // percorso file registrazione
-          fileSize        Int?
-          duration        Int?     // durata in secondi
-          format          String   // 'asciicast' | 'guac' | 'webm'
-          status          String   @default("RECORDING") // RECORDING | COMPLETE | ERROR
-          createdAt       DateTime @default(now())
-          completedAt     DateTime?
-
-          user       User       @relation(fields: [userId], references: [id])
-          connection Connection @relation(fields: [connectionId], references: [id])
-
-          @@index([userId])
-          @@index([connectionId])
-          @@index([createdAt])
-        }
-    - Aggiungere relazioni in User e Connection
-    - Aggiungere AuditAction: SESSION_RECORD_START, SESSION_RECORD_VIEW
-    - Eseguire migrazione Prisma
-
-  Backend — RDP recording:
-    - vnc/rdp.service.ts: aggiungere parametri Guacamole al token:
-      recording-path: /recordings/{userId}/{sessionId}
-      recording-name: {timestamp}.guac
-      recording-include-keys: true (opzionale, per keystroke logging)
-    - Il file .guac viene scritto da guacd nella directory configurata
-    - Post-sessione: convertire .guac in .webm con guac-encode (o servire
-      direttamente il formato Guacamole per il player nativo)
-
-  Backend — SSH recording:
-    - In ssh.handler.ts: intercettare i dati del canale SSH (stream.on
-      'data') e scrivere ogni chunk con timestamp nel formato asciicast v2
-      (JSON Lines: {"version":2,"width":W,"height":H} header + [time,
-      "o", data] events)
-    - Salvare il file .cast nella directory configurata
-    - Aggiornare metadata nel DB alla fine della sessione
-
-  Backend — Storage e API:
-    - Creare server/src/services/recording.service.ts:
-      - startRecording(), completeRecording(), getRecording(),
-        listRecordings(), deleteRecording(), streamRecordingFile()
-    - Directory configurabile via env var RECORDING_PATH (default
-      ./recordings/)
-    - API: GET /api/recordings (lista), GET /api/recordings/:id/stream
-      (download/stream file), DELETE /api/recordings/:id
-    - Policy: recording obbligatorio/opzionale configurabile per tenant
-
-  Frontend:
-    - Creare player SSH: componente xterm.js in modalita' replay che
-      legge il file .cast e riproduce i dati con timing originale
-      (play/pause/seek/speed controls)
-    - Creare player RDP: componente video HTML5 per .webm, oppure
-      integrare guacamole-common-js session player per formato .guac
-    - RecordingsPage o sezione in Settings/Administration: lista
-      registrazioni con filtri (utente, connessione, data), play inline,
-      download
-
-  File coinvolti:
-    MODIFICARE: server/prisma/schema.prisma (SessionRecording, AuditAction)
-    CREARE:     server/src/services/recording.service.ts
-    CREARE:     server/src/routes/recording.routes.ts
-    CREARE:     server/src/controllers/recording.controller.ts
-    MODIFICARE: server/src/socket/ssh.handler.ts (cattura stream I/O)
-    MODIFICARE: server/src/services/rdp.service.ts (parametri recording)
-    MODIFICARE: server/src/config.ts (RECORDING_PATH, recording policy)
-    CREARE:     client/src/components/Recording/SshPlayer.tsx
-    CREARE:     client/src/components/Recording/RdpPlayer.tsx
-    CREARE:     client/src/api/recordings.api.ts
-    MODIFICARE: server/src/app.ts (mount recording routes)
 
 
 ------------------------------------------------------------------------------

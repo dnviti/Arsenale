@@ -18,6 +18,7 @@ import { initSessionCleanup, checkAndCloseInactiveSessions } from './services/se
 import { detectOrchestrator, OrchestratorType } from './orchestrator';
 import * as managedGatewayService from './services/managedGateway.service';
 import * as autoscalerService from './services/autoscaler.service';
+import { completeGuacRecording, cleanupExpiredRecordings } from './services/recording.service';
 
 function freePort(port: number): void {
   try {
@@ -173,6 +174,13 @@ async function main() {
     });
   }, 24 * 60 * 60 * 1000);
 
+  // Cleanup expired recordings daily
+  setInterval(() => {
+    cleanupExpiredRecordings().catch((err) => {
+      logger.error('Recording cleanup failed:', err);
+    });
+  }, 24 * 60 * 60 * 1000);
+
   // Setup guacamole-lite for RDP
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   let guacServer: any = null;
@@ -194,7 +202,7 @@ async function main() {
             key: getGuacamoleKey(),
           },
           log: {
-            level: toGuacamoleLogLevel(config.logLevel),
+            level: config.logGuacamole ? toGuacamoleLogLevel(config.logLevel) : 'QUIET',
           },
         }
       );
@@ -210,13 +218,13 @@ async function main() {
       guacServer.on('open', (clientConnection: any) => {
         const metadata = clientConnection.connectionSettings?.metadata;
         if (metadata) {
-          logger.debug(`Guacamole RDP tunnel opened for connection ${metadata.connectionId}`);
+          logger.debug(`Guacamole tunnel opened for connection ${metadata.connectionId}`);
         }
       });
 
-      // Safety net: close persistent session if client didn't explicitly end it.
+      // Safety net: close persistent session and finalize recording when guac connection closes.
       // Note: guacamole-lite deletes the raw token after decryption, so we use
-      // the metadata object (userId + connectionId) which IS preserved.
+      // the metadata object (userId + connectionId + recordingId) which IS preserved.
       // eslint-disable-next-line @typescript-eslint/no-explicit-any
       guacServer.on('close', (clientConnection: any) => {
         try {
@@ -227,8 +235,15 @@ async function main() {
               metadata.connectionId,
               'RDP',
             ).catch((err: unknown) => {
-              logger.error('Failed to end RDP session on guac close:', err);
+              logger.error('Failed to end session on guac close:', err);
             });
+
+            // Finalize recording if one was started
+            if (metadata.recordingId) {
+              completeGuacRecording(metadata.recordingId).catch((err: unknown) => {
+                logger.error('Failed to complete recording on guac close:', err);
+              });
+            }
           }
         } catch {
           // Ignore — session will be cleaned up by idle timeout

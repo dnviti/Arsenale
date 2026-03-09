@@ -16,7 +16,7 @@ router.delete('/oauth/link/:provider', authenticate, oauthController.unlinkOAuth
 router.post('/oauth/vault-setup', authenticate, oauthController.setupVault);
 
 // OAuth initiation + callback (public) — must come after /oauth/* routes
-router.get('/:provider', oauthController.initiateOAuth);
-router.get('/:provider/callback', oauthController.handleCallback);
+router.get('/oauth/:provider', oauthController.initiateOAuth);
+router.get('/oauth/:provider/callback', oauthController.handleCallback);
 
 export default router;

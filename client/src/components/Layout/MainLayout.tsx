@@ -12,6 +12,7 @@ import {
   DarkMode,
   LightMode,
   VpnKey as KeychainIcon,
+  Videocam as VideocamIcon,
 } from '@mui/icons-material';
 import ConnectionTree from '../Sidebar/ConnectionTree';
 import TabBar from '../Tabs/TabBar';
@@ -26,6 +27,7 @@ import AuditLogDialog from '../Dialogs/AuditLogDialog';
 import KeychainDialog from '../Dialogs/KeychainDialog';
 import ConnectionAuditLogDialog from '../Dialogs/ConnectionAuditLogDialog';
 import UserProfileDialog from '../Dialogs/UserProfileDialog';
+import RecordingsDialog from '../Recording/RecordingsDialog';
 
 import TenantSwitcher from './TenantSwitcher';
 import NotificationBell from './NotificationBell';
@@ -98,6 +100,7 @@ export default function MainLayout() {
   );
   const [auditLogOpen, setAuditLogOpen] = useState(false);
   const [keychainOpen, setKeychainOpen] = useState(false);
+  const [recordingsOpen, setRecordingsOpen] = useState(false);
   const [connectionAuditTarget, setConnectionAuditTarget] = useState<{ id: string; name: string } | null>(null);
   const [profileUserId, setProfileUserId] = useState<string | null>(null);
   const [linkedProvider, setLinkedProvider] = useState<string | null>(() => {
@@ -233,6 +236,10 @@ export default function MainLayout() {
               <HistoryIcon fontSize="small" sx={{ mr: 1 }} />
               Activity Log
             </MenuItem>
+            <MenuItem onClick={() => { setAnchorEl(null); setRecordingsOpen(true); }}>
+              <VideocamIcon fontSize="small" sx={{ mr: 1 }} />
+              Recordings
+            </MenuItem>
             <MenuItem onClick={handleLogout}>Logout</MenuItem>
           </Menu>
         </Toolbar>
@@ -360,6 +367,10 @@ export default function MainLayout() {
         open={!!profileUserId}
         onClose={() => setProfileUserId(null)}
         userId={profileUserId}
+      />
+      <RecordingsDialog
+        open={recordingsOpen}
+        onClose={() => setRecordingsOpen(false)}
       />
     </>
   );

@@ -65,6 +65,7 @@ export const config = {
   logFormat: (process.env.LOG_FORMAT || 'text') as 'text' | 'json',
   logTimestamps: process.env.LOG_TIMESTAMPS !== 'false',
   logHttpRequests: process.env.LOG_HTTP_REQUESTS === 'true',
+  logGuacamole: process.env.LOG_GUACAMOLE !== 'false',
   driveBasePath: process.env.DRIVE_BASE_PATH || path.resolve(__dirname, '../../data/drive'),
   fileUploadMaxSize: parseInt(process.env.FILE_UPLOAD_MAX_SIZE || String(10 * 1024 * 1024), 10),
   userDriveQuota: parseInt(process.env.USER_DRIVE_QUOTA || String(100 * 1024 * 1024), 10),
@@ -107,19 +108,19 @@ export const config = {
       enabled: !!process.env.GOOGLE_CLIENT_ID,
       clientId: process.env.GOOGLE_CLIENT_ID || '',
       clientSecret: process.env.GOOGLE_CLIENT_SECRET || '',
-      callbackUrl: process.env.GOOGLE_CALLBACK_URL || 'http://localhost:3001/api/auth/google/callback',
+      callbackUrl: process.env.GOOGLE_CALLBACK_URL || 'http://localhost:3001/api/auth/oauth/google/callback',
     },
     microsoft: {
       enabled: !!process.env.MICROSOFT_CLIENT_ID,
       clientId: process.env.MICROSOFT_CLIENT_ID || '',
       clientSecret: process.env.MICROSOFT_CLIENT_SECRET || '',
-      callbackUrl: process.env.MICROSOFT_CALLBACK_URL || 'http://localhost:3001/api/auth/microsoft/callback',
+      callbackUrl: process.env.MICROSOFT_CALLBACK_URL || 'http://localhost:3001/api/auth/oauth/microsoft/callback',
     },
     github: {
       enabled: !!process.env.GITHUB_CLIENT_ID,
       clientId: process.env.GITHUB_CLIENT_ID || '',
       clientSecret: process.env.GITHUB_CLIENT_SECRET || '',
-      callbackUrl: process.env.GITHUB_CALLBACK_URL || 'http://localhost:3001/api/auth/github/callback',
+      callbackUrl: process.env.GITHUB_CALLBACK_URL || 'http://localhost:3001/api/auth/oauth/github/callback',
     },
     oidc: {
       enabled: !!process.env.OIDC_CLIENT_ID,
@@ -127,7 +128,7 @@ export const config = {
       issuerUrl: process.env.OIDC_ISSUER_URL || '',
       clientId: process.env.OIDC_CLIENT_ID || '',
       clientSecret: process.env.OIDC_CLIENT_SECRET || '',
-      callbackUrl: process.env.OIDC_CALLBACK_URL || 'http://localhost:3001/api/auth/oidc/callback',
+      callbackUrl: process.env.OIDC_CALLBACK_URL || 'http://localhost:3001/api/auth/oauth/oidc/callback',
       scopes: process.env.OIDC_SCOPES || 'openid profile email',
     },
     saml: {
@@ -171,6 +172,11 @@ export const config = {
   orchestratorK8sNamespace: process.env.ORCHESTRATOR_K8S_NAMESPACE || 'arsenale',
   orchestratorSshGatewayImage: process.env.ORCHESTRATOR_SSH_GATEWAY_IMAGE || 'ghcr.io/dnviti/arsenale/ssh-gateway:latest',
   orchestratorGuacdImage: process.env.ORCHESTRATOR_GUACD_IMAGE || 'guacamole/guacd:latest',
+  // Session recording
+  recordingEnabled: process.env.RECORDING_ENABLED === 'true',
+  recordingPath: path.resolve(process.env.RECORDING_PATH || '/recordings'),
+  recordingVolume: process.env.RECORDING_VOLUME || '',
+  recordingRetentionDays: parseInt(process.env.RECORDING_RETENTION_DAYS || '90', 10),
   webauthn: {
     rpId: process.env.WEBAUTHN_RP_ID || 'localhost',
     rpOrigin: process.env.WEBAUTHN_RP_ORIGIN || 'http://localhost:3000',

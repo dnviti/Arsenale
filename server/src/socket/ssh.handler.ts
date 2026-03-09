@@ -8,11 +8,12 @@ import { AuthPayload, SftpEntry } from '../types';
 import { createSshConnection, createSshConnectionViaBastion, createSftpSession, resizeSshTerminal, SshSession } from '../services/ssh.service';
 import { getConnectionCredentials, getConnection } from '../services/connection.service';
 import { resolveDomainCredentials } from '../services/domain.service';
-import { getGatewayCredentials } from '../services/gateway.service';
+import { getGatewayCredentials, getDefaultGateway } from '../services/gateway.service';
 import { selectInstance } from '../services/loadBalancer.service';
 import { getPrivateKey as getTenantPrivateKey } from '../services/sshkey.service';
 import * as sessionService from '../services/session.service';
 import * as auditService from '../services/audit.service';
+import { AsciicastWriter, startRecording, completeRecording, failRecording, buildRecordingPath } from '../services/recording.service';
 import { logger } from '../utils/logger';
 
 interface ActiveTransfer {
@@ -58,6 +59,8 @@ export function setupSshHandler(io: Server) {
     const clientIp = (socket.handshake.headers['x-forwarded-for'] as string | undefined)
       || socket.handshake.address;
     let lastActivityUpdate = 0;
+    let recordingWriter: AsciicastWriter | null = null;
+    let recordingId: string | null = null;
 
     async function ensureSftp(): Promise<SFTPWrapper> {
       if (sftpSession) return sftpSession;
@@ -165,17 +168,23 @@ export function setupSshHandler(io: Server) {
         let selectedInstanceId: string | undefined;
         let routingDecision: { strategy: string; candidateCount: number; selectedSessionCount: number } | undefined;
 
-        if (conn.gateway) {
-          if (conn.gateway.type !== 'SSH_BASTION' && conn.gateway.type !== 'MANAGED_SSH') {
+        // Resolve gateway: explicit > tenant default > none
+        const gateway = conn.gateway
+          ?? (user.tenantId
+            ? (await getDefaultGateway(user.tenantId, 'MANAGED_SSH') ?? await getDefaultGateway(user.tenantId, 'SSH_BASTION'))
+            : null);
+
+        if (gateway) {
+          if (gateway.type !== 'SSH_BASTION' && gateway.type !== 'MANAGED_SSH') {
             const msg = 'Connection gateway must be SSH_BASTION or MANAGED_SSH for SSH connections';
-            logSessionError(msg, conn.host, conn.port, conn.gatewayId);
+            logSessionError(msg, conn.host, conn.port, gateway.id);
             socket.emit('session:error', { message: msg });
             return;
           }
 
           if (!user.tenantId) {
             const msg = 'Tenant context required for gateway routing';
-            logSessionError(msg, conn.host, conn.port, conn.gatewayId);
+            logSessionError(msg, conn.host, conn.port, gateway.id);
             socket.emit('session:error', { message: msg });
             return;
           }
@@ -184,17 +193,17 @@ export function setupSshHandler(io: Server) {
           let bastionPassword: string | undefined;
           let bastionPrivateKey: string | undefined;
 
-          if (conn.gateway.type === 'MANAGED_SSH') {
+          if (gateway.type === 'MANAGED_SSH') {
             // Managed SSH gateway: use server-managed key pair, fixed username "tunnel"
             const privateKeyBuf = await getTenantPrivateKey(user.tenantId);
             bastionUsername = 'tunnel';
             bastionPrivateKey = privateKeyBuf.toString('utf8');
           } else {
             // SSH_BASTION: decrypt user-supplied credentials from the gateway
-            const gatewayCreds = await getGatewayCredentials(user.userId, user.tenantId, conn.gateway.id);
+            const gatewayCreds = await getGatewayCredentials(user.userId, user.tenantId, gateway.id);
             if (!gatewayCreds.username || (!gatewayCreds.password && !gatewayCreds.sshPrivateKey)) {
               const msg = 'Gateway credentials are incomplete. Please configure username and password or SSH key on the gateway.';
-              logSessionError(msg, conn.host, conn.port, conn.gatewayId);
+              logSessionError(msg, conn.host, conn.port, gateway.id);
               socket.emit('session:error', { message: msg });
               return;
             }
@@ -203,11 +212,11 @@ export function setupSshHandler(io: Server) {
             bastionPrivateKey = gatewayCreds.sshPrivateKey ?? undefined;
           }
 
-          let bastionHost = conn.gateway.host;
-          let bastionPort = conn.gateway.port;
+          let bastionHost = gateway.host;
+          let bastionPort = gateway.port;
 
-          if (conn.gateway.isManaged) {
-            const inst = await selectInstance(conn.gateway.id, conn.gateway.lbStrategy);
+          if (gateway.isManaged) {
+            const inst = await selectInstance(gateway.id, gateway.lbStrategy);
             if (inst) {
               bastionHost = inst.host;
               bastionPort = inst.port;
@@ -251,11 +260,31 @@ export function setupSshHandler(io: Server) {
 
         socket.emit('session:ready');
 
+        // Start recording if enabled
+        if (config.recordingEnabled) {
+          try {
+            const recPath = buildRecordingPath(user.userId, data.connectionId, 'SSH', 'cast');
+            recordingWriter = new AsciicastWriter(recPath);
+            await recordingWriter.open(80, 24);
+            recordingId = await startRecording({
+              userId: user.userId,
+              connectionId: data.connectionId,
+              protocol: 'SSH',
+              format: 'asciicast',
+              filePath: recPath,
+            });
+          } catch (recErr) {
+            logger.error('Failed to start SSH recording:', recErr);
+            recordingWriter = null;
+            recordingId = null;
+          }
+        }
+
         // Create persistent session record
         sessionService.startSession({
           userId: user.userId,
           connectionId: data.connectionId,
-          gatewayId: conn.gatewayId ?? undefined,
+          gatewayId: gateway?.id ?? conn.gatewayId ?? undefined,
           instanceId: selectedInstanceId,
           protocol: 'SSH',
           socketId: socket.id,
@@ -267,7 +296,9 @@ export function setupSshHandler(io: Server) {
         });
 
         session.stream.on('data', (data: Buffer) => {
-          socket.emit('data', data.toString('utf8'));
+          const text = data.toString('utf8');
+          socket.emit('data', text);
+          if (recordingWriter) recordingWriter.writeOutput(text);
         });
 
         session.stream.on('close', () => {
@@ -298,6 +329,7 @@ export function setupSshHandler(io: Server) {
     socket.on('data', (data: string) => {
       if (currentSession?.stream.writable) {
         currentSession.stream.write(data);
+        if (recordingWriter) recordingWriter.writeInput(data);
         // Throttled implicit heartbeat (at most once per 30s)
         const now = Date.now();
         if (now - lastActivityUpdate > 30000) {
@@ -638,6 +670,21 @@ export function setupSshHandler(io: Server) {
     });
 
     function cleanup(sessionId: string) {
+      // Finalize recording
+      if (recordingWriter && recordingId) {
+        try {
+          const { fileSize, duration } = recordingWriter.close();
+          completeRecording(recordingId, fileSize, duration).catch((err) => {
+            logger.error('Failed to complete recording:', err);
+          });
+        } catch (recErr) {
+          logger.error('Failed to close recording writer:', recErr);
+          failRecording(recordingId).catch(() => {});
+        }
+        recordingWriter = null;
+        recordingId = null;
+      }
+
       // End persistent session record
       sessionService.endSessionBySocketId(socket.id).catch((err) => {
         logger.error('Failed to end persistent session:', err);

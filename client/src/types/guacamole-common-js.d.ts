@@ -87,6 +87,29 @@ declare module 'guacamole-common-js' {
       sendEnd(): void;
       onack: ((status: Status) => void) | null;
     }
+
+    class StaticHTTPTunnel extends Tunnel {
+      constructor(url: string, crossDomain?: boolean, extraTunnelHeaders?: Record<string, string>);
+      size: number | null;
+    }
+
+    class SessionRecording {
+      constructor(tunnel: Tunnel);
+      connect(data?: string): void;
+      disconnect(): void;
+      play(): void;
+      pause(): void;
+      seek(position: number, callback?: () => void): void;
+      getDisplay(): Display;
+      getDuration(): number;
+      getPosition(): number;
+      playbackSpeed: number;
+      onload: (() => void) | null;
+      onplay: (() => void) | null;
+      onpause: (() => void) | null;
+      onseek: ((position: number) => void) | null;
+      onerror: ((message: string) => void) | null;
+    }
   }
 
   export default Guacamole;

@@ -145,6 +145,7 @@ model User {
   externalSecretShares   ExternalSecretShare[]
   activeSessions         ActiveSession[]
   webauthnCredentials    WebAuthnCredential[]
+  sessionRecordings      SessionRecording[]
 }
 
 enum AuthProvider {
@@ -230,6 +231,7 @@ model Connection {
   shares           SharedConnection[]
   openTabs         OpenTab[]
   activeSessions   ActiveSession[]
+  sessionRecordings SessionRecording[]
 }
 
 enum ConnectionType {
@@ -549,6 +551,9 @@ enum AuditAction {
   DOMAIN_PROFILE_UPDATE
   DOMAIN_PROFILE_CLEAR
   TENANT_SWITCH
+  RECORDING_START
+  RECORDING_VIEW
+  RECORDING_DELETE
 }
 
 model AuditLog {
@@ -834,6 +839,34 @@ model ManagedGatewayInstance {
 
   @@index([gatewayId])
   @@index([status])
+}
+
+model SessionRecording {
+  id           String          @id @default(uuid())
+  sessionId    String?
+  userId       String
+  connectionId String
+  protocol     SessionProtocol
+  filePath     String
+  fileSize     Int?
+  duration     Int?
+  format       String          @default("asciicast")
+  status       RecordingStatus @default(RECORDING)
+  createdAt    DateTime        @default(now())
+  completedAt  DateTime?
+
+  user       User       @relation(fields: [userId], references: [id], onDelete: Cascade)
+  connection Connection @relation(fields: [connectionId], references: [id], onDelete: Cascade)
+
+  @@index([userId, createdAt])
+  @@index([sessionId])
+  @@index([connectionId])
+}
+
+enum RecordingStatus {
+  RECORDING
+  COMPLETE
+  ERROR
 }
 
 model AppConfig {

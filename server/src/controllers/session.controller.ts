@@ -1,5 +1,6 @@
 import { Response, NextFunction } from 'express';
 import path from 'path';
+import { mkdir, chmod } from 'fs/promises';
 import { z } from 'zod';
 import prisma from '../lib/prisma';
 import { AuthRequest, RdpSettings } from '../types';
@@ -11,8 +12,12 @@ import type { VncSettings } from '../types';
 import * as sessionService from '../services/session.service';
 import * as auditService from '../services/audit.service';
 import { selectInstance } from '../services/loadBalancer.service';
+import { getDefaultGateway } from '../services/gateway.service';
 import { AppError } from '../middleware/error.middleware';
 import { forceDisconnectSession } from '../services/sessionCleanup.service';
+import { config } from '../config';
+import { startRecording, buildRecordingPath } from '../services/recording.service';
+import { logger } from '../utils/logger';
 
 const sessionSchema = z.object({
   connectionId: z.string().uuid(),
@@ -48,21 +53,26 @@ export async function createRdpSession(req: AuthRequest, res: Response, next: Ne
       throw new AppError('Not an RDP connection', 400);
     }
 
-    // Resolve gateway for dynamic guacd routing
+    // Resolve gateway: explicit > tenant default > none
+    const gateway = conn.gateway
+      ?? (req.user!.tenantId ? await getDefaultGateway(req.user!.tenantId, 'GUACD') : null);
+    if (gateway) gatewayId = gateway.id;
+
     let guacdHost: string | undefined;
     let guacdPort: number | undefined;
     let selectedInstanceId: string | undefined;
+    let selectedContainerName: string | undefined;
     let routingDecision: { strategy: string; candidateCount: number; selectedSessionCount: number } | undefined;
 
-    if (conn.gateway) {
-      if (conn.gateway.type !== 'GUACD') {
+    if (gateway) {
+      if (gateway.type !== 'GUACD') {
         throw new AppError('Connection gateway must be of type GUACD for RDP connections', 400);
       }
-      guacdHost = conn.gateway.host;
-      guacdPort = conn.gateway.port;
+      guacdHost = gateway.host;
+      guacdPort = gateway.port;
 
-      if (conn.gateway.isManaged) {
-        const inst = await selectInstance(conn.gateway.id, conn.gateway.lbStrategy);
+      if (gateway.isManaged) {
+        const inst = await selectInstance(gateway.id, gateway.lbStrategy);
         if (!inst) {
           throw new AppError(
             'No healthy gateway instances available. The gateway may be scaling — please try again.',
@@ -72,6 +82,7 @@ export async function createRdpSession(req: AuthRequest, res: Response, next: Ne
         guacdHost = inst.host;
         guacdPort = inst.port;
         selectedInstanceId = inst.id;
+        selectedContainerName = inst.containerName;
         routingDecision = {
           strategy: inst.strategy,
           candidateCount: inst.candidateCount,
@@ -123,6 +134,37 @@ export async function createRdpSession(req: AuthRequest, res: Response, next: Ne
       ? path.posix.join('/guacd-drive', req.user!.userId)
       : undefined;
 
+    // Build recording params if enabled
+    let rdpRecording: { recordingPath: string; recordingName: string } | undefined;
+    let rdpRecordingId: string | undefined;
+    if (config.recordingEnabled) {
+      try {
+        const recGatewayDir = selectedContainerName || 'default';
+        const recFilePath = buildRecordingPath(req.user!.userId, connectionId, 'RDP', 'guac', recGatewayDir);
+        // Pre-create directory (guacd's create-recording-path is non-recursive)
+        const recDir = path.dirname(recFilePath);
+        await mkdir(recDir, { recursive: true });
+        // Make dirs writable by guacd container (runs as different UID)
+        await chmod(recDir, 0o777);
+        await chmod(path.dirname(recDir), 0o777);
+        // guacd inside a managed container sees /recordings/...; server sees config.recordingPath/...
+        const guacdPath = gateway?.isManaged
+          ? recFilePath.replace(config.recordingPath, '/recordings')
+          : recFilePath;
+        rdpRecording = { recordingPath: path.dirname(guacdPath), recordingName: path.basename(guacdPath) };
+        rdpRecordingId = await startRecording({
+          userId: req.user!.userId,
+          connectionId,
+          protocol: 'RDP',
+          format: 'guac',
+          filePath: recFilePath,
+        });
+        logger.info(`[recording] Started RDP recording ${rdpRecordingId} for connection ${connectionId} (gateway: ${recGatewayDir})`);
+      } catch (recErr) {
+        logger.error('Failed to start RDP recording:', recErr);
+      }
+    }
+
     const token = generateGuacamoleToken({
       host: conn.host,
       port: conn.port,
@@ -134,10 +176,12 @@ export async function createRdpSession(req: AuthRequest, res: Response, next: Ne
       rdpSettings: mergedRdp,
       guacdHost,
       guacdPort,
+      recording: rdpRecording,
       metadata: {
         userId: req.user!.userId,
         connectionId,
         ipAddress: req.ip ?? undefined,
+        recordingId: rdpRecordingId,
       },
     });
 
@@ -149,7 +193,7 @@ export async function createRdpSession(req: AuthRequest, res: Response, next: Ne
     const sessionId = await sessionService.startSession({
       userId: req.user!.userId,
       connectionId,
-      gatewayId: conn.gatewayId ?? undefined,
+      gatewayId: gatewayId ?? undefined,
       instanceId: selectedInstanceId,
       protocol: 'RDP',
       guacToken: token,
@@ -158,7 +202,7 @@ export async function createRdpSession(req: AuthRequest, res: Response, next: Ne
       routingDecision,
     });
 
-    res.json({ token, enableDrive, sessionId });
+    res.json({ token, enableDrive, sessionId, recordingId: rdpRecordingId });
   } catch (err) {
     const errorMessage = err instanceof z.ZodError
       ? err.issues[0].message
@@ -205,21 +249,26 @@ export async function createVncSession(req: AuthRequest, res: Response, next: Ne
       throw new AppError('Not a VNC connection', 400);
     }
 
-    // Resolve gateway for dynamic guacd routing
+    // Resolve gateway: explicit > tenant default > none
+    const gateway = conn.gateway
+      ?? (req.user!.tenantId ? await getDefaultGateway(req.user!.tenantId, 'GUACD') : null);
+    if (gateway) gatewayId = gateway.id;
+
     let guacdHost: string | undefined;
     let guacdPort: number | undefined;
     let selectedInstanceId: string | undefined;
+    let selectedContainerName: string | undefined;
     let routingDecision: { strategy: string; candidateCount: number; selectedSessionCount: number } | undefined;
 
-    if (conn.gateway) {
-      if (conn.gateway.type !== 'GUACD') {
+    if (gateway) {
+      if (gateway.type !== 'GUACD') {
         throw new AppError('Connection gateway must be of type GUACD for VNC connections', 400);
       }
-      guacdHost = conn.gateway.host;
-      guacdPort = conn.gateway.port;
+      guacdHost = gateway.host;
+      guacdPort = gateway.port;
 
-      if (conn.gateway.isManaged) {
-        const inst = await selectInstance(conn.gateway.id, conn.gateway.lbStrategy);
+      if (gateway.isManaged) {
+        const inst = await selectInstance(gateway.id, gateway.lbStrategy);
         if (!inst) {
           throw new AppError(
             'No healthy gateway instances available. The gateway may be scaling — please try again.',
@@ -229,6 +278,7 @@ export async function createVncSession(req: AuthRequest, res: Response, next: Ne
         guacdHost = inst.host;
         guacdPort = inst.port;
         selectedInstanceId = inst.id;
+        selectedContainerName = inst.containerName;
         routingDecision = {
           strategy: inst.strategy,
           candidateCount: inst.candidateCount,
@@ -253,6 +303,36 @@ export async function createVncSession(req: AuthRequest, res: Response, next: Ne
     const connVncSettings = (conn.vncSettings as Partial<VncSettings>) ?? null;
     const mergedVnc = mergeVncSettings(connVncSettings);
 
+    // Build recording params if enabled
+    let vncRecording: { recordingPath: string; recordingName: string } | undefined;
+    let vncRecordingId: string | undefined;
+    if (config.recordingEnabled) {
+      try {
+        const recGatewayDir = selectedContainerName || 'default';
+        const recFilePath = buildRecordingPath(req.user!.userId, connectionId, 'VNC', 'guac', recGatewayDir);
+        // Pre-create directory (guacd's create-recording-path is non-recursive)
+        const recDir = path.dirname(recFilePath);
+        await mkdir(recDir, { recursive: true });
+        // Make dirs writable by guacd container (runs as different UID)
+        await chmod(recDir, 0o777);
+        await chmod(path.dirname(recDir), 0o777);
+        const guacdPath = gateway?.isManaged
+          ? recFilePath.replace(config.recordingPath, '/recordings')
+          : recFilePath;
+        vncRecording = { recordingPath: path.dirname(guacdPath), recordingName: path.basename(guacdPath) };
+        vncRecordingId = await startRecording({
+          userId: req.user!.userId,
+          connectionId,
+          protocol: 'VNC',
+          format: 'guac',
+          filePath: recFilePath,
+        });
+        logger.info(`[recording] Started VNC recording ${vncRecordingId} for connection ${connectionId} (gateway: ${recGatewayDir})`);
+      } catch (recErr) {
+        logger.error('Failed to start VNC recording:', recErr);
+      }
+    }
+
     const token = generateVncGuacamoleToken({
       host: conn.host,
       port: conn.port,
@@ -260,10 +340,12 @@ export async function createVncSession(req: AuthRequest, res: Response, next: Ne
       vncSettings: mergedVnc,
       guacdHost,
       guacdPort,
+      recording: vncRecording,
       metadata: {
         userId: req.user!.userId,
         connectionId,
         ipAddress: req.ip ?? undefined,
+        recordingId: vncRecordingId,
       },
     });
 
@@ -272,7 +354,7 @@ export async function createVncSession(req: AuthRequest, res: Response, next: Ne
     const sessionId = await sessionService.startSession({
       userId: req.user!.userId,
       connectionId,
-      gatewayId: conn.gatewayId ?? undefined,
+      gatewayId: gatewayId ?? undefined,
       instanceId: selectedInstanceId,
       protocol: 'VNC',
       guacToken: token,
@@ -281,7 +363,7 @@ export async function createVncSession(req: AuthRequest, res: Response, next: Ne
       routingDecision,
     });
 
-    res.json({ token, sessionId });
+    res.json({ token, sessionId, recordingId: vncRecordingId });
   } catch (err) {
     const errorMessage = err instanceof z.ZodError
       ? err.issues[0].message

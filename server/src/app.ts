@@ -25,6 +25,7 @@ import gatewayRoutes from './routes/gateway.routes';
 import tabsRoutes from './routes/tabs.routes';
 import secretRoutes from './routes/secret.routes';
 import publicShareRoutes from './routes/publicShare.routes';
+import recordingRoutes from './routes/recording.routes';
 import healthRoutes from './routes/health.routes';
 import { errorHandler } from './middleware/error.middleware';
 import { requestLogger } from './middleware/requestLogger.middleware';
@@ -79,6 +80,7 @@ app.use('/api/gateways', gatewayRoutes);
 app.use('/api/tabs', tabsRoutes);
 app.use('/api/secrets', secretRoutes);
 app.use('/api/share', publicShareRoutes);
+app.use('/api/recordings', recordingRoutes);
 
 // Health & readiness probes
 app.use('/api', healthRoutes);

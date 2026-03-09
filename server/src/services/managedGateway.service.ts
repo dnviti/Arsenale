@@ -86,6 +86,10 @@ function buildContainerConfig(
       'arsenale.type': 'guacd',
     },
     ...(config.dockerNetwork ? { network: config.dockerNetwork } : {}),
+    ...(config.recordingEnabled ? {
+      binds: [`${config.recordingVolume || config.recordingPath}:/recordings`],
+      user: '0:0',
+    } : {}),
     restartPolicy: 'unless-stopped',
   };
 }
@@ -172,7 +176,7 @@ export async function deployGatewayInstance(
   if (orchestrator.type === OrchestratorType.KUBERNETES) {
     host = containerConfig.name;
   } else if (gateway.publishPorts && containerInfo.ports[0]?.host) {
-    host = gateway.host || 'localhost';
+    host = (gateway.host && gateway.host !== 'pending-deploy') ? gateway.host : 'localhost';
   } else if (containerInfo.ports[0]?.host) {
     host = 'localhost';
   } else if (config.dockerNetwork) {

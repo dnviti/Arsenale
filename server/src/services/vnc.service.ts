@@ -2,6 +2,11 @@ import crypto from 'crypto';
 import { config } from '../config';
 import type { VncSettings } from '../types';
 
+export interface VncRecordingParams {
+  recordingPath: string;
+  recordingName: string;
+}
+
 export interface VncConnectionParams {
   host: string;
   port: number;
@@ -9,10 +14,12 @@ export interface VncConnectionParams {
   vncSettings?: Partial<VncSettings>;
   guacdHost?: string;
   guacdPort?: number;
+  recording?: VncRecordingParams;
   metadata?: {
     userId: string;
     connectionId: string;
     ipAddress?: string;
+    recordingId?: string;
   };
 }
 
@@ -62,6 +69,12 @@ export function generateVncGuacamoleToken(params: VncConnectionParams): string {
   if (vnc.readOnly) settings['read-only'] = 'true';
   if (vnc.swapRedBlue) settings['swap-red-blue'] = 'true';
   if (vnc.disableAudio === false) settings['enable-audio'] = 'true';
+
+  if (params.recording) {
+    settings['recording-path'] = params.recording.recordingPath;
+    settings['recording-name'] = params.recording.recordingName;
+    settings['create-recording-path'] = 'true';
+  }
 
   const connectionConfig = {
     connection: {

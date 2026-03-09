@@ -72,6 +72,7 @@ export class DockerProvider implements IOrchestratorProvider {
     const createOptions: Dockerode.ContainerCreateOptions = {
       Image: containerConfig.image,
       name: containerConfig.name,
+      User: containerConfig.user,
       Env: envArray,
       Labels: containerConfig.labels,
       ExposedPorts: exposedPorts,
@@ -81,6 +82,7 @@ export class DockerProvider implements IOrchestratorProvider {
         RestartPolicy: { Name: restartPolicyName },
         NetworkMode:
           containerConfig.network || config.dockerNetwork || undefined,
+        Binds: containerConfig.binds || [],
       },
     };
 
