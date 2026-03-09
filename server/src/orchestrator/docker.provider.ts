@@ -56,6 +56,7 @@ export class DockerProvider implements IOrchestratorProvider {
         Interval: containerConfig.healthcheck.interval * 1_000_000,
         Timeout: containerConfig.healthcheck.timeout * 1_000_000,
         Retries: containerConfig.healthcheck.retries,
+        StartPeriod: (containerConfig.healthcheck.startPeriod ?? 0) * 1_000_000,
       };
     }
 

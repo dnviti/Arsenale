@@ -850,6 +850,8 @@ model SessionRecording {
   filePath     String
   fileSize     Int?
   duration     Int?
+  width        Int?
+  height       Int?
   format       String          @default("asciicast")
   status       RecordingStatus @default(RECORDING)
   createdAt    DateTime        @default(now())

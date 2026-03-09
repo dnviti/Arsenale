@@ -138,6 +138,13 @@ export async function createRdpSession(req: AuthRequest, res: Response, next: Ne
     let rdpRecording: { recordingPath: string; recordingName: string } | undefined;
     let rdpRecordingId: string | undefined;
     if (config.recordingEnabled) {
+      // Force reconnect resize method when recording — display-update can leave the
+      // recording without initial graphical content (only mouse cursor visible)
+      mergedRdp.resizeMethod = 'reconnect';
+      if (!mergedRdp.width) {
+        mergedRdp.width = 1024;
+        mergedRdp.height = 768;
+      }
       try {
         const recGatewayDir = selectedContainerName || 'default';
         const recFilePath = buildRecordingPath(req.user!.userId, connectionId, 'RDP', 'guac', recGatewayDir);
@@ -158,6 +165,8 @@ export async function createRdpSession(req: AuthRequest, res: Response, next: Ne
           protocol: 'RDP',
           format: 'guac',
           filePath: recFilePath,
+          width: mergedRdp.width,
+          height: mergedRdp.height,
         });
         logger.info(`[recording] Started RDP recording ${rdpRecordingId} for connection ${connectionId} (gateway: ${recGatewayDir})`);
       } catch (recErr) {

@@ -41,19 +41,24 @@ export default function GuacPlayer({ recordingId, onError }: GuacPlayerProps) {
       displayRef.current.appendChild(display.getElement());
     }
 
+    const scaleToFit = () => {
+      if (!displayRef.current) return;
+      const containerWidth = displayRef.current.clientWidth;
+      const containerHeight = displayRef.current.clientHeight;
+      const displayWidth = display.getWidth();
+      const displayHeight = display.getHeight();
+      if (displayWidth > 0 && displayHeight > 0) {
+        const scale = Math.min(containerWidth / displayWidth, containerHeight / displayHeight, 1);
+        display.scale(scale);
+      }
+    };
+
     recording.onload = () => {
       setDuration(recording.getDuration() / 1000);
       setLoaded(true);
-
-      // Scale display to fit container
-      if (displayRef.current) {
-        const containerWidth = displayRef.current.clientWidth;
-        const displayWidth = display.getWidth();
-        if (displayWidth > 0) {
-          const scale = Math.min(1, containerWidth / displayWidth);
-          display.scale(scale);
-        }
-      }
+      scaleToFit();
+      // Deferred scale — display dimensions may be 0 at onload time
+      requestAnimationFrame(scaleToFit);
     };
 
     recording.onplay = () => setPlaying(true);
@@ -127,7 +132,6 @@ export default function GuacPlayer({ recordingId, onError }: GuacPlayerProps) {
           display: 'flex',
           justifyContent: 'center',
           alignItems: 'center',
-          '& > div': { margin: 'auto' },
         }}
       />
       <Stack direction="row" spacing={1} alignItems="center" sx={{ mt: 1, px: 1 }}>

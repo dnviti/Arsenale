@@ -1,6 +1,5 @@
 import { useEffect, useRef, useState, useCallback } from 'react';
 import { Terminal } from '@xterm/xterm';
-import { FitAddon } from '@xterm/addon-fit';
 import { Box, IconButton, Slider, Typography, Stack, Select, MenuItem } from '@mui/material';
 import PlayArrowIcon from '@mui/icons-material/PlayArrow';
 import PauseIcon from '@mui/icons-material/Pause';
@@ -23,9 +22,10 @@ interface SshPlayerProps {
 }
 
 export default function SshPlayer({ recordingId, onError }: SshPlayerProps) {
+  const termContainerRef = useRef<HTMLDivElement>(null);
   const termRef = useRef<HTMLDivElement>(null);
   const terminalRef = useRef<Terminal | null>(null);
-  const fitAddonRef = useRef<FitAddon | null>(null);
+  const roRef = useRef<ResizeObserver | null>(null);
   const eventsRef = useRef<AsciicastEvent[]>([]);
   const timerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const indexRef = useRef(0);
@@ -53,6 +53,7 @@ export default function SshPlayer({ recordingId, onError }: SshPlayerProps) {
 
   // Load recording data
   useEffect(() => {
+    let cancelled = false;
     const url = getRecordingStreamUrl(recordingId);
     const token = useAuthStore.getState().accessToken;
     fetch(url, {
@@ -63,26 +64,50 @@ export default function SshPlayer({ recordingId, onError }: SshPlayerProps) {
         return res.text();
       })
       .then((text) => {
+        if (cancelled) return;
         const { header, events } = parseAsciicast(text);
         eventsRef.current = events;
 
+        // Size terminal to fit container instead of using recording dimensions
+        const CHAR_W = 9.05;
+        const CHAR_H = 17;
+        const container = termContainerRef.current;
+        const cols = container
+          ? Math.max(Math.floor(container.clientWidth / CHAR_W), header.width || 80)
+          : (header.width || 80);
+        const rows = container
+          ? Math.floor(container.clientHeight / CHAR_H)
+          : (header.height || 24);
+
         const term = new Terminal({
-          cols: header.width || 80,
-          rows: header.height || 24,
+          cols,
+          rows,
           disableStdin: true,
           cursorBlink: false,
+          scrollback: 5000,
+          convertEol: true,
           theme: { background: '#1e1e1e' },
         });
-        const fitAddon = new FitAddon();
-        term.loadAddon(fitAddon);
 
         if (termRef.current) {
           term.open(termRef.current);
-          fitAddon.fit();
         }
 
         terminalRef.current = term;
-        fitAddonRef.current = fitAddon;
+
+        // Re-fit on container resize (e.g. fullscreen toggle)
+        if (container) {
+          const ro = new ResizeObserver(() => {
+            if (!termContainerRef.current || !terminalRef.current) return;
+            const newCols = Math.max(Math.floor(termContainerRef.current.clientWidth / CHAR_W), 80);
+            const newRows = Math.floor(termContainerRef.current.clientHeight / CHAR_H);
+            if (newCols > 0 && newRows > 0) {
+              terminalRef.current.resize(newCols, newRows);
+            }
+          });
+          ro.observe(container);
+          roRef.current = ro;
+        }
 
         if (events.length > 0) {
           setDuration(events[events.length - 1][0]);
@@ -90,14 +115,16 @@ export default function SshPlayer({ recordingId, onError }: SshPlayerProps) {
         setLoaded(true);
       })
       .catch((err) => {
-        onError?.(err.message);
+        if (!cancelled) onError?.(err.message);
       });
 
     return () => {
+      cancelled = true;
       if (timerRef.current) clearTimeout(timerRef.current);
       terminalRef.current?.dispose();
+      roRef.current?.disconnect();
     };
-  // eslint-disable-next-line react-hooks/exhaustive-deps
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [recordingId]);
 
   // Playback engine
@@ -186,8 +213,23 @@ export default function SshPlayer({ recordingId, onError }: SshPlayerProps) {
   };
 
   return (
-    <Box sx={{ display: 'flex', flexDirection: 'column', height: '100%' }}>
-      <Box ref={termRef} sx={{ flex: 1, bgcolor: '#1e1e1e', borderRadius: 1, overflow: 'hidden' }} />
+    <Box sx={{ display: 'flex', flexDirection: 'column', flex: 1, minHeight: 0 }}>
+      <Box
+        ref={termContainerRef}
+        sx={{
+          flex: 1,
+          bgcolor: '#1e1e1e',
+          borderRadius: 1,
+          overflow: 'hidden',
+        }}
+      >
+        <Box
+          ref={termRef}
+          sx={{
+            '& .xterm-viewport': { background: '#1e1e1e !important' },
+          }}
+        />
+      </Box>
       <Stack direction="row" spacing={1} alignItems="center" sx={{ mt: 1, px: 1 }}>
         {playing ? (
           <IconButton size="small" onClick={pause}><PauseIcon /></IconButton>

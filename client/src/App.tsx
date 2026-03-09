@@ -6,6 +6,7 @@ import ForgotPasswordPage from './pages/ForgotPasswordPage';
 import ResetPasswordPage from './pages/ResetPasswordPage';
 import DashboardPage from './pages/DashboardPage';
 import ConnectionViewerPage from './pages/ConnectionViewerPage';
+import RecordingPlayerPage from './pages/RecordingPlayerPage';
 import OAuthCallbackPage from './pages/OAuthCallbackPage';
 import VaultSetupPage from './pages/VaultSetupPage';
 import PublicSharePage from './pages/PublicSharePage';
@@ -69,6 +70,14 @@ export default function App() {
         element={
           <ProtectedRoute>
             <ConnectionViewerPage />
+          </ProtectedRoute>
+        }
+      />
+      <Route
+        path="/recording/:id"
+        element={
+          <ProtectedRoute>
+            <RecordingPlayerPage />
           </ProtectedRoute>
         }
       />

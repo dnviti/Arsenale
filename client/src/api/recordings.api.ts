@@ -9,6 +9,8 @@ export interface Recording {
   filePath: string;
   fileSize: number | null;
   duration: number | null;
+  width: number | null;
+  height: number | null;
   format: string;
   status: 'RECORDING' | 'COMPLETE' | 'ERROR';
   createdAt: string;

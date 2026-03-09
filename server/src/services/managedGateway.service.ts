@@ -85,6 +85,15 @@ function buildContainerConfig(
       'arsenale.tenant-id': gateway.tenantId,
       'arsenale.type': 'guacd',
     },
+    // Disable Docker-level health check — rootless Podman with user '0:0'
+    // blocks exec inside the container (OCI permission denied). The app-level
+    // healthCheck() in this file monitors container status instead.
+    healthcheck: {
+      test: ['NONE'],
+      interval: 0,
+      timeout: 0,
+      retries: 0,
+    },
     ...(config.dockerNetwork ? { network: config.dockerNetwork } : {}),
     ...(config.recordingEnabled ? {
       binds: [`${config.recordingVolume || config.recordingPath}:/recordings`],

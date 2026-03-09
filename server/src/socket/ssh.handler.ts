@@ -272,6 +272,8 @@ export function setupSshHandler(io: Server) {
               protocol: 'SSH',
               format: 'asciicast',
               filePath: recPath,
+              width: 80,
+              height: 24,
             });
           } catch (recErr) {
             logger.error('Failed to start SSH recording:', recErr);

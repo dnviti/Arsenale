@@ -120,6 +120,12 @@ export function generateGuacamoleToken(params: RdpConnectionParams): string {
     settings['recording-path'] = params.recording.recordingPath;
     settings['recording-name'] = params.recording.recordingName;
     settings['create-recording-path'] = 'true';
+    settings['recording-exclude-output'] = 'false';
+    settings['recording-exclude-mouse'] = 'false';
+    // Force legacy graphics pipeline — guacd cannot record the GFX/AVC444
+    // channel used by modern Windows, resulting in a black screen recording.
+    settings['disable-gfx'] = 'true';
+    settings['enable-wallpaper'] = 'true';
   }
 
   if (params.enableDrive && params.drivePath) {

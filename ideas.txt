@@ -190,3 +190,22 @@ IDEA-009 — Sistema di plugin Lua con sandbox sicuro
   accelerando l'adattamento a esigenze specifiche.
 
 
+------------------------------------------------------------------------------
+IDEA-010 — Riscrittura completa del server in Go (Golang)
+------------------------------------------------------------------------------
+  Categoria: Infrastruttura
+  Data: 2026-03-09
+
+  DESCRIZIONE:
+  Convertire interamente il backend del progetto da Express/TypeScript a Go.
+  Questo includerebbe la riscrittura di tutti i layer (routes, controller,
+  services), la gestione delle connessioni WebSocket (SSH, RDP), il sistema
+  di autenticazione JWT e l'integrazione con il database PostgreSQL.
+
+  MOTIVAZIONE:
+  Go offre prestazioni superiori, un modello di concorrenza nativo con le
+  goroutine, un binario compilato senza dipendenze runtime, e un consumo
+  di memoria significativamente inferiore. Questo potrebbe migliorare la
+  scalabilita' e semplificare il deployment in produzione.
+
+

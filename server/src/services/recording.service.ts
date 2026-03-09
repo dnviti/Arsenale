@@ -69,6 +69,8 @@ export async function startRecording(params: {
   protocol: SessionProtocol;
   format: string;
   filePath: string;
+  width?: number;
+  height?: number;
 }): Promise<string> {
   const recording = await prisma.sessionRecording.create({
     data: {
@@ -78,6 +80,8 @@ export async function startRecording(params: {
       protocol: params.protocol,
       format: params.format,
       filePath: params.filePath,
+      width: params.width,
+      height: params.height,
       status: 'RECORDING',
     },
   });

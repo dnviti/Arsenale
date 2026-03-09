@@ -23,6 +23,7 @@ export interface ContainerHealthcheck {
   interval: number;
   timeout: number;
   retries: number;
+  startPeriod?: number;
 }
 
 export interface ContainerConfig {

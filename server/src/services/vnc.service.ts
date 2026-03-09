@@ -74,6 +74,8 @@ export function generateVncGuacamoleToken(params: VncConnectionParams): string {
     settings['recording-path'] = params.recording.recordingPath;
     settings['recording-name'] = params.recording.recordingName;
     settings['create-recording-path'] = 'true';
+    settings['recording-exclude-output'] = 'false';
+    settings['recording-exclude-mouse'] = 'false';
   }
 
   const connectionConfig = {

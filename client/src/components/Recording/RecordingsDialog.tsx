@@ -13,8 +13,7 @@ import DownloadIcon from '@mui/icons-material/Download';
 import { listRecordings, deleteRecording } from '../../api/recordings.api';
 import type { Recording } from '../../api/recordings.api';
 import api from '../../api/client';
-import SshPlayer from './SshPlayer';
-import GuacPlayer from './GuacPlayer';
+import RecordingPlayerDialog from './RecordingPlayerDialog';
 
 const SlideUp = forwardRef(function SlideUp(
   props: TransitionProps & { children: React.ReactElement },
@@ -119,25 +118,6 @@ export default function RecordingsDialog({ open, onClose }: RecordingsDialogProp
         </AppBar>
 
         <Box sx={{ flex: 1, overflow: 'hidden', display: 'flex', flexDirection: 'column', p: 2 }}>
-          {/* Player area */}
-          {playingRecording && (
-            <Box sx={{ height: 400, mb: 2, border: 1, borderColor: 'divider', borderRadius: 1, p: 1 }}>
-              <Box sx={{ display: 'flex', justifyContent: 'space-between', mb: 1 }}>
-                <Typography variant="subtitle2">
-                  {playingRecording.connection.name} ({playingRecording.protocol})
-                </Typography>
-                <Button size="small" onClick={() => setPlayingRecording(null)}>Close Player</Button>
-              </Box>
-              <Box sx={{ height: 'calc(100% - 36px)' }}>
-                {playingRecording.format === 'asciicast' ? (
-                  <SshPlayer recordingId={playingRecording.id} />
-                ) : (
-                  <GuacPlayer recordingId={playingRecording.id} />
-                )}
-              </Box>
-            </Box>
-          )}
-
           {/* Filters */}
           <Box sx={{ display: 'flex', gap: 2, mb: 2 }}>
             <FormControl size="small" sx={{ minWidth: 120 }}>
@@ -236,6 +216,13 @@ export default function RecordingsDialog({ open, onClose }: RecordingsDialogProp
           )}
         </Box>
       </Dialog>
+
+      {/* Player popup dialog */}
+      <RecordingPlayerDialog
+        open={!!playingRecording}
+        onClose={() => setPlayingRecording(null)}
+        recording={playingRecording}
+      />
 
       {/* Delete confirmation dialog */}
       <Dialog open={!!deleteTarget} onClose={() => setDeleteTarget(null)}>
