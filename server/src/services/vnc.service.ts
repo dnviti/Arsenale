@@ -1,6 +1,6 @@
 import crypto from 'crypto';
-import { config } from '../config';
 import type { VncSettings } from '../types';
+import { getGuacamoleKey } from './rdp.service';
 
 export interface VncRecordingParams {
   recordingPath: string;
@@ -21,10 +21,6 @@ export interface VncConnectionParams {
     ipAddress?: string;
     recordingId?: string;
   };
-}
-
-function getGuacamoleKey(): Buffer {
-  return crypto.createHash('sha256').update(config.guacamoleSecret).digest();
 }
 
 /** Merge system defaults with connection overrides */
@@ -89,23 +85,28 @@ export function generateVncGuacamoleToken(params: VncConnectionParams): string {
   };
 
   // guacamole-lite's Crypt.decrypt() outputs with 'ascii' encoding,
-  // which corrupts any byte > 127. Escape non-ASCII chars to \uXXXX.
+  // which corrupts any byte > 127. Escape non-ASCII chars to \uXXXX
+  // so the plaintext is pure ASCII and survives the round-trip.
   const data = JSON.stringify(connectionConfig).replace(
     /[\u0080-\uffff]/g,
     (ch) => '\\u' + ch.charCodeAt(0).toString(16).padStart(4, '0'),
   );
-  const iv = crypto.randomBytes(16);
+  const iv = crypto.randomBytes(12); // GCM uses 12 bytes
   const key = getGuacamoleKey();
-  const cipher = crypto.createCipheriv('aes-256-cbc', key, iv);
+  const cipher = crypto.createCipheriv('aes-256-gcm', key, iv);
 
   let encrypted = cipher.update(data, 'utf8', 'binary');
   encrypted += cipher.final('binary');
+  const tag = cipher.getAuthTag();
 
   const tokenObj = {
     iv: iv.toString('base64'),
     value: Buffer.from(encrypted, 'binary').toString('base64'),
+    tag: tag.toString('base64'),
   };
 
+  // Append '=' so base64 always has padding — prevents URL-appended chars
+  // (from guacamole-common-js WebSocketTunnel) from being decoded as base64
   const b64 = Buffer.from(JSON.stringify(tokenObj)).toString('base64');
   return b64.endsWith('=') ? b64 : b64 + '=';
 }

@@ -273,11 +273,13 @@ async function main() {
       guacServer.on('close', (clientConnection: any) => {
         try {
           const metadata = clientConnection.connectionSettings?.metadata;
+          const connType = clientConnection.connectionSettings?.connection?.type;
+          const protocol = connType === 'vnc' ? 'VNC' : 'RDP';
           if (metadata?.userId && metadata?.connectionId) {
             sessionService.closeStaleSessionsForConnection(
               metadata.userId,
               metadata.connectionId,
-              'RDP',
+              protocol,
             ).catch((err: unknown) => {
               logger.error('Failed to end session on guac close:', err);
             });
