@@ -22,31 +22,6 @@
 
 # Scouted 2026-03-11 — Code Optimization & Cleanup
 
-------------------------------------------------------------------------------
-[ ] REFAC-203 — Async controller wrapper per eliminare boilerplate try-catch-next
-------------------------------------------------------------------------------
-  Priorita: ALTA
-  Dipendenze: Nessuna
-
-  DESCRIZIONE:
-  Creare un wrapper `asyncHandler()` che avvolge le funzioni controller async
-  e inoltra automaticamente gli errori a `next()`. Attualmente tutti i 26
-  controller usano lo stesso pattern `try { ... } catch (err) { next(err); }`
-  ripetuto 201 volte. Il wrapper elimina ~400 righe di boilerplate e previene
-  dimenticanze nell'inoltro degli errori.
-
-  DETTAGLI TECNICI:
-  1) Creare `server/src/middleware/asyncHandler.ts`:
-     - Funzione wrapper che accetta un `RequestHandler` async e restituisce
-       un handler che cattura automaticamente Promise rejection e chiama next()
-  2) Applicare il wrapper a tutti i controller esistenti (26 file)
-  3) Rimuovere i blocchi try-catch-next ridondanti
-
-  File coinvolti:
-    CREARE:     server/src/middleware/asyncHandler.ts
-    MODIFICARE: server/src/controllers/*.controller.ts (tutti i 26 file)
-    MODIFICARE: server/src/routes/*.routes.ts (applicare wrapper nelle route)
-
 
 ------------------------------------------------------------------------------
 [ ] REFAC-204 — Estrarre utility condivise nei servizi (tenant boundary, re-encryption, vault key)

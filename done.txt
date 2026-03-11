@@ -3230,3 +3230,15 @@
   - server/src/services/secretSharing.service.ts (modified)
   - server/src/services/sharing.service.ts (modified)
 
+------------------------------------------------------------------------------
+[x] REFAC-203 — Async controller wrapper per eliminare boilerplate try-catch-next
+------------------------------------------------------------------------------
+  Priorita: ALTA
+  Dipendenze: Nessuna
+  COMPLETATO: Created asyncHandler() wrapper in server/src/middleware/asyncHandler.ts. Applied route-level wrapping across 25 route files. Removed ~176 boilerplate try-catch-next blocks from 26 controller files. Preserved 16 Category C catch blocks with custom logic (auth error mapping, session audit logging, JSON parse error handling). Reduced catch block count from ~192 to 16.
+
+  FILE COINVOLTI:
+  - server/src/middleware/asyncHandler.ts (new)
+  - All 26 files in server/src/controllers/*.controller.ts (modified)
+  - 25 route files in server/src/routes/*.routes.ts (modified)
+
