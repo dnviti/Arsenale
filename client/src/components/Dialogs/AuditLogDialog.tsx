@@ -1,9 +1,10 @@
-import { useState, useEffect, useCallback, forwardRef, Fragment } from 'react';
+import { useState, useEffect, useCallback, useRef, forwardRef, Fragment } from 'react';
 import {
   Dialog, AppBar, Toolbar, Typography, Box, IconButton, Card, CardContent,
   Table, TableHead, TableBody, TableRow, TableCell, TablePagination,
   Select, MenuItem, FormControl, InputLabel, TextField, Stack,
   CircularProgress, Chip, Alert, Slide, Collapse, TableSortLabel, InputAdornment,
+  Tooltip,
 } from '@mui/material';
 import type { TransitionProps } from '@mui/material/transitions';
 import {
@@ -11,6 +12,8 @@ import {
   Search as SearchIcon,
   KeyboardArrowDown as ExpandIcon,
   KeyboardArrowUp as CollapseIcon,
+  Pause as PauseIcon,
+  PlayArrow as PlayIcon,
 } from '@mui/icons-material';
 import { getAuditLogs, getAuditGateways, getAuditCountries, AuditLogEntry, AuditAction, AuditLogParams, AuditGateway } from '../../api/audit.api';
 import { useUiPreferencesStore } from '../../store/uiPreferencesStore';
@@ -30,6 +33,8 @@ interface AuditLogDialogProps {
   onGeoIpClick?: (ip: string) => void;
 }
 
+const AUTO_REFRESH_INTERVAL_MS = 10_000;
+
 export default function AuditLogDialog({ open, onClose, onGeoIpClick }: AuditLogDialogProps) {
   const auditLogAction = useUiPreferencesStore((s) => s.auditLogAction);
   const auditLogSearch = useUiPreferencesStore((s) => s.auditLogSearch);
@@ -37,6 +42,7 @@ export default function AuditLogDialog({ open, onClose, onGeoIpClick }: AuditLog
   const auditLogGatewayId = useUiPreferencesStore((s) => s.auditLogGatewayId);
   const auditLogSortBy = useUiPreferencesStore((s) => s.auditLogSortBy);
   const auditLogSortOrder = useUiPreferencesStore((s) => s.auditLogSortOrder);
+  const autoRefreshPaused = useUiPreferencesStore((s) => s.auditLogAutoRefreshPaused);
   const setUiPref = useUiPreferencesStore((s) => s.set);
 
   const [logs, setLogs] = useState<AuditLogEntry[]>([]);
@@ -100,6 +106,18 @@ export default function AuditLogDialog({ open, onClose, onGeoIpClick }: AuditLog
     }
   }, [open, fetchLogs]);
 
+  // Auto-refresh: poll every 10s when on page 0, not paused, and dialog is open
+  const fetchLogsRef = useRef(fetchLogs);
+  fetchLogsRef.current = fetchLogs;
+
+  useEffect(() => {
+    if (!open || autoRefreshPaused || page !== 0) return;
+    const id = setInterval(() => {
+      fetchLogsRef.current();
+    }, AUTO_REFRESH_INTERVAL_MS);
+    return () => clearInterval(id);
+  }, [open, autoRefreshPaused, page]);
+
   const handleChangePage = (_: unknown, newPage: number) => {
     setPage(newPage);
   };
@@ -133,7 +151,42 @@ export default function AuditLogDialog({ open, onClose, onGeoIpClick }: AuditLog
           <IconButton edge="start" color="inherit" onClick={onClose} sx={{ mr: 1 }}>
             <CloseIcon />
           </IconButton>
-          <Typography variant="h6">Activity Log</Typography>
+          <Typography variant="h6" sx={{ flex: 1 }}>Activity Log</Typography>
+          <Tooltip title={autoRefreshPaused ? 'Resume live updates' : 'Pause live updates'}>
+            <IconButton
+              color="inherit"
+              onClick={() => setUiPref('auditLogAutoRefreshPaused', !autoRefreshPaused)}
+              sx={{ mr: 0.5 }}
+            >
+              {autoRefreshPaused ? <PlayIcon /> : <PauseIcon />}
+            </IconButton>
+          </Tooltip>
+          <Chip
+            label={autoRefreshPaused ? 'Paused' : 'Live'}
+            size="small"
+            color={autoRefreshPaused ? 'default' : 'success'}
+            variant={autoRefreshPaused ? 'outlined' : 'filled'}
+            sx={{
+              color: autoRefreshPaused ? 'inherit' : undefined,
+              fontWeight: 600,
+              ...(!autoRefreshPaused && {
+                '& .MuiChip-label::before': {
+                  content: '""',
+                  display: 'inline-block',
+                  width: 6,
+                  height: 6,
+                  borderRadius: '50%',
+                  backgroundColor: 'currentColor',
+                  mr: 0.75,
+                  animation: 'auditLivePulse 1.5s ease-in-out infinite',
+                },
+                '@keyframes auditLivePulse': {
+                  '0%, 100%': { opacity: 1 },
+                  '50%': { opacity: 0.3 },
+                },
+              }),
+            }}
+          />
         </Toolbar>
       </AppBar>
 

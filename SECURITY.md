@@ -6,7 +6,7 @@ Please **do not** open public GitHub issues for security vulnerabilities.
 
 Report vulnerabilities responsibly by emailing:
 
-**security@dnviti.dev**
+**security@arsenalepam.com**
 
 Include in your report:
 - A clear description of the vulnerability

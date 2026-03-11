@@ -212,6 +212,7 @@ export function registerDemoCommands(program: Command): void {
                 port: conn.port,
                 credentialSecretId: createdSecrets[conn.secretName],
                 description: `Automatically generated demo ${conn.type} connection`,
+                ...(conn.type === ConnectionType.RDP && { rdpSettings: { ignoreCert: true } }),
               },
               targetTenantId
             );

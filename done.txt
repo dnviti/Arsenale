@@ -1267,6 +1267,17 @@
     MODIFICARE: eslint.config.mjs
     MODIFICARE: server/src/services/tenant.service.ts
 
+------------------------------------------------------------------------------
+[x] AUDIT-178 — Auto-refresh e pausa per la pagina Audit Log
+------------------------------------------------------------------------------
+  Priorita: MEDIA
+  Dipendenze: Nessuna
+  COMPLETATO: Auto-refresh with 10-second interval added to AuditLogDialog. Interval only fires when on page 0 and when not paused. Play/Pause IconButton with tooltip in AppBar toolbar. Live/Paused pulsing indicator chip. State is persisted via uiPreferencesStore.
+
+  File coinvolti:
+    MODIFICATO: client/src/components/Dialogs/AuditLogDialog.tsx
+    MODIFICATO: client/src/store/uiPreferencesStore.ts
+
 
 ================================================================================
   SEZIONE C — MULTI-TENANT / TEAMS / PERMESSI
@@ -3119,4 +3130,34 @@
     MODIFICARE: client/src/components/Settings/TenantAuditLogSection.tsx
     MODIFICARE: client/src/components/Dialogs/ConnectionAuditLogDialog.tsx
     MODIFICARE: .env.example
+
+------------------------------------------------------------------------------
+[x] GEO-177 — Popup interno per info GeoIP con mappa OpenStreetMap
+------------------------------------------------------------------------------
+  Priorita: MEDIA
+  Dipendenze: Nessuna
+  COMPLETATO: Full-screen GeoIpDialog with Leaflet/OpenStreetMap map, ip-api.com backend proxy with in-memory cache and rate limiting, info panel showing location/network/flags data. IpGeoCell opens dialog instead of external link. Backend endpoint GET /api/geoip/:ip mounted in app.ts, dialog rendered from MainLayout.
+
+  File coinvolti:
+    CREATO:     client/src/components/Audit/GeoIpDialog.tsx
+    CREATO:     server/src/routes/geoip.routes.ts
+    CREATO:     server/src/controllers/geoip.controller.ts
+    MODIFICATO: client/src/components/Audit/IpGeoCell.tsx
+    MODIFICATO: server/src/app.ts
+    MODIFICATO: client/src/components/Layout/MainLayout.tsx
+
+------------------------------------------------------------------------------
+[x] GEO-107 — Audit log geolocation map visualization
+------------------------------------------------------------------------------
+  Priorita: BASSA
+  Dipendenze: GEO-106
+  COMPLETATO: AuditGeoMap component with Leaflet CircleMarkers for tenant audit log geographic visualization. Backend GET /api/audit/tenant/geo-summary endpoint (admin-only). ToggleButtonGroup (table/map) in TenantAuditLogSection with view mode persisted in uiPreferencesStore (tenantAuditLogViewMode). Click-to-filter: clicking a marker sets country filter and switches to table view.
+
+  File coinvolti:
+    CREATO:     client/src/components/Audit/AuditGeoMap.tsx
+    MODIFICATO: server/src/routes/audit.routes.ts
+    MODIFICATO: server/src/controllers/audit.controller.ts
+    MODIFICATO: client/src/components/Settings/TenantAuditLogSection.tsx
+    MODIFICATO: client/src/store/uiPreferencesStore.ts
+    MODIFICATO: client/src/api/audit.api.ts
 

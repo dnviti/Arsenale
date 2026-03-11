@@ -163,3 +163,6 @@ trivy-*.sarif
 # to-do.txt
 # progressing.txt
 # done.txt
+
+# ignore the security report
+security-report.md
