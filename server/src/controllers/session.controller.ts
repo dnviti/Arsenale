@@ -20,6 +20,9 @@ import { logger } from '../utils/logger';
 import { getClientIp } from '../utils/ip';
 import type { SessionInput } from '../schemas/session.schemas';
 
+const DEFAULT_RDP_WIDTH = 1024;
+const DEFAULT_RDP_HEIGHT = 768;
+
 // ---- RDP session creation (migrated from rdp.handler.ts) ----
 
 export async function createRdpSession(req: AuthRequest, res: Response, next: NextFunction) {
@@ -133,8 +136,8 @@ export async function createRdpSession(req: AuthRequest, res: Response, next: Ne
       // recording without initial graphical content (only mouse cursor visible)
       mergedRdp.resizeMethod = 'reconnect';
       if (!mergedRdp.width) {
-        mergedRdp.width = 1024;
-        mergedRdp.height = 768;
+        mergedRdp.width = DEFAULT_RDP_WIDTH;
+        mergedRdp.height = DEFAULT_RDP_HEIGHT;
       }
       try {
         const recGatewayDir = selectedContainerName || 'default';
