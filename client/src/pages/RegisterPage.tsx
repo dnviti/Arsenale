@@ -6,6 +6,7 @@ import {
 import { registerApi, getPublicConfig } from '../api/auth.api';
 import { resendVerificationEmail } from '../api/email.api';
 import OAuthButtons from '../components/OAuthButtons';
+import { extractApiError } from '../utils/apiError';
 
 export default function RegisterPage() {
   const navigate = useNavigate();
@@ -73,10 +74,7 @@ export default function RegisterPage() {
       setRegistered(true);
       setResendCountdown(60);
     } catch (err: unknown) {
-      const msg =
-        (err as { response?: { data?: { error?: string } } })?.response?.data?.error ||
-        'Registration failed';
-      setError(msg);
+      setError(extractApiError(err, 'Registration failed'));
     } finally {
       setLoading(false);
     }

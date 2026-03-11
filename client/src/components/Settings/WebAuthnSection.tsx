@@ -11,6 +11,7 @@ import {
   registerWebAuthnCredential, removeWebAuthnCredential, renameWebAuthnCredential,
   type WebAuthnCredentialInfo,
 } from '../../api/webauthn.api';
+import { extractApiError } from '../../utils/apiError';
 
 export default function WebAuthnSection() {
   const [enabled, setEnabled] = useState(false);
@@ -62,10 +63,7 @@ export default function WebAuthnSection() {
       if ((err as Error)?.name === 'NotAllowedError') {
         setError('Registration was cancelled or timed out.');
       } else {
-        const msg =
-          (err as { response?: { data?: { error?: string } } })?.response?.data?.error ||
-          'Failed to start registration.';
-        setError(msg);
+        setError(extractApiError(err, 'Failed to start registration.'));
       }
     } finally {
       setRegistering(false);
@@ -82,10 +80,7 @@ export default function WebAuthnSection() {
       setPendingCredential(null);
       await loadData();
     } catch (err: unknown) {
-      const msg =
-        (err as { response?: { data?: { error?: string } } })?.response?.data?.error ||
-        'Registration verification failed.';
-      setError(msg);
+      setError(extractApiError(err, 'Registration verification failed.'));
       setNameDialogOpen(false);
     } finally {
       setLoading(false);
@@ -101,10 +96,7 @@ export default function WebAuthnSection() {
       setDeleteConfirmId(null);
       await loadData();
     } catch (err: unknown) {
-      const msg =
-        (err as { response?: { data?: { error?: string } } })?.response?.data?.error ||
-        'Failed to remove credential.';
-      setError(msg);
+      setError(extractApiError(err, 'Failed to remove credential.'));
     } finally {
       setLoading(false);
     }
@@ -119,10 +111,7 @@ export default function WebAuthnSection() {
       setEditingId(null);
       await loadData();
     } catch (err: unknown) {
-      const msg =
-        (err as { response?: { data?: { error?: string } } })?.response?.data?.error ||
-        'Failed to rename credential.';
-      setError(msg);
+      setError(extractApiError(err, 'Failed to rename credential.'));
     } finally {
       setLoading(false);
     }

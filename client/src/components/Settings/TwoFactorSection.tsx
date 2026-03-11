@@ -4,6 +4,7 @@ import {
 } from '@mui/material';
 import { QRCodeSVG } from 'qrcode.react';
 import { setup2FA, verify2FA, disable2FA, get2FAStatus } from '../../api/twofa.api';
+import { extractApiError } from '../../utils/apiError';
 
 type Phase = 'idle' | 'setup' | 'disabling';
 
@@ -54,10 +55,7 @@ export default function TwoFactorSection() {
       setSecret('');
       setOtpauthUri('');
     } catch (err: unknown) {
-      const msg =
-        (err as { response?: { data?: { error?: string } } })?.response?.data?.error ||
-        'Invalid code';
-      setError(msg);
+      setError(extractApiError(err, 'Invalid code'));
     } finally {
       setLoading(false);
     }
@@ -73,10 +71,7 @@ export default function TwoFactorSection() {
       setPhase('idle');
       setDisableCode('');
     } catch (err: unknown) {
-      const msg =
-        (err as { response?: { data?: { error?: string } } })?.response?.data?.error ||
-        'Invalid code';
-      setError(msg);
+      setError(extractApiError(err, 'Invalid code'));
     } finally {
       setLoading(false);
     }

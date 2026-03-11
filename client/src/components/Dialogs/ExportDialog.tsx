@@ -18,6 +18,7 @@ import {
 import { CloudDownload as DownloadIcon } from '@mui/icons-material';
 import { downloadExport } from '../../api/importExport.api';
 import { getVaultStatus } from '../../api/vault.api';
+import { extractApiError } from '../../utils/apiError';
 
 interface ExportDialogProps {
   open: boolean;
@@ -68,10 +69,7 @@ export default function ExportDialog({ open, onClose, folderId, connectionIds }:
         connectionIds,
       }, filename);
     } catch (err: unknown) {
-      const msg =
-        (err as { response?: { data?: { error?: string } } })?.response?.data?.error ||
-        'Export failed';
-      setError(msg);
+      setError(extractApiError(err, 'Export failed'));
     } finally {
       setLoading(false);
     }

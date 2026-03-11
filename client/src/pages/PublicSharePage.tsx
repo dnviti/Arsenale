@@ -13,6 +13,7 @@ import {
   getExternalShareInfo, accessExternalShare,
 } from '../api/secrets.api';
 import type { ExternalShareInfo, SecretPayload } from '../api/secrets.api';
+import { extractApiError } from '../utils/apiError';
 
 function SensitiveValue({ value }: { value: string }) {
   const [visible, setVisible] = useState(false);
@@ -153,10 +154,7 @@ export default function PublicSharePage() {
         await accessShare();
       }
     } catch (err: unknown) {
-      const msg =
-        (err as { response?: { data?: { error?: string } } })?.response?.data?.error ||
-        'Share not found or no longer available';
-      setError(msg);
+      setError(extractApiError(err, 'Share not found or no longer available'));
     } finally {
       setLoading(false);
     }
@@ -171,10 +169,7 @@ export default function PublicSharePage() {
       setSecretName(result.secretName);
     } catch (err: unknown) {
       const status = (err as { response?: { status?: number } })?.response?.status;
-      const msg =
-        (err as { response?: { data?: { error?: string } } })?.response?.data?.error ||
-        (status === 403 ? 'Invalid PIN' : 'Failed to access share');
-      setError(msg);
+      setError(extractApiError(err, status === 403 ? 'Invalid PIN' : 'Failed to access share'));
     } finally {
       setAccessing(false);
     }

@@ -22,6 +22,7 @@ import {
 import { logoutApi } from '../../api/auth.api';
 import { useVaultStore } from '../../store/vaultStore';
 import { useAuthStore } from '../../store/authStore';
+import { extractApiError } from '../../utils/apiError';
 
 type UnlockMethod = 'webauthn' | 'totp' | 'sms' | 'password';
 const METHOD_PRIORITY: UnlockMethod[] = ['webauthn', 'totp', 'sms', 'password'];
@@ -44,11 +45,6 @@ function getMethodIcon(method: UnlockMethod) {
   }
 }
 
-function extractError(err: unknown, fallback: string): string {
-  return (err as { response?: { data?: { error?: string } } })?.response?.data?.error
-    || (err as Error)?.message
-    || fallback;
-}
 
 export default function VaultLockedOverlay() {
   const unlocked = useVaultStore((s) => s.unlocked);
@@ -102,7 +98,7 @@ export default function VaultLockedOverlay() {
       await unlockVaultWithWebAuthn(credential);
       onSuccess();
     } catch (err: unknown) {
-      setError(extractError(err, 'WebAuthn authentication failed'));
+      setError(extractApiError(err, 'WebAuthn authentication failed'));
     } finally {
       setLoading(false);
     }
@@ -123,7 +119,7 @@ export default function VaultLockedOverlay() {
       await unlockVault(password);
       onSuccess();
     } catch (err: unknown) {
-      setError(extractError(err, 'Failed to unlock vault'));
+      setError(extractApiError(err, 'Failed to unlock vault'));
     } finally {
       setLoading(false);
     }
@@ -136,7 +132,7 @@ export default function VaultLockedOverlay() {
       await unlockVaultWithTotp(code);
       onSuccess();
     } catch (err: unknown) {
-      setError(extractError(err, 'Invalid TOTP code'));
+      setError(extractApiError(err, 'Invalid TOTP code'));
     } finally {
       setLoading(false);
     }
@@ -149,7 +145,7 @@ export default function VaultLockedOverlay() {
       await requestVaultSmsCode();
       setSmsSent(true);
     } catch (err: unknown) {
-      setError(extractError(err, 'Failed to send SMS code'));
+      setError(extractApiError(err, 'Failed to send SMS code'));
     } finally {
       setLoading(false);
     }
@@ -162,7 +158,7 @@ export default function VaultLockedOverlay() {
       await unlockVaultWithSms(code);
       onSuccess();
     } catch (err: unknown) {
-      setError(extractError(err, 'Invalid or expired SMS code'));
+      setError(extractApiError(err, 'Invalid or expired SMS code'));
     } finally {
       setLoading(false);
     }

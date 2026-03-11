@@ -17,6 +17,7 @@ import { ConnectionData } from '../../api/connections.api';
 import { UserSearchResult } from '../../api/user.api';
 import { collectFolderConnections } from '../Sidebar/treeHelpers';
 import UserPicker from '../UserPicker';
+import { extractApiError } from '../../utils/apiError';
 
 interface ShareFolderDialogProps {
   open: boolean;
@@ -97,10 +98,7 @@ export default function ShareFolderDialog({
       setSelectedUser(null);
       setEmail('');
     } catch (err: unknown) {
-      const msg =
-        (err as { response?: { data?: { error?: string } } })?.response?.data?.error ||
-        'Failed to share connections';
-      setError(msg);
+      setError(extractApiError(err, 'Failed to share connections'));
     } finally {
       setLoading(false);
     }

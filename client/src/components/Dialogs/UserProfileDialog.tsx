@@ -1,10 +1,9 @@
-import { useState, useEffect, useCallback, forwardRef } from 'react';
+import { useState, useEffect, useCallback } from 'react';
 import {
   Dialog, AppBar, Toolbar, Typography, Box, IconButton, Avatar, Chip, Stack,
-  CircularProgress, Alert, Slide, Table, TableHead, TableBody, TableRow,
+  CircularProgress, Alert, Table, TableHead, TableBody, TableRow,
   TableCell, TablePagination, Divider,
 } from '@mui/material';
-import type { TransitionProps } from '@mui/material/transitions';
 import {
   Close as CloseIcon,
   Shield as ShieldIcon,
@@ -14,13 +13,7 @@ import { getUserProfile, UserProfileData } from '../../api/tenant.api';
 import { getTenantAuditLogs, TenantAuditLogEntry } from '../../api/audit.api';
 import { useAuthStore } from '../../store/authStore';
 import { ACTION_LABELS, getActionColor } from '../Audit/auditConstants';
-
-const SlideUp = forwardRef(function SlideUp(
-  props: TransitionProps & { children: React.ReactElement },
-  ref: React.Ref<unknown>,
-) {
-  return <Slide direction="up" ref={ref} {...props} />;
-});
+import { SlideUp } from '../common/SlideUp';
 
 interface UserProfileDialogProps {
   open: boolean;

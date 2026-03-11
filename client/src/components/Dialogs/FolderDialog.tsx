@@ -5,6 +5,7 @@ import {
 } from '@mui/material';
 import { createFolder, updateFolder, FolderData } from '../../api/folders.api';
 import { useConnectionsStore } from '../../store/connectionsStore';
+import { extractApiError } from '../../utils/apiError';
 
 interface FolderDialogProps {
   open: boolean;
@@ -84,10 +85,7 @@ export default function FolderDialog({ open, onClose, folder, parentId, teamId }
       await fetchConnections();
       handleClose();
     } catch (err: unknown) {
-      const msg =
-        (err as { response?: { data?: { error?: string } } })?.response?.data?.error ||
-        (isEditMode ? 'Failed to update folder' : 'Failed to create folder');
-      setError(msg);
+      setError(extractApiError(err, isEditMode ? 'Failed to update folder' : 'Failed to create folder'));
     } finally {
       setLoading(false);
     }

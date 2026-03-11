@@ -13,6 +13,7 @@ import type { SecretShare } from '../../api/secrets.api';
 import { useAuthStore } from '../../store/authStore';
 import { UserSearchResult } from '../../api/user.api';
 import UserPicker from '../UserPicker';
+import { extractApiError } from '../../utils/apiError';
 
 interface ShareSecretDialogProps {
   open: boolean;
@@ -82,10 +83,7 @@ export default function ShareSecretDialog({
       setEmail('');
       await loadShares();
     } catch (err: unknown) {
-      const msg =
-        (err as { response?: { data?: { error?: string } } })?.response?.data?.error ||
-        'Failed to share secret';
-      setError(msg);
+      setError(extractApiError(err, 'Failed to share secret'));
     } finally {
       setLoading(false);
     }

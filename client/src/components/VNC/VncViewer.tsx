@@ -5,6 +5,7 @@ import { io } from 'socket.io-client';
 import api from '../../api/client';
 import { useAuthStore } from '../../store/authStore';
 import type { CredentialOverride } from '../../store/tabsStore';
+import { extractApiError } from '../../utils/apiError';
 
 interface VncViewerProps {
   connectionId: string;
@@ -201,10 +202,7 @@ export default function VncViewer({ connectionId, tabId: _tabId, isActive = true
       } catch (err: unknown) {
         if (cancelled) return;
         setStatus('error');
-        const msg =
-          (err as { response?: { data?: { error?: string } } })?.response?.data?.error ||
-          (err instanceof Error ? err.message : 'Failed to start VNC session');
-        setError(msg);
+        setError(extractApiError(err, err instanceof Error ? err.message : 'Failed to start VNC session'));
       }
     }
 

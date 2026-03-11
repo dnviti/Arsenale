@@ -9,6 +9,7 @@ import {
   type EmailChangeInitResult, type VerificationMethod,
 } from '../../api/user.api';
 import IdentityVerification from '../common/IdentityVerification';
+import { extractApiError } from '../../utils/apiError';
 
 interface ProfileSectionProps {
   onHasPasswordResolved: (hasPassword: boolean) => void;
@@ -89,8 +90,7 @@ export default function ProfileSection({ onHasPasswordResolved, linkedProvider }
       updateUser({ username: result.username });
       setSuccess('Profile updated successfully');
     } catch (err: unknown) {
-      const msg = (err as { response?: { data?: { error?: string } } })?.response?.data?.error || 'Failed to update profile';
-      setError(msg);
+      setError(extractApiError(err, 'Failed to update profile'));
     } finally {
       setLoading(false);
     }
@@ -114,8 +114,7 @@ export default function ProfileSection({ onHasPasswordResolved, linkedProvider }
         setEmailChangePhase('identity-verifying');
       }
     } catch (err: unknown) {
-      const msg = (err as { response?: { data?: { error?: string } } })?.response?.data?.error || 'Failed to initiate email change';
-      setEmailChangeError(msg);
+      setEmailChangeError(extractApiError(err, 'Failed to initiate email change'));
     } finally {
       setEmailChangeLoading(false);
     }
@@ -135,8 +134,7 @@ export default function ProfileSection({ onHasPasswordResolved, linkedProvider }
       setSuccess('Email changed successfully');
       resetEmailChange();
     } catch (err: unknown) {
-      const msg = (err as { response?: { data?: { error?: string } } })?.response?.data?.error || 'Failed to confirm email change';
-      setEmailChangeError(msg);
+      setEmailChangeError(extractApiError(err, 'Failed to confirm email change'));
     } finally {
       setEmailChangeLoading(false);
     }
@@ -151,8 +149,7 @@ export default function ProfileSection({ onHasPasswordResolved, linkedProvider }
       setSuccess('Email changed successfully');
       resetEmailChange();
     } catch (err: unknown) {
-      const msg = (err as { response?: { data?: { error?: string } } })?.response?.data?.error || 'Failed to confirm email change';
-      setEmailChangeError(msg);
+      setEmailChangeError(extractApiError(err, 'Failed to confirm email change'));
       setEmailChangePhase('entering-email');
     } finally {
       setEmailChangeLoading(false);

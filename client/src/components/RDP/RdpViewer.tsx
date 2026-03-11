@@ -8,6 +8,7 @@ import { useAuthStore } from '../../store/authStore';
 import type { CredentialOverride } from '../../store/tabsStore';
 import FileBrowser from './FileBrowser';
 import FloatingToolbar, { ToolbarAction } from '../shared/FloatingToolbar';
+import { extractApiError } from '../../utils/apiError';
 
 interface RdpViewerProps {
   connectionId: string;
@@ -241,10 +242,7 @@ export default function RdpViewer({ connectionId, tabId: _tabId, isActive = true
       } catch (err: unknown) {
         if (cancelled) return;
         setStatus('error');
-        const msg =
-          (err as { response?: { data?: { error?: string } } })?.response?.data?.error ||
-          (err instanceof Error ? err.message : 'Failed to start RDP session');
-        setError(msg);
+        setError(extractApiError(err, err instanceof Error ? err.message : 'Failed to start RDP session'));
       }
     }
 

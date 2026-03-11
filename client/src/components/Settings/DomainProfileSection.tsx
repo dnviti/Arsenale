@@ -10,6 +10,7 @@ import {
   type DomainProfile,
 } from '../../api/user.api';
 import { useVaultStore } from '../../store/vaultStore';
+import { extractApiError } from '../../utils/apiError';
 
 export default function DomainProfileSection() {
   const [profile, setProfile] = useState<DomainProfile | null>(null);
@@ -56,10 +57,7 @@ export default function DomainProfileSection() {
       setEditing(false);
       setSuccess('Domain profile updated');
     } catch (err: unknown) {
-      setError(
-        (err as { response?: { data?: { error?: string } } })?.response?.data?.error ||
-        'Failed to update domain profile',
-      );
+      setError(extractApiError(err, 'Failed to update domain profile'));
     } finally {
       setSaving(false);
     }
@@ -81,10 +79,7 @@ export default function DomainProfileSection() {
       setEditing(false);
       setSuccess('Domain profile cleared');
     } catch (err: unknown) {
-      setError(
-        (err as { response?: { data?: { error?: string } } })?.response?.data?.error ||
-        'Failed to clear domain profile',
-      );
+      setError(extractApiError(err, 'Failed to clear domain profile'));
     } finally {
       setSaving(false);
     }

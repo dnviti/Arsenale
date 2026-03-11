@@ -14,6 +14,7 @@ import {
   createExternalShare, listExternalShares, revokeExternalShare,
 } from '../../api/secrets.api';
 import type { ExternalShareResult, ExternalShareListItem } from '../../api/secrets.api';
+import { extractApiError } from '../../utils/apiError';
 
 interface ExternalShareDialogProps {
   open: boolean;
@@ -95,10 +96,7 @@ export default function ExternalShareDialog({
       setResult(res);
       await loadShares();
     } catch (err: unknown) {
-      const msg =
-        (err as { response?: { data?: { error?: string } } })?.response?.data?.error ||
-        'Failed to create external share';
-      setError(msg);
+      setError(extractApiError(err, 'Failed to create external share'));
     } finally {
       setLoading(false);
     }

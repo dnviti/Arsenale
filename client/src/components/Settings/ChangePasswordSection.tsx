@@ -8,6 +8,7 @@ import {
   type VerificationMethod,
 } from '../../api/user.api';
 import IdentityVerification from '../common/IdentityVerification';
+import { extractApiError } from '../../utils/apiError';
 
 interface ChangePasswordSectionProps {
   hasPassword: boolean;
@@ -52,8 +53,7 @@ export default function ChangePasswordSection({ hasPassword }: ChangePasswordSec
         setPhase('verifying-identity');
       }
     } catch (err: unknown) {
-      const msg = (err as { response?: { data?: { error?: string } } })?.response?.data?.error || 'Failed to initiate password change';
-      setError(msg);
+      setError(extractApiError(err, 'Failed to initiate password change'));
     } finally {
       setLoading(false);
     }
@@ -86,8 +86,7 @@ export default function ChangePasswordSection({ hasPassword }: ChangePasswordSec
         authLogout();
       }, 2000);
     } catch (err: unknown) {
-      const msg = (err as { response?: { data?: { error?: string } } })?.response?.data?.error || 'Failed to change password';
-      setError(msg);
+      setError(extractApiError(err, 'Failed to change password'));
     } finally {
       setLoading(false);
     }

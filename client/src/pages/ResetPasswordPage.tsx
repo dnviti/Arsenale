@@ -9,6 +9,7 @@ import {
   requestResetSmsCodeApi,
   completePasswordResetApi,
 } from '../api/passwordReset.api';
+import { extractApiError } from '../utils/apiError';
 
 type Step = 'validating' | 'sms' | 'form' | 'success' | 'error';
 
@@ -77,10 +78,7 @@ export default function ResetPasswordPage() {
       await requestResetSmsCodeApi(token);
       setSmsSent(true);
     } catch (err: unknown) {
-      const msg =
-        (err as { response?: { data?: { error?: string } } })?.response?.data?.error ||
-        'Failed to send SMS code';
-      setError(msg);
+      setError(extractApiError(err, 'Failed to send SMS code'));
     } finally {
       setSmsSending(false);
     }
@@ -115,10 +113,7 @@ export default function ResetPasswordPage() {
       setNewRecoveryKey(result.newRecoveryKey || '');
       setStep('success');
     } catch (err: unknown) {
-      const msg =
-        (err as { response?: { data?: { error?: string } } })?.response?.data?.error ||
-        'Password reset failed. Please try again.';
-      setError(msg);
+      setError(extractApiError(err, 'Password reset failed. Please try again.'));
     } finally {
       setLoading(false);
     }

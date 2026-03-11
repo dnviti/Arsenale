@@ -14,6 +14,7 @@ import { initiateIdentityVerification, type VerificationMethod } from '../../api
 import InviteDialog from '../Dialogs/InviteDialog';
 import CreateUserDialog from '../Dialogs/CreateUserDialog';
 import IdentityVerification from '../common/IdentityVerification';
+import { extractApiError } from '../../utils/apiError';
 
 const TENANT_ROLES = ['OWNER', 'ADMIN', 'MEMBER'] as const;
 
@@ -119,10 +120,7 @@ export default function TenantSection({ onNavigateToTab, onViewUserProfile }: Te
     try {
       await updateTenant({ name: editName.trim() });
     } catch (err: unknown) {
-      setNameError(
-        (err as { response?: { data?: { error?: string } } })?.response?.data?.error ||
-        'Failed to update name'
-      );
+      setNameError(extractApiError(err, 'Failed to update name'));
     } finally {
       setSavingName(false);
     }
@@ -139,10 +137,7 @@ export default function TenantSection({ onNavigateToTab, onViewUserProfile }: Te
     try {
       await updateTenant({ defaultSessionTimeoutSeconds: minutes * 60 });
     } catch (err: unknown) {
-      setTimeoutError(
-        (err as { response?: { data?: { error?: string } } })?.response?.data?.error ||
-        'Failed to update timeout'
-      );
+      setTimeoutError(extractApiError(err, 'Failed to update timeout'));
     } finally {
       setSavingTimeout(false);
     }
@@ -164,10 +159,7 @@ export default function TenantSection({ onNavigateToTab, onViewUserProfile }: Te
         await updateTenant({ mfaRequired: false });
         setMfaRequired(false);
       } catch (err: unknown) {
-        setMfaError(
-          (err as { response?: { data?: { error?: string } } })?.response?.data?.error ||
-          'Failed to update MFA policy'
-        );
+        setMfaError(extractApiError(err, 'Failed to update MFA policy'));
       } finally {
         setSavingMfa(false);
       }
@@ -182,10 +174,7 @@ export default function TenantSection({ onNavigateToTab, onViewUserProfile }: Te
       await updateTenant({ mfaRequired: true });
       setMfaRequired(true);
     } catch (err: unknown) {
-      setMfaError(
-        (err as { response?: { data?: { error?: string } } })?.response?.data?.error ||
-        'Failed to update MFA policy'
-      );
+      setMfaError(extractApiError(err, 'Failed to update MFA policy'));
     } finally {
       setSavingMfa(false);
     }
@@ -201,10 +190,7 @@ export default function TenantSection({ onNavigateToTab, onViewUserProfile }: Te
     try {
       await createTenant(createName.trim());
     } catch (err: unknown) {
-      setCreateError(
-        (err as { response?: { data?: { error?: string } } })?.response?.data?.error ||
-        'Failed to create organization'
-      );
+      setCreateError(extractApiError(err, 'Failed to create organization'));
     } finally {
       setCreating(false);
     }
@@ -216,10 +202,7 @@ export default function TenantSection({ onNavigateToTab, onViewUserProfile }: Te
     try {
       await deleteTenant();
     } catch (err: unknown) {
-      setError(
-        (err as { response?: { data?: { error?: string } } })?.response?.data?.error ||
-        'Failed to delete organization'
-      );
+      setError(extractApiError(err, 'Failed to delete organization'));
     } finally {
       setDeleting(false);
       setDeleteConfirmOpen(false);
@@ -231,10 +214,7 @@ export default function TenantSection({ onNavigateToTab, onViewUserProfile }: Te
     try {
       await updateUserRole(userId, newRole as 'OWNER' | 'ADMIN' | 'MEMBER');
     } catch (err: unknown) {
-      setError(
-        (err as { response?: { data?: { error?: string } } })?.response?.data?.error ||
-        'Failed to update role'
-      );
+      setError(extractApiError(err, 'Failed to update role'));
     }
   };
 
@@ -244,10 +224,7 @@ export default function TenantSection({ onNavigateToTab, onViewUserProfile }: Te
     try {
       await toggleUserEnabled(userId, enabled);
     } catch (err: unknown) {
-      setError(
-        (err as { response?: { data?: { error?: string } } })?.response?.data?.error ||
-        'Failed to update user status'
-      );
+      setError(extractApiError(err, 'Failed to update user status'));
     } finally {
       setTogglingUser(null);
     }
@@ -259,10 +236,7 @@ export default function TenantSection({ onNavigateToTab, onViewUserProfile }: Te
     try {
       await removeUser(removeTarget.id);
     } catch (err: unknown) {
-      setError(
-        (err as { response?: { data?: { error?: string } } })?.response?.data?.error ||
-        'Failed to remove user'
-      );
+      setError(extractApiError(err, 'Failed to remove user'));
     }
     setRemoveTarget(null);
   };
@@ -310,10 +284,7 @@ export default function TenantSection({ onNavigateToTab, onViewUserProfile }: Te
       setChangeEmailMetadata(res.metadata);
       setChangeEmailPhase('verifying');
     } catch (err: unknown) {
-      setChangeEmailError(
-        (err as { response?: { data?: { error?: string } } })?.response?.data?.error ||
-        'Failed to initiate verification'
-      );
+      setChangeEmailError(extractApiError(err, 'Failed to initiate verification'));
     } finally {
       setChangeEmailLoading(false);
     }
@@ -328,10 +299,7 @@ export default function TenantSection({ onNavigateToTab, onViewUserProfile }: Te
       setChangeEmailPhase('done');
       fetchUsers();
     } catch (err: unknown) {
-      setChangeEmailError(
-        (err as { response?: { data?: { error?: string } } })?.response?.data?.error ||
-        'Failed to change email'
-      );
+      setChangeEmailError(extractApiError(err, 'Failed to change email'));
       setChangeEmailPhase('input');
     } finally {
       setChangeEmailLoading(false);
@@ -357,10 +325,7 @@ export default function TenantSection({ onNavigateToTab, onViewUserProfile }: Te
       setChangePwdMetadata(res.metadata);
       setChangePwdPhase('verifying');
     } catch (err: unknown) {
-      setChangePwdError(
-        (err as { response?: { data?: { error?: string } } })?.response?.data?.error ||
-        'Failed to initiate verification'
-      );
+      setChangePwdError(extractApiError(err, 'Failed to initiate verification'));
     } finally {
       setChangePwdLoading(false);
     }
@@ -375,10 +340,7 @@ export default function TenantSection({ onNavigateToTab, onViewUserProfile }: Te
       setRecoveryKey(res.recoveryKey);
       setChangePwdPhase('done');
     } catch (err: unknown) {
-      setChangePwdError(
-        (err as { response?: { data?: { error?: string } } })?.response?.data?.error ||
-        'Failed to change password'
-      );
+      setChangePwdError(extractApiError(err, 'Failed to change password'));
       setChangePwdPhase('input');
     } finally {
       setChangePwdLoading(false);
@@ -520,10 +482,7 @@ export default function TenantSection({ onNavigateToTab, onViewUserProfile }: Te
                       await updateTenant({ vaultAutoLockMaxMinutes: val === 'none' ? null : Number(val) });
                       setVaultAutoLockMax(val);
                     } catch (err: unknown) {
-                      setVaultLockError(
-                        (err as { response?: { data?: { error?: string } } })?.response?.data?.error ||
-                        'Failed to update vault auto-lock policy'
-                      );
+                      setVaultLockError(extractApiError(err, 'Failed to update vault auto-lock policy'));
                     } finally {
                       setSavingVaultLock(false);
                     }

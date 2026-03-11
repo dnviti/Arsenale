@@ -8,6 +8,7 @@ import ContentCopyIcon from '@mui/icons-material/ContentCopy';
 import RefreshIcon from '@mui/icons-material/Refresh';
 import { useTenantStore } from '../../store/tenantStore';
 import { getEmailStatus } from '../../api/admin.api';
+import { extractApiError } from '../../utils/apiError';
 import type { CreateUserResult } from '../../api/tenant.api';
 
 interface CreateUserDialogProps {
@@ -75,10 +76,7 @@ export default function CreateUserDialog({ open, onClose }: CreateUserDialogProp
       });
       setResult(res);
     } catch (err: unknown) {
-      const msg =
-        (err as { response?: { data?: { error?: string } } })?.response?.data?.error ||
-        'Failed to create user';
-      setError(msg);
+      setError(extractApiError(err, 'Failed to create user'));
     } finally {
       setLoading(false);
     }

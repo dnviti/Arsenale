@@ -1,9 +1,8 @@
-import { useState, useEffect, useMemo, useCallback, forwardRef } from 'react';
+import { useState, useEffect, useMemo, useCallback } from 'react';
 import {
   Dialog, AppBar, Toolbar, Typography, Box, IconButton, Tabs, Tab,
-  Stack, useMediaQuery, Slide,
+  Stack, useMediaQuery,
 } from '@mui/material';
-import type { TransitionProps } from '@mui/material/transitions';
 import {
   Close as CloseIcon,
   Person as PersonIcon,
@@ -32,13 +31,7 @@ import GatewaySection from '../Settings/GatewaySection';
 import EmailProviderSection from '../Settings/EmailProviderSection';
 import SelfSignupSection from '../Settings/SelfSignupSection';
 import TenantAuditLogSection from '../Settings/TenantAuditLogSection';
-
-const SlideUp = forwardRef(function SlideUp(
-  props: TransitionProps & { children: React.ReactElement },
-  ref: React.Ref<unknown>,
-) {
-  return <Slide direction="up" ref={ref} {...props} />;
-});
+import { SlideUp } from '../common/SlideUp';
 
 interface TabDef {
   id: string;

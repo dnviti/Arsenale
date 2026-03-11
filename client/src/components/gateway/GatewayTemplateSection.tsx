@@ -11,6 +11,7 @@ import {
 import { useGatewayStore } from '../../store/gatewayStore';
 import type { GatewayTemplateData } from '../../api/gateway.api';
 import GatewayTemplateDialog from './GatewayTemplateDialog';
+import { extractApiError } from '../../utils/apiError';
 
 export default function GatewayTemplateSection() {
   const templates = useGatewayStore((s) => s.templates);
@@ -43,10 +44,7 @@ export default function GatewayTemplateSection() {
     try {
       await deleteTemplateAction(deleteTarget.id);
     } catch (err: unknown) {
-      setError(
-        (err as { response?: { data?: { error?: string } } })?.response?.data?.error ||
-        'Failed to delete template'
-      );
+      setError(extractApiError(err, 'Failed to delete template'));
     } finally {
       setDeleting(false);
       setDeleteTarget(null);
@@ -61,10 +59,7 @@ export default function GatewayTemplateSection() {
       const gateway = await deployFromTemplateAction(tpl.id);
       setSuccess(`Gateway "${gateway.name}" created and deployment started.`);
     } catch (err: unknown) {
-      setError(
-        (err as { response?: { data?: { error?: string } } })?.response?.data?.error ||
-        'Failed to deploy from template'
-      );
+      setError(extractApiError(err, 'Failed to deploy from template'));
     } finally {
       setDeployingId(null);
     }

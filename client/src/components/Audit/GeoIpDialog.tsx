@@ -1,9 +1,8 @@
-import { useState, useEffect, useRef, forwardRef } from 'react';
+import { useState, useEffect, useRef } from 'react';
 import {
-  Dialog, AppBar, Toolbar, IconButton, Typography, Box, Slide,
+  Dialog, AppBar, Toolbar, IconButton, Typography, Box,
   CircularProgress, Alert, Chip, Divider, Paper,
 } from '@mui/material';
-import type { TransitionProps } from '@mui/material/transitions';
 import {
   Close as CloseIcon,
   Public as GlobeIcon,
@@ -21,6 +20,8 @@ import L from 'leaflet';
 import 'leaflet/dist/leaflet.css';
 import api from '../../api/client';
 import { countryFlag } from './IpGeoCell';
+import { SlideUp } from '../common/SlideUp';
+import { extractApiError } from '../../utils/apiError';
 
 // Fix default marker icons in Leaflet (broken with bundlers)
 delete (L.Icon.Default.prototype as unknown as Record<string, unknown>)._getIconUrl;
@@ -28,13 +29,6 @@ L.Icon.Default.mergeOptions({
   iconRetinaUrl: 'https://unpkg.com/leaflet@1.9.4/dist/images/marker-icon-2x.png',
   iconUrl: 'https://unpkg.com/leaflet@1.9.4/dist/images/marker-icon.png',
   shadowUrl: 'https://unpkg.com/leaflet@1.9.4/dist/images/marker-shadow.png',
-});
-
-const SlideUp = forwardRef(function SlideUp(
-  props: TransitionProps & { children: React.ReactElement },
-  ref: React.Ref<unknown>,
-) {
-  return <Slide direction="up" ref={ref} {...props} />;
 });
 
 interface IpApiData {
@@ -106,8 +100,7 @@ export default function GeoIpDialog({ open, onClose, ipAddress }: GeoIpDialogPro
       .then((res) => { if (!cancelled) setData(res.data); })
       .catch((err: unknown) => {
         if (!cancelled) {
-          const axiosErr = err as { response?: { data?: { message?: string } }; message?: string };
-          setError(axiosErr.response?.data?.message || axiosErr.message || 'Failed to look up IP');
+          setError(extractApiError(err, 'Failed to look up IP'));
         }
       })
       .finally(() => { if (!cancelled) setLoading(false); });

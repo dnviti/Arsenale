@@ -23,6 +23,7 @@ import { useGatewayStore } from '../../store/gatewayStore';
 import { useAuthStore } from '../../store/authStore';
 import SecretPicker from '../Keychain/SecretPicker';
 import { useVaultStore } from '../../store/vaultStore';
+import { extractApiError } from '../../utils/apiError';
 
 interface ConnectionDialogProps {
   open: boolean;
@@ -199,10 +200,7 @@ export default function ConnectionDialog({ open, onClose, connection, folderId, 
       await fetchConnections();
       handleClose();
     } catch (err: unknown) {
-      const msg =
-        (err as { response?: { data?: { error?: string } } })?.response?.data?.error ||
-        (isEditMode ? 'Failed to update connection' : 'Failed to create connection');
-      setError(msg);
+      setError(extractApiError(err, isEditMode ? 'Failed to update connection' : 'Failed to create connection'));
     } finally {
       setLoading(false);
     }

@@ -28,6 +28,7 @@ import {
   CloudUpload as UploadIcon,
 } from '@mui/icons-material';
 import { importConnections, type ImportResult, type ImportOptions } from '../../api/importExport.api';
+import { extractApiError } from '../../utils/apiError';
 
 interface ImportDialogProps {
   open: boolean;
@@ -142,10 +143,7 @@ export default function ImportDialog({ open, onClose }: ImportDialogProps) {
       setResult(result);
       setStep(3);
     } catch (err: unknown) {
-      const msg =
-        (err as { response?: { data?: { error?: string } } })?.response?.data?.error ||
-        'Import failed';
-      setError(msg);
+      setError(extractApiError(err, 'Import failed'));
     } finally {
       setLoading(false);
     }

@@ -10,6 +10,7 @@ import {
   getOAuthProviders, getLinkedAccounts, unlinkOAuthAccount, initiateOAuthLink,
   initiateSamlLink, OAuthProviders, LinkedAccount,
 } from '../../api/oauth.api';
+import { extractApiError } from '../../utils/apiError';
 
 function MicrosoftIcon() {
   return (
@@ -93,10 +94,7 @@ export default function LinkedAccountsSection({ hasPassword }: LinkedAccountsSec
       setAccounts((prev) => prev.filter((a) => a.provider !== provider));
       setSuccess(`${labels[provider] ?? provider} account unlinked`);
     } catch (err: unknown) {
-      const msg =
-        (err as { response?: { data?: { error?: string } } })?.response?.data?.error ||
-        'Failed to unlink account';
-      setError(msg);
+      setError(extractApiError(err, 'Failed to unlink account'));
     }
   };
 

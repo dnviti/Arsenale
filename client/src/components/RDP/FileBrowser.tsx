@@ -12,6 +12,7 @@ import {
   InsertDriveFile as FileIcon,
 } from '@mui/icons-material';
 import { listFiles, uploadFile, downloadFile, deleteFile, FileInfo } from '../../api/files.api';
+import { extractApiError } from '../../utils/apiError';
 
 function formatFileSize(bytes: number): string {
   if (bytes < 1024) return `${bytes} B`;
@@ -56,10 +57,7 @@ export default function FileBrowser({ open, onClose }: FileBrowserProps) {
       const result = await uploadFile(file);
       setFiles(result);
     } catch (err: unknown) {
-      const msg =
-        (err as { response?: { data?: { error?: string } } })?.response?.data?.error ||
-        'Failed to upload file';
-      setError(msg);
+      setError(extractApiError(err, 'Failed to upload file'));
     } finally {
       setUploading(false);
     }

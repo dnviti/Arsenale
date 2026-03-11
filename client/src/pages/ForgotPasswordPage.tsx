@@ -4,6 +4,7 @@ import {
   Box, Card, CardContent, TextField, Button, Typography, Alert, Link,
 } from '@mui/material';
 import { forgotPasswordApi } from '../api/passwordReset.api';
+import { extractApiError } from '../utils/apiError';
 
 export default function ForgotPasswordPage() {
   const [email, setEmail] = useState('');
@@ -19,10 +20,7 @@ export default function ForgotPasswordPage() {
       await forgotPasswordApi(email);
       setSent(true);
     } catch (err: unknown) {
-      const msg =
-        (err as { response?: { data?: { error?: string } } })?.response?.data?.error ||
-        'Request failed. Please try again.';
-      setError(msg);
+      setError(extractApiError(err, 'Request failed. Please try again.'));
     } finally {
       setLoading(false);
     }

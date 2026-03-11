@@ -6,6 +6,7 @@ import {
 import { useGatewayStore } from '../../store/gatewayStore';
 import type { GatewayTemplateData } from '../../api/gateway.api';
 import SessionTimeoutConfig from '../orchestration/SessionTimeoutConfig';
+import { extractApiError } from '../../utils/apiError';
 
 interface GatewayTemplateDialogProps {
   open: boolean;
@@ -130,10 +131,7 @@ export default function GatewayTemplateDialog({ open, onClose, template }: Gatew
       }
       onClose();
     } catch (err: unknown) {
-      setError(
-        (err as { response?: { data?: { error?: string } } })?.response?.data?.error ||
-        `Failed to ${isEditMode ? 'update' : 'create'} template`
-      );
+      setError(extractApiError(err, `Failed to ${isEditMode ? 'update' : 'create'} template`));
     } finally {
       setLoading(false);
     }

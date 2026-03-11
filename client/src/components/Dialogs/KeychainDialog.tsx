@@ -1,11 +1,9 @@
-import { useState, useEffect, forwardRef } from 'react';
+import { useState, useEffect } from 'react';
 import {
   Dialog, AppBar, Toolbar, Typography, IconButton, Box,
   Alert, Button,
   DialogTitle, DialogContent, DialogContentText, DialogActions,
-  Slide,
 } from '@mui/material';
-import type { TransitionProps } from '@mui/material/transitions';
 import { Close as CloseIcon } from '@mui/icons-material';
 import SecretListPanel from '../Keychain/SecretListPanel';
 import SecretDetailView from '../Keychain/SecretDetailView';
@@ -16,13 +14,7 @@ import { useSecretStore } from '../../store/secretStore';
 import { useAuthStore } from '../../store/authStore';
 import type { SecretListItem, SecretDetail } from '../../api/secrets.api';
 import { getSecret } from '../../api/secrets.api';
-
-const SlideUp = forwardRef(function SlideUp(
-  props: TransitionProps & { children: React.ReactElement },
-  ref: React.Ref<unknown>,
-) {
-  return <Slide direction="up" ref={ref} {...props} />;
-});
+import { SlideUp } from '../common/SlideUp';
 
 interface KeychainDialogProps {
   open: boolean;

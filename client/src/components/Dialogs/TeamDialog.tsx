@@ -5,6 +5,7 @@ import {
 import { useTeamStore } from '../../store/teamStore';
 import { useConnectionsStore } from '../../store/connectionsStore';
 import type { TeamData } from '../../api/team.api';
+import { extractApiError } from '../../utils/apiError';
 
 interface TeamDialogProps {
   open: boolean;
@@ -62,10 +63,7 @@ export default function TeamDialog({ open, onClose, team }: TeamDialogProps) {
       }
       handleClose();
     } catch (err: unknown) {
-      const msg =
-        (err as { response?: { data?: { error?: string } } })?.response?.data?.error ||
-        (isEditMode ? 'Failed to update team' : 'Failed to create team');
-      setError(msg);
+      setError(extractApiError(err, isEditMode ? 'Failed to update team' : 'Failed to create team'));
     } finally {
       setLoading(false);
     }

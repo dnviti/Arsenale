@@ -98,7 +98,7 @@ JWT-based with access tokens (short-lived) and refresh tokens (stored in DB). Th
 Features that overlay the main workspace (settings, keychain, audit log, etc.) **must** be implemented as full-screen MUI `Dialog` components rendered from `MainLayout`, not as separate page routes. This preserves active RDP/SSH sessions. The only routed page is the main connections dashboard.
 
 **Pattern (SettingsDialog / AuditLogDialog / KeychainDialog):**
-- Define a local `SlideUp` transition via `forwardRef` using `<Slide direction="up">`
+- Import the shared `SlideUp` transition: `import { SlideUp } from '../common/SlideUp'`
 - Props: `{ open: boolean; onClose: () => void }`
 - Root element: `<Dialog fullScreen open={open} onClose={onClose} TransitionComponent={SlideUp}>`
 - AppBar: `<AppBar position="static" sx={{ position: 'relative' }}>` + `<Toolbar variant="dense">` with `CloseIcon` button and title
@@ -107,6 +107,10 @@ Features that overlay the main workspace (settings, keychain, audit log, etc.) *
 - Dialog rendered at the fragment root level in `MainLayout`, outside the blur wrapper `Box`
 
 **Rule:** Never create a new page route for UI that opens over the dashboard. Use this dialog pattern instead.
+
+### API Error Handling
+
+Use `extractApiError(err, fallbackMessage)` from `client/src/utils/apiError.ts` for API error extraction in catch blocks. Never use inline type casts for Axios error responses. For dialog form submissions with loading/error state, prefer the `useAsyncAction` hook from `client/src/hooks/useAsyncAction.ts`.
 
 ### UI Preferences Persistence
 

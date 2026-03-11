@@ -8,6 +8,7 @@ import { ExpandMore as ExpandMoreIcon, Save as SaveIcon } from '@mui/icons-mater
 import { useGatewayStore } from '../../store/gatewayStore';
 import type { GatewayData } from '../../api/gateway.api';
 import SessionTimeoutConfig from '../orchestration/SessionTimeoutConfig';
+import { extractApiError } from '../../utils/apiError';
 
 interface GatewayDialogProps {
   open: boolean;
@@ -171,10 +172,7 @@ export default function GatewayDialog({ open, onClose, gateway }: GatewayDialogP
       }
       handleClose();
     } catch (err: unknown) {
-      const msg =
-        (err as { response?: { data?: { error?: string } } })?.response?.data?.error ||
-        (isEditMode ? 'Failed to update gateway' : 'Failed to create gateway');
-      setError(msg);
+      setError(extractApiError(err, isEditMode ? 'Failed to update gateway' : 'Failed to create gateway'));
     } finally {
       setLoading(false);
     }

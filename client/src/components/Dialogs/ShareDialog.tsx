@@ -12,6 +12,7 @@ import {
 import { useAuthStore } from '../../store/authStore';
 import { UserSearchResult } from '../../api/user.api';
 import UserPicker from '../UserPicker';
+import { extractApiError } from '../../utils/apiError';
 
 interface ShareDialogProps {
   open: boolean;
@@ -79,10 +80,7 @@ export default function ShareDialog({
       setEmail('');
       await loadShares();
     } catch (err: unknown) {
-      const msg =
-        (err as { response?: { data?: { error?: string } } })?.response?.data?.error ||
-        'Failed to share connection';
-      setError(msg);
+      setError(extractApiError(err, 'Failed to share connection'));
     } finally {
       setLoading(false);
     }

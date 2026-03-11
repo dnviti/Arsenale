@@ -6,6 +6,7 @@ import {
   setupSmsPhone, verifySmsPhone, enableSmsMfa,
   sendSmsMfaDisableCode, disableSmsMfa, getSmsMfaStatus,
 } from '../../api/smsMfa.api';
+import { extractApiError } from '../../utils/apiError';
 
 type Phase = 'idle' | 'phone-input' | 'verify-phone' | 'disabling';
 
@@ -38,10 +39,7 @@ export default function SmsMfaSection() {
       await setupSmsPhone(phoneInput);
       setPhase('verify-phone');
     } catch (err: unknown) {
-      const msg =
-        (err as { response?: { data?: { error?: string } } })?.response?.data?.error ||
-        'Failed to send verification code';
-      setError(msg);
+      setError(extractApiError(err, 'Failed to send verification code'));
     } finally {
       setLoading(false);
     }
@@ -59,10 +57,7 @@ export default function SmsMfaSection() {
       setCode('');
       setPhoneInput('');
     } catch (err: unknown) {
-      const msg =
-        (err as { response?: { data?: { error?: string } } })?.response?.data?.error ||
-        'Invalid code';
-      setError(msg);
+      setError(extractApiError(err, 'Invalid code'));
     } finally {
       setLoading(false);
     }
@@ -75,10 +70,7 @@ export default function SmsMfaSection() {
       await sendSmsMfaDisableCode();
       setPhase('disabling');
     } catch (err: unknown) {
-      const msg =
-        (err as { response?: { data?: { error?: string } } })?.response?.data?.error ||
-        'Failed to send verification code';
-      setError(msg);
+      setError(extractApiError(err, 'Failed to send verification code'));
     } finally {
       setLoading(false);
     }
@@ -95,10 +87,7 @@ export default function SmsMfaSection() {
       setPhase('idle');
       setDisableCode('');
     } catch (err: unknown) {
-      const msg =
-        (err as { response?: { data?: { error?: string } } })?.response?.data?.error ||
-        'Invalid code';
-      setError(msg);
+      setError(extractApiError(err, 'Invalid code'));
     } finally {
       setLoading(false);
     }

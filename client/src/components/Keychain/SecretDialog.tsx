@@ -13,6 +13,7 @@ import { useAuthStore } from '../../store/authStore';
 import { useTeamStore } from '../../store/teamStore';
 import type { SecretDetail, SecretType, SecretScope, SecretPayload } from '../../api/secrets.api';
 import type { TenantVaultStatus } from '../../api/secrets.api';
+import { extractApiError } from '../../utils/apiError';
 
 interface SecretDialogProps {
   open: boolean;
@@ -229,10 +230,7 @@ export default function SecretDialog({ open, onClose, secret }: SecretDialogProp
       }
       onClose();
     } catch (err: unknown) {
-      const msg =
-        (err as { response?: { data?: { error?: string } } })?.response?.data?.error ||
-        (isEditMode ? 'Failed to update secret' : 'Failed to create secret');
-      setError(msg);
+      setError(extractApiError(err, isEditMode ? 'Failed to update secret' : 'Failed to create secret'));
     } finally {
       setLoading(false);
     }

@@ -3180,3 +3180,18 @@
   - All 23 files in server/src/controllers/*.controller.ts
   - All route files in server/src/routes/*.routes.ts
 
+------------------------------------------------------------------------------
+[x] REFAC-202 — Extract client shared utilities (SlideUp, apiError, useAsyncAction)
+------------------------------------------------------------------------------
+  Priorita: ALTA
+  Dipendenze: Nessuna
+  COMPLETATO: Created shared SlideUp component (common/SlideUp.tsx), extractApiError utility (utils/apiError.ts), and useAsyncAction hook (hooks/useAsyncAction.ts). Removed 7 duplicate SlideUp definitions from dialog files. Replaced inline Axios error casts across 43 files with extractApiError. Piloted useAsyncAction in InviteDialog. Updated CLAUDE.md with new patterns. Bundle size reduced ~2.5 KB.
+
+  FILE COINVOLTI:
+  - client/src/components/common/SlideUp.tsx (new)
+  - client/src/utils/apiError.ts (new)
+  - client/src/hooks/useAsyncAction.ts (new)
+  - 7 dialog files (SlideUp deduplication)
+  - 43 files (inline error cast replacement)
+  - CLAUDE.md (updated patterns)
+

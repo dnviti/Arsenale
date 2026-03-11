@@ -4,6 +4,7 @@ import { Box, Card, CardContent, TextField, Button, Typography, Alert } from '@m
 import { setupVaultPassword } from '../api/oauth.api';
 import { useVaultStore } from '../store/vaultStore';
 import { useAuthStore } from '../store/authStore';
+import { extractApiError } from '../utils/apiError';
 
 export default function VaultSetupPage() {
   const [vaultPassword, setVaultPassword] = useState('');
@@ -34,10 +35,7 @@ export default function VaultSetupPage() {
       updateUser({ vaultSetupComplete: true });
       navigate('/', { replace: true });
     } catch (err: unknown) {
-      const msg =
-        (err as { response?: { data?: { error?: string } } })?.response?.data?.error ||
-        'Failed to set up vault';
-      setError(msg);
+      setError(extractApiError(err, 'Failed to set up vault'));
     } finally {
       setLoading(false);
     }

@@ -23,42 +23,6 @@
 # Scouted 2026-03-11 — Code Optimization & Cleanup
 
 
-------------------------------------------------------------------------------
-[ ] REFAC-202 — Extract client shared utilities (SlideUp, apiError, useAsyncAction)
-------------------------------------------------------------------------------
-  Priorita: ALTA
-  Dipendenze: Nessuna
-
-  DESCRIZIONE:
-  The SlideUp transition component is copy-pasted identically in 7+ dialog
-  files. API error extraction ((err as {...})?.response?.data?.error) appears
-  in 10+ components. The loading/error state pattern (useState + try/catch/
-  finally) is repeated in every dialog form submission.
-
-  DETTAGLI IMPLEMENTAZIONE:
-  1. Create client/src/components/common/SlideUp.tsx exporting the SlideUp
-     transition as a named export. Update all dialog files to import from this
-     shared location.
-  2. Create client/src/utils/apiError.ts exporting extractApiError(err, fallback)
-     that handles the Axios error shape. Replace inline casts across files.
-  3. Create client/src/hooks/useAsyncAction.ts encapsulating the repeated
-     pattern of [loading, error] + try/catch/finally for dialog form submissions.
-  4. Update CLAUDE.md full-screen dialog pattern to reference the shared
-     SlideUp component.
-
-  FILE COINVOLTI:
-  - client/src/components/common/SlideUp.tsx (new)
-  - client/src/utils/apiError.ts (new)
-  - client/src/hooks/useAsyncAction.ts (new)
-  - 7+ dialog files containing const SlideUp = forwardRef(...)
-  - 10+ files containing inline error extraction
-  - CLAUDE.md (update dialog pattern documentation)
-
-  CRITERI DI ACCETTAZIONE:
-  - Zero duplicate SlideUp definitions — single source in common/SlideUp.tsx
-  - All inline error extraction patterns replaced with extractApiError
-  - npm run verify passes
-  - No visual or behavioral regressions
 
 
 ------------------------------------------------------------------------------
