@@ -22,6 +22,149 @@
 
 # Scouted 2026-03-11 — Code Optimization & Cleanup
 
+------------------------------------------------------------------------------
+[ ] REFAC-203 — Async controller wrapper per eliminare boilerplate try-catch-next
+------------------------------------------------------------------------------
+  Priorita: ALTA
+  Dipendenze: Nessuna
+
+  DESCRIZIONE:
+  Creare un wrapper `asyncHandler()` che avvolge le funzioni controller async
+  e inoltra automaticamente gli errori a `next()`. Attualmente tutti i 26
+  controller usano lo stesso pattern `try { ... } catch (err) { next(err); }`
+  ripetuto 201 volte. Il wrapper elimina ~400 righe di boilerplate e previene
+  dimenticanze nell'inoltro degli errori.
+
+  DETTAGLI TECNICI:
+  1) Creare `server/src/middleware/asyncHandler.ts`:
+     - Funzione wrapper che accetta un `RequestHandler` async e restituisce
+       un handler che cattura automaticamente Promise rejection e chiama next()
+  2) Applicare il wrapper a tutti i controller esistenti (26 file)
+  3) Rimuovere i blocchi try-catch-next ridondanti
+
+  File coinvolti:
+    CREARE:     server/src/middleware/asyncHandler.ts
+    MODIFICARE: server/src/controllers/*.controller.ts (tutti i 26 file)
+    MODIFICARE: server/src/routes/*.routes.ts (applicare wrapper nelle route)
+
+
+------------------------------------------------------------------------------
+[ ] REFAC-204 — Estrarre utility condivise nei servizi (tenant boundary, re-encryption, vault key)
+------------------------------------------------------------------------------
+  Priorita: ALTA
+  Dipendenze: Nessuna
+
+  DESCRIZIONE:
+  Tre pattern di codice sono duplicati tra sharing.service.ts e
+  secretSharing.service.ts (e altri servizi):
+  - Validazione confine tenant (~15 righe identiche copiate)
+  - Re-cifratura credenziali per condivisione (~20 righe identiche copiate)
+  - Helper `requireMasterKey()` esiste in connection.service.ts ma non e'
+    esportato ne' riusato da team.service.ts e secret.service.ts
+  Estrarre queste utility in moduli condivisi per eliminare duplicazione.
+
+  DETTAGLI TECNICI:
+  1) Estrarre `validateTenantBoundary(actingUserId, targetUserId)` in un
+     modulo utility condiviso
+  2) Estrarre `reEncryptCredentials(sourceKey, targetKey, fields)` come
+     helper riusabile
+  3) Esportare `requireMasterKey(userId)` da un modulo condiviso e riusarlo
+     in connection.service, team.service e secret.service
+
+  File coinvolti:
+    CREARE:     server/src/services/shared/tenantBoundary.ts
+    CREARE:     server/src/services/shared/credentialEncryption.ts
+    MODIFICARE: server/src/services/sharing.service.ts
+    MODIFICARE: server/src/services/secretSharing.service.ts
+    MODIFICARE: server/src/services/connection.service.ts
+    MODIFICARE: server/src/services/team.service.ts
+    MODIFICARE: server/src/services/secret.service.ts
+
+
+------------------------------------------------------------------------------
+[ ] REFAC-205 — Migrare i dialog rimanenti al hook useAsyncAction
+------------------------------------------------------------------------------
+  Priorita: MEDIA
+  Dipendenze: REFAC-202 (completato)
+
+  DESCRIZIONE:
+  Il hook `useAsyncAction` e' stato creato in REFAC-202 ma adottato solo in
+  InviteDialog. Almeno 10 altri dialog gestiscono manualmente `useState` per
+  loading e error con pattern try-catch identici. Migrare tutti i dialog per
+  ridurre ~15 righe per componente e standardizzare la gestione errori.
+
+  DETTAGLI TECNICI:
+  1) Identificare tutti i dialog con pattern manuale loading/error/try-catch
+  2) Sostituire con `useAsyncAction` hook per ogni submit handler
+  3) Verificare che il comportamento rimanga identico (reset error on open,
+     loading state durante submit, messaggio errore visualizzato)
+
+  File coinvolti:
+    MODIFICARE: client/src/components/Dialogs/ConnectionDialog.tsx
+    MODIFICARE: client/src/components/Dialogs/FolderDialog.tsx
+    MODIFICARE: client/src/components/Dialogs/ShareDialog.tsx
+    MODIFICARE: client/src/components/Dialogs/ShareFolderDialog.tsx
+    MODIFICARE: client/src/components/Dialogs/TeamDialog.tsx
+    MODIFICARE: client/src/components/Dialogs/CreateUserDialog.tsx
+    MODIFICARE: client/src/components/Dialogs/ExportDialog.tsx
+    MODIFICARE: client/src/components/Dialogs/ImportDialog.tsx
+    MODIFICARE: client/src/components/Dialogs/ConnectAsDialog.tsx
+    MODIFICARE: client/src/components/Dialogs/UserProfileDialog.tsx
+
+
+------------------------------------------------------------------------------
+[ ] REFAC-206 — Estendere middleware Zod validate per query params e path params
+------------------------------------------------------------------------------
+  Priorita: MEDIA
+  Dipendenze: REFAC-201 (completato)
+
+  DESCRIZIONE:
+  Il middleware Zod di validazione da REFAC-201 gestisce solo il body delle
+  request. Oltre 10 controller usano ancora cast `as unknown as SomeType`
+  per req.query, bypassando la validazione runtime. Estendere il middleware
+  per validare anche query string e path params elimina i cast non sicuri e
+  aggiunge type safety a runtime.
+
+  DETTAGLI TECNICI:
+  1) Estendere il middleware `validate()` con opzioni per `query` e `params`:
+     `validate({ body: schema, query: querySchema, params: paramsSchema })`
+  2) Applicare ai controller che usano `as unknown as` per req.query:
+     audit, secret, notification, recording controller
+  3) Rimuovere i type cast non sicuri dai controller aggiornati
+
+  File coinvolti:
+    MODIFICARE: server/src/middleware/validate.middleware.ts
+    MODIFICARE: server/src/controllers/audit.controller.ts
+    MODIFICARE: server/src/controllers/secret.controller.ts
+    MODIFICARE: server/src/controllers/notification.controller.ts
+    MODIFICARE: server/src/controllers/recording.controller.ts
+    MODIFICARE: server/src/routes/*.routes.ts (aggiungere schema query)
+
+
+------------------------------------------------------------------------------
+[ ] CLEAN-201 — Rimuovere log di debug e standardizzare pattern risposta API client
+------------------------------------------------------------------------------
+  Priorita: BASSA
+  Dipendenze: Nessuna
+
+  DESCRIZIONE:
+  Pulizia codice: rimuovere console.log di debug rimasti nel codice di
+  produzione (terminalSettingsStore.ts) e standardizzare il pattern di
+  ritorno delle chiamate API client. Attualmente alcuni file usano
+  `const res = await api.get(); return res.data;` e altri usano
+  `const { data } = await api.get<T>(); return data;` — uniformare
+  migliora type safety e leggibilita'.
+
+  DETTAGLI TECNICI:
+  1) Rimuovere console.log da terminalSettingsStore.ts (righe 31, 33)
+  2) Standardizzare tutti i file API client al pattern con destructuring
+     e generic type: `const { data } = await api.get<T>(...); return data;`
+  3) Verificare che i tipi generici siano applicati dove possibile
+
+  File coinvolti:
+    MODIFICARE: client/src/store/terminalSettingsStore.ts
+    MODIFICARE: client/src/api/*.api.ts (tutti i 21 file API)
+
 
 
 
@@ -1836,3 +1979,217 @@
   Add shortcuts array to the web app manifest with 2-3 quick actions (e.g. "New Connection",
   "Open Keychain"). Each shortcut deep-links to the app with a query param that triggers the
   corresponding dialog. Enables right-click taskbar icon quick access on desktop PWA installs.
+
+
+# Scouted 2026-03-11 — Zero-Trust Tunnel (Cloudflare Tunnel-style)
+
+------------------------------------------------------------------------------
+[ ] ZT-201 — Zero-trust tunnel: TunnelBroker service, WSS endpoint, auto token/cert generation
+------------------------------------------------------------------------------
+  Priorita: ALTA
+  Dipendenze: GATE-036 (completato), SSHGW-051 (completato)
+
+  DESCRIZIONE:
+  Implement the server-side TunnelBroker that accepts outbound-only WSS
+  connections from gateway agents, enabling zero-trust environments where no
+  inbound ports can be exposed on gateways (like Cloudflare Tunnel, but
+  self-hosted). The broker manages a registry of connected tunnels, multiplexes
+  TCP streams over binary-framed WebSocket, and provides a net.Duplex-compatible
+  openStream() API for transparent integration with SSH2 and guacamole-lite.
+
+  DETTAGLI TECNICI:
+  1) Prisma migration: add tunnelEnabled, encryptedTunnelToken (AES-256-GCM),
+     tunnelTokenHash (SHA-256 unique), tunnelConnectedAt, tunnelLastHeartbeat,
+     tunnelClientVersion, tunnelClientIp, tunnelCaCert, tunnelCaKey (encrypted),
+     tunnelClientCert, tunnelClientCertExp to Gateway model. Add
+     tunnelProxyHost/tunnelProxyPort to ManagedGatewayInstance.
+  2) New server/src/services/tunnel.service.ts: TunnelBroker class with
+     Map<gatewayId, TunnelConnection> registry, openStream(gatewayId, host, port)
+     returning net.Duplex, local TCP proxy creation for GUACD tunnels.
+  3) New server/src/socket/tunnel.handler.ts: raw WebSocket (ws library, not
+     Socket.IO) endpoint at /api/tunnel/connect. Binary multiplexing protocol:
+     4-byte header [type, flags, streamID(u16)], types OPEN/DATA/CLOSE/PING/PONG.
+  4) Auto-generation: when tunnelEnabled is set to true, server auto-generates
+     256-bit tunnel token + per-gateway mTLS CA (ed25519) + client certificate
+     (90-day validity). All crypto material encrypted at rest.
+  5) Authentication: tunnel agent presents token via Authorization header +
+     client cert via mTLS. Server validates with constant-time comparison.
+     Token bound to specific gateway ID.
+  6) New Zod schemas: server/src/schemas/tunnel.schemas.ts
+  7) REST routes: POST /gateways/:id/tunnel-token (auto-generate),
+     DELETE /gateways/:id/tunnel-token (revoke), integrated into gateway CRUD.
+  8) New AuditAction values: TUNNEL_CONNECT, TUNNEL_DISCONNECT,
+     TUNNEL_TOKEN_GENERATE, TUNNEL_TOKEN_ROTATE.
+
+  File coinvolti:
+    MODIFICARE: server/prisma/schema.prisma
+    CREARE:     server/src/services/tunnel.service.ts
+    CREARE:     server/src/socket/tunnel.handler.ts
+    CREARE:     server/src/schemas/tunnel.schemas.ts
+    MODIFICARE: server/src/services/gateway.service.ts (token CRUD)
+    MODIFICARE: server/src/routes/gateway.routes.ts (new endpoints)
+    MODIFICARE: server/src/index.ts (attach WSS endpoint)
+
+------------------------------------------------------------------------------
+[ ] ZT-202 — Zero-trust tunnel: embedded Tunnel Agent in gateway containers (auto-activating)
+------------------------------------------------------------------------------
+  Priorita: ALTA
+  Dipendenze: ZT-201
+
+  DESCRIZIONE:
+  Create the tunnel-agent workspace — a lightweight Node.js process bundled
+  into every managed gateway container image (ssh-gateway and guacd custom).
+  The agent is dormant by default and auto-activates when tunnel env vars are
+  present. For non-managed gateways, a standalone Docker image is provided.
+  Everything is fully automatic: no manual token copying, no certificate
+  management, no user interaction required.
+
+  DETTAGLI TECNICI:
+  1) New tunnel-agent/ workspace in monorepo with src/index.ts, src/tunnel.ts
+     (WSS client, reconnection, heartbeats), src/tcpForwarder.ts (stream
+     bridging to local services), src/auth.ts (mTLS + token), src/config.ts.
+  2) Auto-activation: reads TUNNEL_SERVER_URL, TUNNEL_TOKEN, TUNNEL_GATEWAY_ID,
+     TUNNEL_CA_CERT, TUNNEL_CLIENT_CERT, TUNNEL_CLIENT_KEY from env. If absent,
+     process exits cleanly (dormant mode).
+  3) Outbound WSS connection to server with token in Authorization header and
+     client cert in TLS handshake. Persistent connection with 15s ping/pong.
+  4) Auto-reconnect: exponential backoff 1s -> 2s -> 4s -> ... -> 60s max.
+  5) Stream handling: on OPEN frame from server, open local TCP connection to
+     target host:port (e.g. localhost:4822 for guacd, localhost:2222 for sshd),
+     bridge data bidirectionally via DATA/CLOSE frames.
+  6) Certificate auto-renewal: 7 days before expiry, send CERT_RENEW frame;
+     server signs fresh cert and delivers in-band. Zero downtime.
+  7) Local health reporting: agent probes local service and includes health
+     status in heartbeat metadata { healthy, latencyMs, activeStreams }.
+  8) tunnel-agent/Dockerfile for standalone deployment.
+  9) Embed in ssh-gateway Dockerfile and custom guacd Dockerfile: add
+     tunnel-agent as optional entrypoint alongside main service.
+  10) Modify managedGateway.service.ts buildContainerConfig(): when
+      tunnelEnabled=true, inject tunnel env vars, set publishPorts=false
+      (no host port mappings), pass all crypto material as env vars.
+
+  File coinvolti:
+    CREARE:     tunnel-agent/ (new workspace)
+    CREARE:     tunnel-agent/src/index.ts, tunnel.ts, tcpForwarder.ts, auth.ts
+    CREARE:     tunnel-agent/Dockerfile
+    MODIFICARE: ssh-gateway/Dockerfile (embed tunnel agent)
+    MODIFICARE: server/src/services/managedGateway.service.ts (buildContainerConfig)
+    MODIFICARE: package.json (add tunnel-agent workspace)
+
+------------------------------------------------------------------------------
+[ ] ZT-203 — Zero-trust tunnel: transparent SSH/RDP/VNC traffic routing through tunnel
+------------------------------------------------------------------------------
+  Priorita: ALTA
+  Dipendenze: ZT-201, ZT-202
+
+  DESCRIZIONE:
+  Integrate the TunnelBroker into SSH, RDP, and VNC connection flows so that
+  when a gateway has tunnelEnabled=true, traffic routes transparently through
+  the tunnel instead of direct TCP connections. Existing direct-connection
+  gateways continue to work unchanged.
+
+  DETTAGLI TECNICI:
+  1) ssh.service.ts: add optional sock: stream.Duplex param to
+     SshConnectionParams and BastionConnectionParams. When provided, SSH2
+     Client.connect() uses sock instead of host/port (already supported by
+     SSH2 library, proven pattern at line 112 for bastion target connections).
+  2) ssh.handler.ts: before calling createSshConnectionViaBastion() or
+     createSshConnection(), check tunnelBroker.hasTunnel(gateway.id). If true,
+     call tunnelBroker.openStream(gatewayId, bastionHost, bastionPort) to get
+     a net.Duplex, then pass as sock param.
+  3) session.controller.ts (RDP/VNC): for tunneled GUACD gateways, call
+     tunnelBroker.getLocalProxy(gatewayId) which returns { host: '127.0.0.1',
+     port: <dynamicPort> }. Pass this as guacdHost/guacdPort to
+     generateGuacamoleToken(). guacamole-lite connects to localhost — zero
+     changes to the library.
+  4) loadBalancer.service.ts: when selecting instances for tunneled managed
+     gateways, return tunnelProxyHost/tunnelProxyPort instead of container
+     host/port.
+  5) Fallback: if tunnel is disconnected at connection time, return a clear
+     error ("Gateway tunnel is disconnected — the gateway may be unreachable")
+     rather than timing out on a direct connection attempt.
+
+  File coinvolti:
+    MODIFICARE: server/src/services/ssh.service.ts (sock param)
+    MODIFICARE: server/src/socket/ssh.handler.ts (tunnel resolution)
+    MODIFICARE: server/src/controllers/session.controller.ts (local proxy)
+    MODIFICARE: server/src/services/loadBalancer.service.ts (tunnel proxy addr)
+
+------------------------------------------------------------------------------
+[ ] ZT-204 — Zero-trust tunnel: automatic health monitoring and certificate rotation
+------------------------------------------------------------------------------
+  Priorita: MEDIA
+  Dipendenze: ZT-201, ZT-202
+
+  DESCRIZIONE:
+  Adapt the gateway health monitoring system to work through tunnels, and
+  implement automatic mTLS certificate rotation. When tunnelEnabled=true,
+  health is determined by tunnel heartbeats (superior to remote TCP probes
+  because the agent measures actual local service health).
+
+  DETTAGLI TECNICI:
+  1) gatewayMonitor.service.ts: new tunnel monitoring mode. When
+     tunnelEnabled=true, skip TCP probes. Instead, check TunnelBroker
+     registry for connection state and last heartbeat timestamp.
+  2) Health status mapping: connected + recent heartbeat + agent reports
+     healthy = REACHABLE. Disconnected or heartbeat timeout (>45s) =
+     UNREACHABLE. Connected but agent reports unhealthy = DEGRADED.
+  3) Instance-level health for managed gateways: tunnel agent's heartbeat
+     metadata includes per-instance local health check result. Server updates
+     ManagedGatewayInstance.healthStatus accordingly.
+  4) Certificate rotation: server-side scheduler checks tunnelClientCertExp
+     for all tunneled gateways. When < 7 days to expiry, generates new cert
+     signed by gateway's CA and sends via CERT_RENEW response frame through
+     the active tunnel.
+  5) For managed instances: if cert rotation requires restart (e.g., mTLS
+     handshake cert cannot be hot-swapped), server triggers rolling restart
+     via orchestrator with new env vars — automatic, no downtime.
+  6) Tunnel metrics emitted via Socket.IO to client: tunnel uptime, RTT
+     latency (from PING/PONG), active stream count, bytes transferred.
+
+  File coinvolti:
+    MODIFICARE: server/src/services/gatewayMonitor.service.ts
+    MODIFICARE: server/src/services/tunnel.service.ts (cert rotation logic)
+    MODIFICARE: server/src/services/managedGateway.service.ts (rolling restart)
+    MODIFICARE: server/src/socket/gatewayMonitor.handler.ts (tunnel events)
+
+------------------------------------------------------------------------------
+[ ] ZT-205 — Zero-trust tunnel: UI toggle with auto-deploy and live status indicators
+------------------------------------------------------------------------------
+  Priorita: MEDIA
+  Dipendenze: ZT-203, ZT-204
+
+  DESCRIZIONE:
+  Add tunnel configuration UI to the gateway management interface. For managed
+  gateways, enabling the toggle auto-deploys everything — the admin just flips
+  a switch and the tunnel is live. For non-managed gateways, a single copyable
+  connection string is provided (encodes server URL + token + gateway ID).
+
+  DETTAGLI TECNICI:
+  1) GatewayDialog.tsx: new "Zero-Trust Tunnel" accordion section. Toggle
+     switch "Enable Zero-Trust Tunnel". When enabled on managed gateways:
+     - Server auto-generates token + certs (single API call)
+     - Host/port fields become read-only (tunnel handles routing)
+     - publishPorts automatically disabled
+     - Status shows "Deploying..." then "Connected" when tunnel is live
+  2) GatewayDialog.tsx for non-managed gateways: when tunnel enabled, show
+     a single copyable connection string (base64-encoded JSON with serverUrl,
+     tunnelToken, gatewayId). Instructions: "Run this Docker command on the
+     gateway machine" with pre-built docker run command using the connection
+     string as env var.
+  3) GatewaySection.tsx: tunnel status badge next to health badge.
+     Green tunnel icon = connected, red = disconnected, grey = not configured.
+     Tooltip: connected since, RTT latency, active streams, agent version.
+  4) Token management: "Rotate Token" button (confirms, triggers rolling
+     restart for managed gateways). "Revoke Token" (disables tunnel entirely).
+  5) Socket.IO events: new tunnel:status event for real-time status updates
+     in the gateway list/detail views.
+  6) Certificate info display: show cert expiry date, auto-renewal status
+     ("Next renewal in X days"), no manual certificate management needed.
+
+  File coinvolti:
+    MODIFICARE: client/src/components/Gateways/GatewayDialog.tsx
+    MODIFICARE: client/src/components/Gateways/GatewaySection.tsx
+    MODIFICARE: client/src/api/gateways.api.ts (tunnel endpoints)
+    MODIFICARE: client/src/store/gatewayStore.ts (tunnel state)
+    MODIFICARE: server/src/socket/gatewayMonitor.handler.ts (tunnel events)
