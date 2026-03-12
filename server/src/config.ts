@@ -190,6 +190,8 @@ export const config = {
   guacencRecordingPath: process.env.GUACENC_RECORDING_PATH || '/recordings',
   // IP Geolocation (MaxMind GeoLite2)
   geoipDbPath: process.env.GEOIP_DB_PATH ? path.resolve(process.env.GEOIP_DB_PATH) : '',
+  // Impossible travel detection — maximum plausible speed in km/h (default: 900, faster than commercial aviation)
+  impossibleTravelSpeedKmh: parseInt(process.env.IMPOSSIBLE_TRAVEL_SPEED_KMH || '900', 10),
   // Reverse proxy trust depth for Express.
   // Controls how `req.ip` is resolved from X-Forwarded-For.
   // false = disabled, true = trust all, number = hop count to trust.
