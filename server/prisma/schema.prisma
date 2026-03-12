@@ -579,6 +579,7 @@ enum AuditAction {
   SYNC_START
   SYNC_COMPLETE
   SYNC_ERROR
+  IMPOSSIBLE_TRAVEL_DETECTED
 }
 
 model AuditLog {
@@ -593,6 +594,7 @@ model AuditLog {
   geoCountry String?
   geoCity    String?
   geoCoords  Float[]     @default([])
+  flags      String[]    @default([])
   createdAt  DateTime    @default(now())
 
   user User? @relation(fields: [userId], references: [id], onDelete: Cascade)
@@ -616,6 +618,7 @@ enum NotificationType {
   SECRET_EXPIRED
   TENANT_INVITATION
   RECORDING_READY
+  IMPOSSIBLE_TRAVEL_DETECTED
 }
 
 model Notification {

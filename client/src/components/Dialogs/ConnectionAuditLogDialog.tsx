@@ -4,7 +4,7 @@ import {
   Table, TableHead, TableBody, TableRow, TableCell, TablePagination,
   Select, MenuItem, FormControl, InputLabel, TextField, Stack,
   CircularProgress, Chip, Alert, Collapse, TableSortLabel, InputAdornment,
-  Autocomplete, Button,
+  Autocomplete, Button, Tooltip,
 } from '@mui/material';
 import {
   Close as CloseIcon,
@@ -12,6 +12,7 @@ import {
   KeyboardArrowDown as ExpandIcon,
   KeyboardArrowUp as CollapseIcon,
   Download as DownloadIcon,
+  Warning as WarningIcon,
 } from '@mui/icons-material';
 import {
   getConnectionAuditLogs, getConnectionAuditUsers, getAuditGateways, getAuditCountries,
@@ -81,6 +82,7 @@ export default function ConnectionAuditLogDialog({ open, onClose, connectionId, 
   const [auditUsers, setAuditUsers] = useState<ConnectionAuditUser[]>([]);
   const [countries, setCountries] = useState<string[]>([]);
   const [geoCountry, setGeoCountry] = useState('');
+  const [flaggedOnly, setFlaggedOnly] = useState(false);
 
   useEffect(() => {
     const timer = setTimeout(() => {
@@ -109,6 +111,7 @@ export default function ConnectionAuditLogDialog({ open, onClose, connectionId, 
       if (geoCountry) params.geoCountry = geoCountry;
       if (startDate) params.startDate = startDate;
       if (endDate) params.endDate = endDate;
+      if (flaggedOnly) params.flaggedOnly = true;
 
       const result = await getConnectionAuditLogs(connectionId, params);
       setLogs(result.data);
@@ -118,7 +121,7 @@ export default function ConnectionAuditLogDialog({ open, onClose, connectionId, 
     } finally {
       setLoading(false);
     }
-  }, [connectionId, page, rowsPerPage, connAuditLogAction, connAuditLogSearch, connAuditLogGatewayId, connAuditLogUserId, ipAddress, geoCountry, startDate, endDate, connAuditLogSortBy, connAuditLogSortOrder]);
+  }, [connectionId, page, rowsPerPage, connAuditLogAction, connAuditLogSearch, connAuditLogGatewayId, connAuditLogUserId, ipAddress, geoCountry, startDate, endDate, connAuditLogSortBy, connAuditLogSortOrder, flaggedOnly]);
 
   useEffect(() => {
     if (open && connectionId) {
@@ -143,7 +146,7 @@ export default function ConnectionAuditLogDialog({ open, onClose, connectionId, 
 
   const selectedUser = auditUsers.find((u) => u.id === connAuditLogUserId) ?? null;
   const colSpan = isAdmin ? 7 : 6;
-  const hasActiveFilters = connAuditLogAction || connAuditLogSearch || connAuditLogGatewayId || connAuditLogUserId || ipAddress || geoCountry || startDate || endDate;
+  const hasActiveFilters = connAuditLogAction || connAuditLogSearch || connAuditLogGatewayId || connAuditLogUserId || ipAddress || geoCountry || startDate || endDate || flaggedOnly;
 
   return (
     <Dialog fullScreen open={open} onClose={onClose} TransitionComponent={SlideUp}>
@@ -280,6 +283,17 @@ export default function ConnectionAuditLogDialog({ open, onClose, connectionId, 
                 onChange={(e) => { setEndDate(e.target.value); setPage(0); }}
                 slotProps={{ inputLabel: { shrink: true } }}
               />
+              <Tooltip title="Show only flagged entries (e.g. impossible travel)">
+                <Chip
+                  icon={<WarningIcon fontSize="small" />}
+                  label="Flagged"
+                  size="small"
+                  color={flaggedOnly ? 'warning' : 'default'}
+                  variant={flaggedOnly ? 'filled' : 'outlined'}
+                  onClick={() => { setFlaggedOnly(!flaggedOnly); setPage(0); }}
+                  sx={{ cursor: 'pointer' }}
+                />
+              </Tooltip>
             </Stack>
           </CardContent>
         </Card>
@@ -352,11 +366,18 @@ export default function ConnectionAuditLogDialog({ open, onClose, connectionId, 
                             </TableCell>
                           )}
                           <TableCell>
-                            <Chip
-                              label={ACTION_LABELS[log.action] || log.action}
-                              color={getActionColor(log.action)}
-                              size="small"
-                            />
+                            <Box sx={{ display: 'inline-flex', alignItems: 'center', gap: 0.5 }}>
+                              <Chip
+                                label={ACTION_LABELS[log.action] || log.action}
+                                color={getActionColor(log.action)}
+                                size="small"
+                              />
+                              {log.flags?.includes('IMPOSSIBLE_TRAVEL') && (
+                                <Tooltip title="Impossible travel detected">
+                                  <WarningIcon color="warning" fontSize="small" />
+                                </Tooltip>
+                              )}
+                            </Box>
                           </TableCell>
                           <TableCell>
                             <IpGeoCell ipAddress={log.ipAddress} geoCountry={log.geoCountry} geoCity={log.geoCity} onGeoIpClick={onGeoIpClick} />
