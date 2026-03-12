@@ -17,6 +17,7 @@ export type UpdateTenantInput = z.infer<typeof updateTenantSchema>;
 export const inviteUserSchema = z.object({
   email: z.string().email(),
   role: z.enum(['ADMIN', 'OPERATOR', 'MEMBER', 'CONSULTANT', 'AUDITOR', 'GUEST']),
+  expiresAt: z.string().datetime().optional().nullable(),
 });
 export type InviteUserInput = z.infer<typeof inviteUserSchema>;
 
@@ -31,6 +32,7 @@ export const createUserSchema = z.object({
   password: passwordSchema,
   role: z.enum(['ADMIN', 'OPERATOR', 'MEMBER', 'CONSULTANT', 'AUDITOR', 'GUEST']),
   sendWelcomeEmail: z.boolean().optional().default(false),
+  expiresAt: z.string().datetime().optional().nullable(),
 });
 export type CreateUserInput = z.infer<typeof createUserSchema>;
 
@@ -50,3 +52,8 @@ export const adminChangePasswordSchema = z.object({
   verificationId: z.string().uuid(),
 });
 export type AdminChangePasswordInput = z.infer<typeof adminChangePasswordSchema>;
+
+export const updateMembershipExpirySchema = z.object({
+  expiresAt: z.string().datetime().nullable(),
+});
+export type UpdateMembershipExpiryInput = z.infer<typeof updateMembershipExpirySchema>;

@@ -124,14 +124,20 @@ export async function issueTokens(user: {
     orderBy: { joinedAt: 'asc' },
   });
 
+  // Filter out expired memberships
+  const now = new Date();
+  const validMemberships = allMemberships.filter(
+    (m) => !m.expiresAt || m.expiresAt > now,
+  );
+
   // Resolve active membership, auto-activating if exactly one exists
-  let activeMembership = allMemberships.find((m) => m.isActive);
-  if (!activeMembership && allMemberships.length === 1) {
+  let activeMembership = validMemberships.find((m) => m.isActive);
+  if (!activeMembership && validMemberships.length === 1) {
     await prisma.tenantMember.update({
-      where: { id: allMemberships[0].id },
+      where: { id: validMemberships[0].id },
       data: { isActive: true },
     });
-    activeMembership = { ...allMemberships[0], isActive: true };
+    activeMembership = { ...validMemberships[0], isActive: true };
   }
 
   const payload: AuthPayload = {
@@ -167,7 +173,7 @@ export async function issueTokens(user: {
       tenantId: activeMembership?.tenantId,
       tenantRole: activeMembership?.role,
     },
-    tenantMemberships: allMemberships.map((m) => ({
+    tenantMemberships: validMemberships.map((m) => ({
       tenantId: m.tenant.id,
       name: m.tenant.name,
       slug: m.tenant.slug,
@@ -184,6 +190,9 @@ export async function switchTenant(userId: string, targetTenantId: string) {
   });
   if (!membership) {
     throw new AppError('You are not a member of this organization', 403);
+  }
+  if (membership.expiresAt && membership.expiresAt <= new Date()) {
+    throw new AppError('Your membership in this organization has expired', 403);
   }
 
   // Transactionally deactivate all memberships and activate the target

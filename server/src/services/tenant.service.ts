@@ -226,6 +226,8 @@ export async function listTenantUsers(tenantId: string) {
       smsMfaEnabled: m.user.smsMfaEnabled,
       enabled: m.user.enabled,
       createdAt: m.user.createdAt,
+      expiresAt: m.expiresAt?.toISOString() ?? null,
+      expired: m.expiresAt ? m.expiresAt <= new Date() : false,
     }))
     .sort((a, b) => {
       const aOrder = roleOrder[a.role] ?? 3;
@@ -303,7 +305,7 @@ export async function getUserProfile(
   return profile;
 }
 
-export async function inviteUser(tenantId: string, email: string, role: TenantRoleType) {
+export async function inviteUser(tenantId: string, email: string, role: TenantRoleType, expiresAt?: Date) {
   const targetUser = await prisma.user.findUnique({ where: { email } });
   if (!targetUser) {
     throw new AppError('User not found. They must register first.', 404);
@@ -318,7 +320,7 @@ export async function inviteUser(tenantId: string, email: string, role: TenantRo
 
   const [membership, tenant] = await Promise.all([
     prisma.tenantMember.create({
-      data: { tenantId, userId: targetUser.id, role: role as TenantRole, isActive: false },
+      data: { tenantId, userId: targetUser.id, role: role as TenantRole, isActive: false, ...(expiresAt && { expiresAt }) },
     }),
     prisma.tenant.findUnique({ where: { id: tenantId }, select: { name: true } }),
   ]);
@@ -435,7 +437,7 @@ export async function removeUser(tenantId: string, targetUserId: string, actingU
 
 export async function createUser(
   tenantId: string,
-  data: { email: string; username?: string; password: string; role: TenantRoleType },
+  data: { email: string; username?: string; password: string; role: TenantRoleType; expiresAt?: string },
   _actingUserId: string,
 ) {
   // Check for existing user
@@ -488,7 +490,7 @@ export async function createUser(
     });
 
     const membership = await tx.tenantMember.create({
-      data: { tenantId, userId: user.id, role: data.role as TenantRole, isActive: false },
+      data: { tenantId, userId: user.id, role: data.role as TenantRole, isActive: false, ...(data.expiresAt && { expiresAt: new Date(data.expiresAt) }) },
     });
 
     return { ...user, role: membership.role };
@@ -547,6 +549,26 @@ export async function toggleUserEnabled(
   }
 
   return { ...updated, role: membership.role };
+}
+
+export async function updateMembershipExpiry(
+  tenantId: string,
+  targetUserId: string,
+  expiresAt: Date | null,
+) {
+  const membership = await prisma.tenantMember.findUnique({
+    where: { tenantId_userId: { tenantId, userId: targetUserId } },
+  });
+  if (!membership) {
+    throw new AppError('User not found in this organization', 404);
+  }
+  if (membership.role === 'OWNER') {
+    throw new AppError('Cannot set expiration on owner membership', 400);
+  }
+  return prisma.tenantMember.update({
+    where: { tenantId_userId: { tenantId, userId: targetUserId } },
+    data: { expiresAt },
+  });
 }
 
 // ---------------------------------------------------------------------------

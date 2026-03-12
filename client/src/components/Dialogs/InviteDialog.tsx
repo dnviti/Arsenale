@@ -15,6 +15,7 @@ interface InviteDialogProps {
 export default function InviteDialog({ open, onClose }: InviteDialogProps) {
   const [email, setEmail] = useState('');
   const [role, setRole] = useState<TenantRole>('MEMBER');
+  const [expiresAt, setExpiresAt] = useState('');
   const { loading, error, setError, run } = useAsyncAction();
   const inviteUser = useTenantStore((s) => s.inviteUser);
 
@@ -29,7 +30,7 @@ export default function InviteDialog({ open, onClose }: InviteDialogProps) {
     }
 
     const ok = await run(async () => {
-      await inviteUser(email.trim(), role);
+      await inviteUser(email.trim(), role, expiresAt ? new Date(expiresAt).toISOString() : undefined);
     }, 'Failed to invite user');
     if (ok) handleClose();
   };
@@ -37,6 +38,7 @@ export default function InviteDialog({ open, onClose }: InviteDialogProps) {
   const handleClose = () => {
     setEmail('');
     setRole('MEMBER');
+    setExpiresAt('');
     setError('');
     onClose();
   };
@@ -68,6 +70,16 @@ export default function InviteDialog({ open, onClose }: InviteDialogProps) {
               ))}
             </Select>
           </FormControl>
+          <TextField
+            label="Access Expires At"
+            type="datetime-local"
+            value={expiresAt}
+            onChange={(e) => setExpiresAt(e.target.value)}
+            fullWidth
+            size="small"
+            slotProps={{ inputLabel: { shrink: true } }}
+            helperText="Leave empty for permanent access"
+          />
         </Box>
       </DialogContent>
       <DialogActions>

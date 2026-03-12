@@ -24,6 +24,8 @@ export interface TenantUser {
   smsMfaEnabled: boolean;
   enabled: boolean;
   createdAt: string;
+  expiresAt: string | null;
+  expired: boolean;
 }
 
 export interface TenantMembership {
@@ -41,6 +43,7 @@ export interface CreateUserData {
   password: string;
   role: TenantRole;
   sendWelcomeEmail?: boolean;
+  expiresAt?: string;
 }
 
 export interface CreateUserResult {
@@ -123,8 +126,9 @@ export async function inviteUser(
   tenantId: string,
   email: string,
   role: TenantRole,
+  expiresAt?: string,
 ): Promise<InviteResult> {
-  const { data } = await api.post(`/tenants/${tenantId}/invite`, { email, role });
+  const { data } = await api.post(`/tenants/${tenantId}/invite`, { email, role, ...(expiresAt && { expiresAt }) });
   return data;
 }
 
@@ -194,4 +198,12 @@ export async function adminChangeUserPassword(
 ): Promise<{ recoveryKey: string }> {
   const { data } = await api.put(`/tenants/${tenantId}/users/${userId}/password`, { newPassword, verificationId });
   return data;
+}
+
+export async function updateMembershipExpiry(
+  tenantId: string,
+  userId: string,
+  expiresAt: string | null,
+): Promise<void> {
+  await api.patch(`/tenants/${tenantId}/users/${userId}/expiry`, { expiresAt });
 }

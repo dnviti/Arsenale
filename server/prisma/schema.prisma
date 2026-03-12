@@ -73,11 +73,13 @@ model TeamMember {
   teamVaultKeyIV        String?
   teamVaultKeyTag       String?
   joinedAt              DateTime @default(now())
+  expiresAt             DateTime?
 
   team Team @relation(fields: [teamId], references: [id], onDelete: Cascade)
   user User @relation(fields: [userId], references: [id], onDelete: Cascade)
 
   @@unique([teamId, userId])
+  @@index([expiresAt])
 }
 
 model User {
@@ -584,6 +586,10 @@ enum AuditAction {
   SYNC_COMPLETE
   SYNC_ERROR
   IMPOSSIBLE_TRAVEL_DETECTED
+  TENANT_MEMBERSHIP_EXPIRED
+  TEAM_MEMBERSHIP_EXPIRED
+  TENANT_MEMBERSHIP_EXPIRY_UPDATE
+  TEAM_MEMBERSHIP_EXPIRY_UPDATE
 }
 
 model AuditLog {
@@ -759,6 +765,7 @@ model TenantMember {
   isActive  Boolean    @default(false)
   joinedAt  DateTime   @default(now())
   updatedAt DateTime   @updatedAt
+  expiresAt DateTime?
 
   tenant Tenant @relation(fields: [tenantId], references: [id], onDelete: Cascade)
   user   User   @relation(fields: [userId], references: [id], onDelete: Cascade)
@@ -766,6 +773,7 @@ model TenantMember {
   @@unique([tenantId, userId])
   @@index([userId, isActive])
   @@index([tenantId, isActive])
+  @@index([expiresAt])
 }
 
 model TenantVaultMember {

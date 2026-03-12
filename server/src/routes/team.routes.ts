@@ -3,7 +3,7 @@ import { authenticate } from '../middleware/auth.middleware';
 import { requireTenant } from '../middleware/tenant.middleware';
 import { requireTeamMember, requireTeamRole } from '../middleware/team.middleware';
 import { validate, validateUuidParam } from '../middleware/validate.middleware';
-import { createTeamSchema, updateTeamSchema, addMemberSchema, updateMemberRoleSchema } from '../schemas/team.schemas';
+import { createTeamSchema, updateTeamSchema, addMemberSchema, updateMemberRoleSchema, updateMemberExpirySchema } from '../schemas/team.schemas';
 import * as teamController from '../controllers/team.controller';
 import { asyncHandler } from '../middleware/asyncHandler';
 
@@ -24,5 +24,6 @@ router.get('/:id/members', validateUuidParam(), requireTeamMember, asyncHandler(
 router.post('/:id/members', validateUuidParam(), requireTeamMember, requireTeamRole('TEAM_ADMIN'), validate(addMemberSchema), asyncHandler(teamController.addMember));
 router.put('/:id/members/:userId', validateUuidParam(), requireTeamMember, requireTeamRole('TEAM_ADMIN'), validateUuidParam('userId'), validate(updateMemberRoleSchema), asyncHandler(teamController.updateMemberRole));
 router.delete('/:id/members/:userId', validateUuidParam(), requireTeamMember, requireTeamRole('TEAM_ADMIN', { allowTenantAdmin: true }), validateUuidParam('userId'), asyncHandler(teamController.removeMember));
+router.patch('/:id/members/:userId/expiry', validateUuidParam(), requireTeamMember, requireTeamRole('TEAM_ADMIN'), validateUuidParam('userId'), validate(updateMemberExpirySchema), asyncHandler(teamController.updateMemberExpiry));
 
 export default router;

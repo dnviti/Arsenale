@@ -4,6 +4,7 @@ import {
   listTeams, createTeam as createTeamApi, getTeam, updateTeam as updateTeamApi,
   deleteTeam as deleteTeamApi, listTeamMembers, addTeamMember as addTeamMemberApi,
   updateTeamMemberRole as updateMemberRoleApi, removeTeamMember as removeMemberApi,
+  updateTeamMemberExpiry as updateMemberExpiryApi,
 } from '../api/team.api';
 
 interface TeamState {
@@ -22,9 +23,10 @@ interface TeamState {
   selectTeam: (teamId: string) => Promise<void>;
   clearSelectedTeam: () => void;
   fetchMembers: (teamId: string) => Promise<void>;
-  addMember: (teamId: string, userId: string, role: 'TEAM_ADMIN' | 'TEAM_EDITOR' | 'TEAM_VIEWER') => Promise<void>;
+  addMember: (teamId: string, userId: string, role: 'TEAM_ADMIN' | 'TEAM_EDITOR' | 'TEAM_VIEWER', expiresAt?: string) => Promise<void>;
   updateMemberRole: (teamId: string, userId: string, role: 'TEAM_ADMIN' | 'TEAM_EDITOR' | 'TEAM_VIEWER') => Promise<void>;
   removeMember: (teamId: string, userId: string) => Promise<void>;
+  updateMemberExpiry: (teamId: string, userId: string, expiresAt: string | null) => Promise<void>;
   reset: () => void;
 }
 
@@ -94,8 +96,8 @@ export const useTeamStore = create<TeamState>((set, get) => ({
     }
   },
 
-  addMember: async (teamId, userId, role) => {
-    await addTeamMemberApi(teamId, userId, role);
+  addMember: async (teamId, userId, role, expiresAt?) => {
+    await addTeamMemberApi(teamId, userId, role, expiresAt);
     await get().fetchMembers(teamId);
   },
 
@@ -106,6 +108,11 @@ export const useTeamStore = create<TeamState>((set, get) => ({
 
   removeMember: async (teamId, userId) => {
     await removeMemberApi(teamId, userId);
+    await get().fetchMembers(teamId);
+  },
+
+  updateMemberExpiry: async (teamId, userId, expiresAt) => {
+    await updateMemberExpiryApi(teamId, userId, expiresAt);
     await get().fetchMembers(teamId);
   },
 

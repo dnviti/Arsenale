@@ -36,6 +36,7 @@ export default function TenantSection({ onNavigateToTab, onViewUserProfile }: Te
   const updateUserRole = useTenantStore((s) => s.updateUserRole);
   const removeUser = useTenantStore((s) => s.removeUser);
   const toggleUserEnabled = useTenantStore((s) => s.toggleUserEnabled);
+  const updateMembershipExpiry = useTenantStore((s) => s.updateMembershipExpiry);
 
   const [editName, setEditName] = useState('');
   const [nameError, setNameError] = useState('');
@@ -90,6 +91,12 @@ export default function TenantSection({ onNavigateToTab, onViewUserProfile }: Te
   const [changePwdLoading, setChangePwdLoading] = useState(false);
   const [changePwdError, setChangePwdError] = useState('');
   const [recoveryKey, setRecoveryKey] = useState('');
+
+  // Membership expiry dialog
+  const [expiryDialogOpen, setExpiryDialogOpen] = useState(false);
+  const [expiryTarget, setExpiryTarget] = useState<{ id: string; name: string; expiresAt: string | null } | null>(null);
+  const [expiryValue, setExpiryValue] = useState('');
+  const [savingExpiry, setSavingExpiry] = useState(false);
 
   const tenantRole = user?.tenantRole;
   const isAdmin = isAdminOrAbove(tenantRole);
@@ -555,6 +562,7 @@ export default function TenantSection({ onNavigateToTab, onViewUserProfile }: Te
                     <TableCell>User</TableCell>
                     <TableCell>Role</TableCell>
                     <TableCell>MFA</TableCell>
+                    {isAdmin && <TableCell>Expires</TableCell>}
                     {isAdmin && <TableCell>Status</TableCell>}
                     {isAdmin && <TableCell align="right">Actions</TableCell>}
                   </TableRow>
@@ -606,6 +614,20 @@ export default function TenantSection({ onNavigateToTab, onViewUserProfile }: Te
                           <Chip label="None" size="small" />
                         )}
                       </TableCell>
+                      {isAdmin && (
+                        <TableCell>
+                          {u.expiresAt ? (
+                            <Chip
+                              label={u.expired ? 'Expired' : new Date(u.expiresAt).toLocaleDateString()}
+                              color={u.expired ? 'error' : 'default'}
+                              size="small"
+                              variant="outlined"
+                            />
+                          ) : (
+                            <Typography variant="caption" color="text.secondary">—</Typography>
+                          )}
+                        </TableCell>
+                      )}
                       {isAdmin && (
                         <TableCell>
                           {u.id === user?.id ? (
@@ -705,10 +727,76 @@ export default function TenantSection({ onNavigateToTab, onViewUserProfile }: Te
       >
         <MenuItem onClick={openChangeEmail}>Change Email</MenuItem>
         <MenuItem onClick={openChangePwd}>Change Password</MenuItem>
+        <MenuItem onClick={() => {
+          if (menuTargetUser) {
+            const u = users.find((usr) => usr.id === menuTargetUser.id);
+            setExpiryTarget({ id: menuTargetUser.id, name: menuTargetUser.name, expiresAt: u?.expiresAt ?? null });
+            setExpiryValue(u?.expiresAt ? new Date(u.expiresAt).toISOString().slice(0, 16) : '');
+            setExpiryDialogOpen(true);
+            closeAdminMenu();
+          }
+        }}>
+          {users.find((usr) => usr.id === menuTargetUser?.id)?.expiresAt ? 'Change Expiration' : 'Set Expiration'}
+        </MenuItem>
         <MenuItem onClick={() => { if (menuTargetUser) { setRemoveTarget({ id: menuTargetUser.id, name: menuTargetUser.name }); closeAdminMenu(); } }} sx={{ color: 'error.main' }}>
           Remove
         </MenuItem>
       </Menu>
+
+      {/* Membership expiry dialog */}
+      <Dialog open={expiryDialogOpen} onClose={() => setExpiryDialogOpen(false)} maxWidth="xs" fullWidth>
+        <DialogTitle>Membership Expiration — {expiryTarget?.name}</DialogTitle>
+        <DialogContent>
+          <Box sx={{ display: 'flex', flexDirection: 'column', gap: 2, mt: 1 }}>
+            <TextField
+              label="Expires At"
+              type="datetime-local"
+              value={expiryValue}
+              onChange={(e) => setExpiryValue(e.target.value)}
+              fullWidth
+              size="small"
+              slotProps={{ inputLabel: { shrink: true } }}
+              helperText="Clear to remove expiration"
+            />
+          </Box>
+        </DialogContent>
+        <DialogActions>
+          {expiryTarget?.expiresAt && (
+            <Button
+              color="warning"
+              disabled={savingExpiry}
+              onClick={async () => {
+                if (!expiryTarget) return;
+                setSavingExpiry(true);
+                try {
+                  await updateMembershipExpiry(expiryTarget.id, null);
+                  setExpiryDialogOpen(false);
+                } catch { /* ignore */ }
+                setSavingExpiry(false);
+              }}
+            >
+              Remove Expiration
+            </Button>
+          )}
+          <Box sx={{ flex: 1 }} />
+          <Button onClick={() => setExpiryDialogOpen(false)}>Cancel</Button>
+          <Button
+            variant="contained"
+            disabled={savingExpiry || !expiryValue}
+            onClick={async () => {
+              if (!expiryTarget || !expiryValue) return;
+              setSavingExpiry(true);
+              try {
+                await updateMembershipExpiry(expiryTarget.id, new Date(expiryValue).toISOString());
+                setExpiryDialogOpen(false);
+              } catch { /* ignore */ }
+              setSavingExpiry(false);
+            }}
+          >
+            {savingExpiry ? 'Saving...' : 'Save'}
+          </Button>
+        </DialogActions>
+      </Dialog>
 
       {/* Admin change email dialog */}
       <Dialog open={changeEmailOpen} onClose={() => setChangeEmailOpen(false)} maxWidth="sm" fullWidth>

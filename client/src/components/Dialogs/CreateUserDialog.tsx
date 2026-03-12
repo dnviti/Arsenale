@@ -30,6 +30,7 @@ export default function CreateUserDialog({ open, onClose }: CreateUserDialogProp
   const [password, setPassword] = useState('');
   const [confirmPassword, setConfirmPassword] = useState('');
   const [role, setRole] = useState<TenantRole>('MEMBER');
+  const [expiresAt, setExpiresAt] = useState('');
   const [sendWelcomeEmail, setSendWelcomeEmail] = useState(false);
   const [emailConfigured, setEmailConfigured] = useState(false);
   const { loading, error, setError, clearError, run } = useAsyncAction();
@@ -71,6 +72,7 @@ export default function CreateUserDialog({ open, onClose }: CreateUserDialogProp
         password,
         role,
         sendWelcomeEmail: emailConfigured ? sendWelcomeEmail : false,
+        expiresAt: expiresAt ? new Date(expiresAt).toISOString() : undefined,
       });
       setResult(res);
     }, 'Failed to create user');
@@ -82,6 +84,7 @@ export default function CreateUserDialog({ open, onClose }: CreateUserDialogProp
     setPassword('');
     setConfirmPassword('');
     setRole('MEMBER');
+    setExpiresAt('');
     setSendWelcomeEmail(false);
     clearError();
     setResult(null);
@@ -206,6 +209,16 @@ export default function CreateUserDialog({ open, onClose }: CreateUserDialogProp
               ))}
             </Select>
           </FormControl>
+          <TextField
+            label="Access Expires At"
+            type="datetime-local"
+            value={expiresAt}
+            onChange={(e) => setExpiresAt(e.target.value)}
+            fullWidth
+            size="small"
+            slotProps={{ inputLabel: { shrink: true } }}
+            helperText="Leave empty for permanent access"
+          />
           {emailConfigured && (
             <FormControlLabel
               control={

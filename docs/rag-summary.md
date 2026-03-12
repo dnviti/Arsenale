@@ -52,6 +52,8 @@ Tenant roles provide a seven-level hierarchical access control: Owner > Admin > 
 
 Tenant-level policies allow administrators to enforce mandatory multi-factor authentication for all members, set maximum vault auto-lock durations to prevent users from keeping vaults unlocked indefinitely, and configure default session inactivity timeouts. User accounts can be enabled or disabled by administrators, and admins can perform identity-verified operations like changing user emails or resetting passwords.
 
+Time-limited memberships allow administrators to set an optional expiration date on tenant and team memberships. Expired memberships are automatically filtered out at token issuance time (defense in depth) and cleaned up by a batch scheduler running every 5 minutes. When a tenant membership expires, the user is removed from all teams in that tenant and their refresh tokens are revoked for immediate lockout. Owner memberships cannot expire. Administrators can set, change, or remove expiration dates from the organization settings UI.
+
 ## Security
 
 Arsenale supports multiple MFA methods: TOTP authenticator apps, SMS one-time passwords (via Twilio, AWS SNS, or Vonage), and WebAuthn/FIDO2 passkeys for hardware security key and biometric authentication. Users can register multiple methods simultaneously. Identity verification is required for sensitive operations like email changes or password resets, using the same MFA infrastructure.
