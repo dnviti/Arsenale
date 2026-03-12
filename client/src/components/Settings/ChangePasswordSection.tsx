@@ -8,13 +8,14 @@ import {
   type VerificationMethod,
 } from '../../api/user.api';
 import IdentityVerification from '../common/IdentityVerification';
+import RecoveryKeyConfirmDialog from '../common/RecoveryKeyConfirmDialog';
 import { useAsyncAction } from '../../hooks/useAsyncAction';
 
 interface ChangePasswordSectionProps {
   hasPassword: boolean;
 }
 
-type Phase = 'idle' | 'verifying-identity' | 'entering-password';
+type Phase = 'idle' | 'verifying-identity' | 'entering-password' | 'showing-recovery-key';
 
 export default function ChangePasswordSection({ hasPassword }: ChangePasswordSectionProps) {
   const authLogout = useAuthStore((s) => s.logout);
@@ -25,6 +26,7 @@ export default function ChangePasswordSection({ hasPassword }: ChangePasswordSec
   const [confirmPassword, setConfirmPassword] = useState('');
   const { loading, error, setError, run } = useAsyncAction();
   const [success, setSuccess] = useState('');
+  const [recoveryKey, setRecoveryKey] = useState('');
 
   // Identity verification state
   const [skipVerification, setSkipVerification] = useState(false);
@@ -67,17 +69,15 @@ export default function ChangePasswordSection({ hasPassword }: ChangePasswordSec
     }
 
     const ok = await run(async () => {
-      await changePassword(
+      const result = await changePassword(
         skipVerification ? oldPassword : '',
         newPassword,
         completedVerificationId,
       );
+      setRecoveryKey(result.recoveryKey);
     }, 'Failed to change password');
     if (ok) {
-      setSuccess('Password changed. You will be signed out...');
-      setTimeout(() => {
-        authLogout();
-      }, 2000);
+      setPhase('showing-recovery-key');
     }
   };
 
@@ -155,6 +155,11 @@ export default function ChangePasswordSection({ hasPassword }: ChangePasswordSec
           </Box>
         )}
       </CardContent>
+      <RecoveryKeyConfirmDialog
+        open={phase === 'showing-recovery-key'}
+        recoveryKey={recoveryKey}
+        onConfirmed={() => { setRecoveryKey(''); authLogout(); }}
+      />
     </Card>
   );
 }

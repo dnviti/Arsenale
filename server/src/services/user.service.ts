@@ -8,6 +8,8 @@ import {
   decryptMasterKey,
   getMasterKey,
   lockVault,
+  generateRecoveryKey,
+  encryptMasterKeyWithRecovery,
 } from './crypto.service';
 import { AppError } from '../middleware/error.middleware';
 import { getEmailStatus, sendEmailChangeCode } from './email';
@@ -265,6 +267,9 @@ export async function changePassword(
   const newDerivedKey = await deriveKeyFromPassword(newPassword, newVaultSalt);
   const newEncryptedVault = encryptMasterKey(masterKey, newDerivedKey);
 
+  const newRecoveryKey = generateRecoveryKey();
+  const recoveryEncrypted = await encryptMasterKeyWithRecovery(masterKey, newRecoveryKey);
+
   await prisma.user.update({
     where: { id: userId },
     data: {
@@ -273,6 +278,10 @@ export async function changePassword(
       encryptedVaultKey: newEncryptedVault.ciphertext,
       vaultKeyIV: newEncryptedVault.iv,
       vaultKeyTag: newEncryptedVault.tag,
+      encryptedVaultRecoveryKey: recoveryEncrypted.encrypted.ciphertext,
+      vaultRecoveryKeyIV: recoveryEncrypted.encrypted.iv,
+      vaultRecoveryKeyTag: recoveryEncrypted.encrypted.tag,
+      vaultRecoveryKeySalt: recoveryEncrypted.salt,
     },
   });
 
@@ -282,7 +291,7 @@ export async function changePassword(
   lockVault(userId);
   await prisma.refreshToken.deleteMany({ where: { userId } });
 
-  return { success: true };
+  return { success: true, recoveryKey: newRecoveryKey };
 }
 
 export async function updateSshDefaults(userId: string, sshDefaults: Prisma.InputJsonValue) {

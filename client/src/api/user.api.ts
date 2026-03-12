@@ -29,7 +29,7 @@ export async function changePassword(
   oldPassword: string,
   newPassword: string,
   verificationId?: string,
-): Promise<{ success: boolean }> {
+): Promise<{ success: boolean; recoveryKey: string }> {
   const { data } = await api.put('/user/password', { oldPassword, newPassword, verificationId });
   return data;
 }
