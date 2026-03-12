@@ -22,6 +22,7 @@ on:
       - 'eslint.config.mjs'
       - 'tsconfig.json'
   workflow_dispatch:
+  workflow_call:
 
 concurrency:
   group: ${{ github.workflow }}-${{ github.ref }}

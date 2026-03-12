@@ -28,7 +28,19 @@ env:
   REGISTRY: ghcr.io
 
 jobs:
+  verify:
+    uses: ./.github/workflows/verify-client.yml
+    permissions:
+      contents: read
+
+  security:
+    uses: ./.github/workflows/security-client.yml
+    permissions:
+      contents: read
+      security-events: write
+
   build-and-scan:
+    needs: [verify, security]
     runs-on: ubuntu-latest
     permissions:
       contents: read
