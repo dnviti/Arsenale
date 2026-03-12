@@ -51,6 +51,10 @@ Copy `.env.example` to `.env`. PostgreSQL is used in both development and produc
 
 **Important:** The `.env` file lives at the **monorepo root**, not inside `server/`. Prisma CLI commands (`db:push`, `db:migrate`) run from the `server/` workspace directory, so `server/prisma.config.ts` explicitly resolves the `.env` path to `../.env`. Never add a separate `server/.env` — all env vars are loaded from the root `.env`.
 
+## Documentation Maintenance
+
+`docs/rag-summary.md` must be kept in sync whenever documentation or features change. If any feature is added, modified, or removed, update this file to reflect the current state.
+
 ## Architecture
 
 **Monorepo** with npm workspaces: `server/`, `client/`, and `clients/browser-extensions/`.
@@ -215,3 +219,5 @@ Use `/idea-create` to add ideas, `/idea-approve` to promote an idea to a task, `
 - Task/idea content is written in Italian (local files) with English communication
 
 **Issue title format:** `[PREFIX-NNN] Task Title` or `[IDEA-NNN] Idea Title` — the bracketed code is used to look up issues via `gh issue list --search`.
+
+**Task branch workflow:** `/task-pick` must always create a dedicated branch (`task/<code>`) from `develop` and, upon completion, open a pull request targeting `develop` via `gh pr create --base develop`. Never merge directly into `develop` without a PR.

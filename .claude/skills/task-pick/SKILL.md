@@ -223,18 +223,19 @@ Use `AskUserQuestion` with options:
 - **"Yes, commit"** — create a commit referencing the task code
 - **"No, skip commit"** — skip
 
-**6e. Ask to merge into develop:**
+**6e. Open a pull request to develop:**
 
-Use `AskUserQuestion` with options:
-- **"Yes, merge into develop"** — execute:
-  ```bash
-  git checkout develop
-  git merge task/<task-code-lowercase> --no-ff -m "Merge task/<task-code-lowercase> into develop"
-  ```
-  Use `--no-ff` to preserve branch history.
+Push the task branch and open a PR targeting `develop`:
 
-  **Note:** If the task still has `status:to-test` label (user skipped testing), warn: "This task has not been tested yet. Consider running `/test-engineer TASK-CODE` before merging to a release branch."
+```bash
+git push -u origin task/<task-code-lowercase>
+```
 
-- **"No, stay on task branch"** — skip the merge
+Then create the PR:
+```bash
+gh pr create --base develop --title "[TASK-CODE] Task Title" --body "## Summary\n\n<brief description of changes>\n\nRefs #ISSUE_NUM"
+```
 
-**Important:** Always ask — never auto-commit, auto-close, or auto-merge without user confirmation.
+**Note:** If the task still has `status:to-test` label (user skipped testing), add a warning in the PR body: "This task has not been tested yet. Consider running `/test-engineer TASK-CODE` before merging."
+
+**Important:** Always ask before pushing — never auto-commit, auto-close, or auto-push without user confirmation. Never merge directly into `develop` without a PR.
