@@ -4,6 +4,7 @@ import {
   FormControl, InputLabel, Select, MenuItem,
 } from '@mui/material';
 import { useTenantStore } from '../../store/tenantStore';
+import { useAsyncAction } from '../../hooks/useAsyncAction';
 
 interface InviteDialogProps {
   open: boolean;
@@ -13,12 +14,10 @@ interface InviteDialogProps {
 export default function InviteDialog({ open, onClose }: InviteDialogProps) {
   const [email, setEmail] = useState('');
   const [role, setRole] = useState<'ADMIN' | 'MEMBER'>('MEMBER');
-  const [error, setError] = useState('');
-  const [loading, setLoading] = useState(false);
+  const { loading, error, setError, run } = useAsyncAction();
   const inviteUser = useTenantStore((s) => s.inviteUser);
 
   const handleSubmit = async () => {
-    setError('');
     if (!email.trim()) {
       setError('Email is required');
       return;
@@ -28,18 +27,10 @@ export default function InviteDialog({ open, onClose }: InviteDialogProps) {
       return;
     }
 
-    setLoading(true);
-    try {
+    const ok = await run(async () => {
       await inviteUser(email.trim(), role);
-      handleClose();
-    } catch (err: unknown) {
-      const msg =
-        (err as { response?: { data?: { error?: string } } })?.response?.data?.error ||
-        'Failed to invite user';
-      setError(msg);
-    } finally {
-      setLoading(false);
-    }
+    }, 'Failed to invite user');
+    if (ok) handleClose();
   };
 
   const handleClose = () => {

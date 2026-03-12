@@ -1,11 +1,10 @@
-import { forwardRef, useState, useEffect, useCallback } from 'react';
+import { useState, useEffect, useCallback } from 'react';
 import {
-  Dialog, AppBar, Toolbar, IconButton, Typography, Box, Slide,
+  Dialog, AppBar, Toolbar, IconButton, Typography, Box,
   Table, TableHead, TableRow, TableCell, TableBody, Chip,
   Select, MenuItem, FormControl, InputLabel, Button, Tooltip,
   DialogTitle, DialogContent, DialogActions, CircularProgress,
 } from '@mui/material';
-import type { TransitionProps } from '@mui/material/transitions';
 import CloseIcon from '@mui/icons-material/Close';
 import PlayArrowIcon from '@mui/icons-material/PlayArrow';
 import DeleteIcon from '@mui/icons-material/Delete';
@@ -15,13 +14,7 @@ import { listRecordings, deleteRecording, exportRecordingVideo } from '../../api
 import type { Recording } from '../../api/recordings.api';
 import api from '../../api/client';
 import RecordingPlayerDialog from './RecordingPlayerDialog';
-
-const SlideUp = forwardRef(function SlideUp(
-  props: TransitionProps & { children: React.ReactElement },
-  ref: React.Ref<unknown>,
-) {
-  return <Slide direction="up" ref={ref} {...props} />;
-});
+import { SlideUp } from '../common/SlideUp';
 
 interface RecordingsDialogProps {
   open: boolean;

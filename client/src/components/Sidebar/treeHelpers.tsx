@@ -33,11 +33,6 @@ import { openConnectionWindow } from '../../utils/openConnectionWindow';
 import { useDraggable, useDroppable } from '@dnd-kit/core';
 import { CSS } from '@dnd-kit/utilities';
 
-// eslint-disable-next-line react-refresh/only-export-components
-export function getErrorMessage(err: unknown, fallback: string): string {
-  return (err as { response?: { data?: { error?: string } } })?.response?.data?.error || fallback;
-}
-
 export const BASE_PL = 2;
 export const INDENT = 2;
 // eslint-disable-next-line react-refresh/only-export-components

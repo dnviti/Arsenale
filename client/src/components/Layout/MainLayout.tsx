@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, lazy, Suspense } from 'react';
 import {
   AppBar, Toolbar, Typography, IconButton, Box, Chip, Menu, MenuItem,
   Snackbar, Alert, Avatar, Button, Badge,
@@ -17,20 +17,20 @@ import {
 import ConnectionTree from '../Sidebar/ConnectionTree';
 import TabBar from '../Tabs/TabBar';
 import TabPanel from '../Tabs/TabPanel';
-import ConnectionDialog from '../Dialogs/ConnectionDialog';
-import FolderDialog from '../Dialogs/FolderDialog';
-import ShareDialog from '../Dialogs/ShareDialog';
-import ShareFolderDialog from '../Dialogs/ShareFolderDialog';
-import ConnectAsDialog from '../Dialogs/ConnectAsDialog';
-import SettingsDialog from '../Dialogs/SettingsDialog';
-import AuditLogDialog from '../Dialogs/AuditLogDialog';
-import KeychainDialog from '../Dialogs/KeychainDialog';
-import ConnectionAuditLogDialog from '../Dialogs/ConnectionAuditLogDialog';
-import UserProfileDialog from '../Dialogs/UserProfileDialog';
-import RecordingsDialog from '../Recording/RecordingsDialog';
-import ExportDialog from '../Dialogs/ExportDialog';
-import ImportDialog from '../Dialogs/ImportDialog';
-import GeoIpDialog from '../Audit/GeoIpDialog';
+const ConnectionDialog = lazy(() => import('../Dialogs/ConnectionDialog'));
+const FolderDialog = lazy(() => import('../Dialogs/FolderDialog'));
+const ShareDialog = lazy(() => import('../Dialogs/ShareDialog'));
+const ShareFolderDialog = lazy(() => import('../Dialogs/ShareFolderDialog'));
+const ConnectAsDialog = lazy(() => import('../Dialogs/ConnectAsDialog'));
+const SettingsDialog = lazy(() => import('../Dialogs/SettingsDialog'));
+const AuditLogDialog = lazy(() => import('../Dialogs/AuditLogDialog'));
+const KeychainDialog = lazy(() => import('../Dialogs/KeychainDialog'));
+const ConnectionAuditLogDialog = lazy(() => import('../Dialogs/ConnectionAuditLogDialog'));
+const UserProfileDialog = lazy(() => import('../Dialogs/UserProfileDialog'));
+const RecordingsDialog = lazy(() => import('../Recording/RecordingsDialog'));
+const ExportDialog = lazy(() => import('../Dialogs/ExportDialog'));
+const ImportDialog = lazy(() => import('../Dialogs/ImportDialog'));
+const GeoIpDialog = lazy(() => import('../Audit/GeoIpDialog'));
 
 import TenantSwitcher from './TenantSwitcher';
 import NotificationBell from './NotificationBell';
@@ -45,7 +45,10 @@ import { useThemeStore } from '../../store/themeStore';
 import { useTerminalSettingsStore } from '../../store/terminalSettingsStore';
 import { useTabsStore } from '../../store/tabsStore';
 import { useGatewayMonitor } from '../../hooks/useGatewayMonitor';
+import { useShareSync } from '../../hooks/useShareSync';
 import { useSecretStore } from '../../store/secretStore';
+import { useLazyMount } from '../../hooks/useLazyMount';
+import type { NavigationActions } from '../../utils/notificationActions';
 
 const SIDEBAR_WIDTH = 280;
 
@@ -67,6 +70,7 @@ export default function MainLayout() {
   const fetchExpiringCount = useSecretStore((s) => s.fetchExpiringCount);
 
   useGatewayMonitor();
+  useShareSync();
 
   useEffect(() => {
     if (!terminalDefaultsLoaded) {
@@ -115,9 +119,39 @@ export default function MainLayout() {
     return linked;
   });
 
+  // Lazy-mount guards: keep Suspense wrapper mounted after first open to preserve close animations
+  const connectionDialogMounted = useLazyMount(connectionDialogOpen);
+  const folderDialogMounted = useLazyMount(folderDialogOpen);
+  const shareDialogMounted = useLazyMount(shareTarget);
+  const shareFolderDialogMounted = useLazyMount(shareFolderTarget);
+  const connectAsDialogMounted = useLazyMount(connectAsTarget);
+  const settingsDialogMounted = useLazyMount(settingsOpen);
+  const auditLogDialogMounted = useLazyMount(auditLogOpen);
+  const keychainDialogMounted = useLazyMount(keychainOpen);
+  const connectionAuditDialogMounted = useLazyMount(connectionAuditTarget);
+  const userProfileDialogMounted = useLazyMount(profileUserId);
+  const recordingsDialogMounted = useLazyMount(recordingsOpen);
+  const importDialogMounted = useLazyMount(importDialogOpen);
+  const exportDialogMounted = useLazyMount(exportDialogOpen);
+  const geoIpDialogMounted = useLazyMount(geoIpTarget);
+
   const handleOpenSettings = (tab?: string) => {
     setSettingsInitialTab(tab);
     setSettingsOpen(true);
+  };
+
+  const navigationActions: NavigationActions = {
+    openKeychain: () => setKeychainOpen(true),
+    openRecordings: () => setRecordingsOpen(true),
+    openSettings: handleOpenSettings,
+    selectConnection: (connectionId: string) => {
+      const store = useConnectionsStore.getState();
+      const all = [...store.ownConnections, ...store.sharedConnections, ...store.teamConnections];
+      const conn = all.find((c) => c.id === connectionId);
+      if (conn) {
+        useTabsStore.getState().openTab(conn);
+      }
+    },
   };
 
   const handleEditConnection = (conn: ConnectionData) => {
@@ -208,7 +242,7 @@ export default function MainLayout() {
             </Badge>
           </IconButton>
           <Box sx={{ flexGrow: 1 }} />
-          <NotificationBell />
+          <NotificationBell navigationActions={navigationActions} />
           <IconButton
             color="inherit"
             onClick={toggleTheme}
@@ -300,38 +334,58 @@ export default function MainLayout() {
         </Box>
       </Box>
 
-      <ConnectionDialog
-        open={connectionDialogOpen}
-        onClose={() => { setConnectionDialogOpen(false); setEditingConnection(null); setConnectionFolderId(null); setConnectionTeamId(null); }}
-        connection={editingConnection}
-        folderId={connectionFolderId}
-        teamId={connectionTeamId}
-      />
-      <FolderDialog
-        open={folderDialogOpen}
-        onClose={() => { setFolderDialogOpen(false); setEditingFolder(null); setNewFolderParentId(null); setFolderTeamId(null); }}
-        folder={editingFolder}
-        parentId={newFolderParentId}
-        teamId={folderTeamId}
-      />
-      <ShareDialog
-        open={!!shareTarget}
-        onClose={() => setShareTarget(null)}
-        connectionId={shareTarget?.id ?? ''}
-        connectionName={shareTarget?.name ?? ''}
-        teamId={shareTarget?.teamId}
-      />
-      <ShareFolderDialog
-        open={!!shareFolderTarget}
-        onClose={() => setShareFolderTarget(null)}
-        folderId={shareFolderTarget?.folderId ?? ''}
-        folderName={shareFolderTarget?.folderName ?? ''}
-      />
-      <ConnectAsDialog
-        open={!!connectAsTarget}
-        onClose={() => setConnectAsTarget(null)}
-        connection={connectAsTarget}
-      />
+      {connectionDialogMounted && (
+        <Suspense fallback={null}>
+          <ConnectionDialog
+            open={connectionDialogOpen}
+            onClose={() => { setConnectionDialogOpen(false); setEditingConnection(null); setConnectionFolderId(null); setConnectionTeamId(null); }}
+            connection={editingConnection}
+            folderId={connectionFolderId}
+            teamId={connectionTeamId}
+          />
+        </Suspense>
+      )}
+      {folderDialogMounted && (
+        <Suspense fallback={null}>
+          <FolderDialog
+            open={folderDialogOpen}
+            onClose={() => { setFolderDialogOpen(false); setEditingFolder(null); setNewFolderParentId(null); setFolderTeamId(null); }}
+            folder={editingFolder}
+            parentId={newFolderParentId}
+            teamId={folderTeamId}
+          />
+        </Suspense>
+      )}
+      {shareDialogMounted && (
+        <Suspense fallback={null}>
+          <ShareDialog
+            open={!!shareTarget}
+            onClose={() => setShareTarget(null)}
+            connectionId={shareTarget?.id ?? ''}
+            connectionName={shareTarget?.name ?? ''}
+            teamId={shareTarget?.teamId}
+          />
+        </Suspense>
+      )}
+      {shareFolderDialogMounted && (
+        <Suspense fallback={null}>
+          <ShareFolderDialog
+            open={!!shareFolderTarget}
+            onClose={() => setShareFolderTarget(null)}
+            folderId={shareFolderTarget?.folderId ?? ''}
+            folderName={shareFolderTarget?.folderName ?? ''}
+          />
+        </Suspense>
+      )}
+      {connectAsDialogMounted && (
+        <Suspense fallback={null}>
+          <ConnectAsDialog
+            open={!!connectAsTarget}
+            onClose={() => setConnectAsTarget(null)}
+            connection={connectAsTarget}
+          />
+        </Suspense>
+      )}
 
       <Snackbar
         open={notification !== null}
@@ -350,52 +404,88 @@ export default function MainLayout() {
       </Snackbar>
       </Box>
 
-      <SettingsDialog
-        open={settingsOpen}
-        onClose={() => { setSettingsOpen(false); setLinkedProvider(null); }}
-        initialTab={settingsInitialTab}
-        linkedProvider={linkedProvider}
-        onViewUserProfile={(uid) => setProfileUserId(uid)}
-        onGeoIpClick={setGeoIpTarget}
-      />
-      <AuditLogDialog
-        open={auditLogOpen}
-        onClose={() => setAuditLogOpen(false)}
-        onGeoIpClick={setGeoIpTarget}
-      />
-      <KeychainDialog
-        open={keychainOpen}
-        onClose={() => setKeychainOpen(false)}
-      />
-      <ConnectionAuditLogDialog
-        open={!!connectionAuditTarget}
-        onClose={() => setConnectionAuditTarget(null)}
-        connectionId={connectionAuditTarget?.id ?? ''}
-        connectionName={connectionAuditTarget?.name ?? ''}
-        onGeoIpClick={setGeoIpTarget}
-      />
-      <UserProfileDialog
-        open={!!profileUserId}
-        onClose={() => setProfileUserId(null)}
-        userId={profileUserId}
-      />
-      <RecordingsDialog
-        open={recordingsOpen}
-        onClose={() => setRecordingsOpen(false)}
-      />
-      <ImportDialog
-        open={importDialogOpen}
-        onClose={() => { setImportDialogOpen(false); useConnectionsStore.getState().fetchConnections(); }}
-      />
-      <ExportDialog
-        open={exportDialogOpen}
-        onClose={() => setExportDialogOpen(false)}
-      />
-      <GeoIpDialog
-        open={!!geoIpTarget}
-        onClose={() => setGeoIpTarget(null)}
-        ipAddress={geoIpTarget}
-      />
+      {settingsDialogMounted && (
+        <Suspense fallback={null}>
+          <SettingsDialog
+            open={settingsOpen}
+            onClose={() => { setSettingsOpen(false); setLinkedProvider(null); }}
+            initialTab={settingsInitialTab}
+            linkedProvider={linkedProvider}
+            onViewUserProfile={(uid) => setProfileUserId(uid)}
+            onGeoIpClick={setGeoIpTarget}
+          />
+        </Suspense>
+      )}
+      {auditLogDialogMounted && (
+        <Suspense fallback={null}>
+          <AuditLogDialog
+            open={auditLogOpen}
+            onClose={() => setAuditLogOpen(false)}
+            onGeoIpClick={setGeoIpTarget}
+          />
+        </Suspense>
+      )}
+      {keychainDialogMounted && (
+        <Suspense fallback={null}>
+          <KeychainDialog
+            open={keychainOpen}
+            onClose={() => setKeychainOpen(false)}
+          />
+        </Suspense>
+      )}
+      {connectionAuditDialogMounted && (
+        <Suspense fallback={null}>
+          <ConnectionAuditLogDialog
+            open={!!connectionAuditTarget}
+            onClose={() => setConnectionAuditTarget(null)}
+            connectionId={connectionAuditTarget?.id ?? ''}
+            connectionName={connectionAuditTarget?.name ?? ''}
+            onGeoIpClick={setGeoIpTarget}
+          />
+        </Suspense>
+      )}
+      {userProfileDialogMounted && (
+        <Suspense fallback={null}>
+          <UserProfileDialog
+            open={!!profileUserId}
+            onClose={() => setProfileUserId(null)}
+            userId={profileUserId}
+          />
+        </Suspense>
+      )}
+      {recordingsDialogMounted && (
+        <Suspense fallback={null}>
+          <RecordingsDialog
+            open={recordingsOpen}
+            onClose={() => setRecordingsOpen(false)}
+          />
+        </Suspense>
+      )}
+      {importDialogMounted && (
+        <Suspense fallback={null}>
+          <ImportDialog
+            open={importDialogOpen}
+            onClose={() => { setImportDialogOpen(false); useConnectionsStore.getState().fetchConnections(); }}
+          />
+        </Suspense>
+      )}
+      {exportDialogMounted && (
+        <Suspense fallback={null}>
+          <ExportDialog
+            open={exportDialogOpen}
+            onClose={() => setExportDialogOpen(false)}
+          />
+        </Suspense>
+      )}
+      {geoIpDialogMounted && (
+        <Suspense fallback={null}>
+          <GeoIpDialog
+            open={!!geoIpTarget}
+            onClose={() => setGeoIpTarget(null)}
+            ipAddress={geoIpTarget}
+          />
+        </Suspense>
+      )}
     </>
   );
 }

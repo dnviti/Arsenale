@@ -8,6 +8,7 @@ import { ExpandMore as ExpandMoreIcon, Save as SaveIcon } from '@mui/icons-mater
 import { useGatewayStore } from '../../store/gatewayStore';
 import type { GatewayData } from '../../api/gateway.api';
 import SessionTimeoutConfig from '../orchestration/SessionTimeoutConfig';
+import { useAsyncAction } from '../../hooks/useAsyncAction';
 
 interface GatewayDialogProps {
   open: boolean;
@@ -36,15 +37,15 @@ export default function GatewayDialog({ open, onClose, gateway }: GatewayDialogP
   const [cooldownVal, setCooldownVal] = useState('300');
   const [publishPorts, setPublishPorts] = useState(false);
   const [lbStrategy, setLbStrategy] = useState<'ROUND_ROBIN' | 'LEAST_CONNECTIONS'>('ROUND_ROBIN');
-  const [error, setError] = useState('');
-  const [loading, setLoading] = useState(false);
-  const [scalingSaving, setScalingSaving] = useState(false);
+  const { loading, error, setError, run } = useAsyncAction();
+  const { loading: scalingSaving, run: runScaling } = useAsyncAction();
   const createGateway = useGatewayStore((s) => s.createGateway);
   const updateGateway = useGatewayStore((s) => s.updateGateway);
   const updateScalingConfig = useGatewayStore((s) => s.updateScalingConfig);
 
   const isEditMode = Boolean(gateway);
 
+  // eslint-disable-next-line react-hooks/set-state-in-effect -- intentional form reset on dialog open
   useEffect(() => {
     if (open && gateway) {
       setName(gateway.name);
@@ -90,6 +91,7 @@ export default function GatewayDialog({ open, onClose, gateway }: GatewayDialogP
       setLbStrategy('ROUND_ROBIN');
     }
     setError('');
+  // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [open, gateway]);
 
   const handleTypeChange = (newType: 'GUACD' | 'SSH_BASTION' | 'MANAGED_SSH') => {
@@ -121,8 +123,7 @@ export default function GatewayDialog({ open, onClose, gateway }: GatewayDialogP
       return;
     }
 
-    setLoading(true);
-    try {
+    const ok = await run(async () => {
       if (isEditMode && gateway) {
         const data: Record<string, unknown> = {};
         if (name.trim() !== gateway.name) data.name = name.trim();
@@ -169,15 +170,8 @@ export default function GatewayDialog({ open, onClose, gateway }: GatewayDialogP
           ...((type === 'MANAGED_SSH' || type === 'GUACD') ? { lbStrategy } : {}),
         });
       }
-      handleClose();
-    } catch (err: unknown) {
-      const msg =
-        (err as { response?: { data?: { error?: string } } })?.response?.data?.error ||
-        (isEditMode ? 'Failed to update gateway' : 'Failed to create gateway');
-      setError(msg);
-    } finally {
-      setLoading(false);
-    }
+    }, isEditMode ? 'Failed to update gateway' : 'Failed to create gateway');
+    if (ok) handleClose();
   };
 
   const handleClose = () => {
@@ -442,22 +436,15 @@ export default function GatewayDialog({ open, onClose, gateway }: GatewayDialogP
                     size="small"
                     startIcon={<SaveIcon />}
                     disabled={scalingSaving}
-                    onClick={async () => {
-                      setScalingSaving(true);
-                      try {
-                        await updateScalingConfig(gateway?.id ?? '', {
-                          autoScale: autoScaleEnabled,
-                          minReplicas: Number(minReplicasVal),
-                          maxReplicas: Number(maxReplicasVal),
-                          sessionsPerInstance: Number(sessPerInstance),
-                          scaleDownCooldownSeconds: Number(cooldownVal),
-                        });
-                      } catch (err) {
-                        setError((err as Error).message);
-                      } finally {
-                        setScalingSaving(false);
-                      }
-                    }}
+                    onClick={() => runScaling(async () => {
+                      await updateScalingConfig(gateway?.id ?? '', {
+                        autoScale: autoScaleEnabled,
+                        minReplicas: Number(minReplicasVal),
+                        maxReplicas: Number(maxReplicasVal),
+                        sessionsPerInstance: Number(sessPerInstance),
+                        scaleDownCooldownSeconds: Number(cooldownVal),
+                      });
+                    }, 'Failed to save scaling config')}
                     sx={{ alignSelf: 'flex-start' }}
                   >
                     {scalingSaving ? 'Saving...' : 'Save Scaling Config'}

@@ -1,6 +1,7 @@
 import crypto from 'crypto';
 import dotenv from 'dotenv';
 import path from 'path';
+import { parseExpiry } from './utils/format';
 
 dotenv.config({ path: path.resolve(__dirname, '../../.env') });
 
@@ -54,19 +55,7 @@ export const config = {
   serverEncryptionKey: resolveServerEncryptionKey(),
   gatewayApiToken: process.env.GATEWAY_API_TOKEN || '',
   vaultTtlMinutes: parseInt(process.env.VAULT_TTL_MINUTES || '30', 10),
-  vaultRecoveryTtlMs: (() => {
-    const expiry = process.env.JWT_REFRESH_EXPIRES_IN || '7d';
-    const match = expiry.match(/^(\d+)([smhd])$/);
-    if (!match) return 7 * 24 * 60 * 60 * 1000;
-    const value = parseInt(match[1]);
-    switch (match[2]) {
-      case 's': return value * 1000;
-      case 'm': return value * 60 * 1000;
-      case 'h': return value * 60 * 60 * 1000;
-      case 'd': return value * 24 * 60 * 60 * 1000;
-      default: return 7 * 24 * 60 * 60 * 1000;
-    }
-  })(),
+  vaultRecoveryTtlMs: parseExpiry(process.env.JWT_REFRESH_EXPIRES_IN || '7d'),
   nodeEnv: process.env.NODE_ENV || 'development',
   logLevel: (process.env.LOG_LEVEL || 'info') as 'error' | 'warn' | 'info' | 'verbose' | 'debug',
   logFormat: (process.env.LOG_FORMAT || 'text') as 'text' | 'json',
@@ -163,6 +152,17 @@ export const config = {
   loginRateLimitMaxAttempts: parseInt(process.env.LOGIN_RATE_LIMIT_MAX_ATTEMPTS || '5', 10),
   accountLockoutThreshold: parseInt(process.env.ACCOUNT_LOCKOUT_THRESHOLD || '10', 10),
   accountLockoutDurationMs: parseInt(process.env.ACCOUNT_LOCKOUT_DURATION_MS || String(30 * 60 * 1000), 10),
+  vaultRateLimitWindowMs: parseInt(process.env.VAULT_RATE_LIMIT_WINDOW_MS || String(60 * 1000), 10),
+  vaultRateLimitMaxAttempts: parseInt(process.env.VAULT_RATE_LIMIT_MAX_ATTEMPTS || '5', 10),
+  vaultMfaRateLimitMaxAttempts: parseInt(process.env.VAULT_MFA_RATE_LIMIT_MAX_ATTEMPTS || '10', 10),
+  sessionRateLimitWindowMs: parseInt(process.env.SESSION_RATE_LIMIT_WINDOW_MS || String(60 * 1000), 10),
+  sessionRateLimitMaxAttempts: parseInt(process.env.SESSION_RATE_LIMIT_MAX_ATTEMPTS || '20', 10),
+  oauthFlowRateLimitWindowMs: parseInt(process.env.OAUTH_FLOW_RATE_LIMIT_WINDOW_MS || String(15 * 60 * 1000), 10),
+  oauthFlowRateLimitMaxAttempts: parseInt(process.env.OAUTH_FLOW_RATE_LIMIT_MAX_ATTEMPTS || '20', 10),
+  oauthAccountRateLimitWindowMs: parseInt(process.env.OAUTH_ACCOUNT_RATE_LIMIT_WINDOW_MS || String(60 * 1000), 10),
+  oauthAccountRateLimitMaxAttempts: parseInt(process.env.OAUTH_ACCOUNT_RATE_LIMIT_MAX_ATTEMPTS || '15', 10),
+  oauthLinkRateLimitWindowMs: parseInt(process.env.OAUTH_LINK_RATE_LIMIT_WINDOW_MS || String(15 * 60 * 1000), 10),
+  oauthLinkRateLimitMaxAttempts: parseInt(process.env.OAUTH_LINK_RATE_LIMIT_MAX_ATTEMPTS || '10', 10),
   sessionHeartbeatIntervalMs: parseInt(process.env.SESSION_HEARTBEAT_INTERVAL_MS || String(30 * 1000), 10),
   sessionIdleThresholdMinutes: parseInt(process.env.SESSION_IDLE_THRESHOLD_MINUTES || '5', 10),
   sessionCleanupRetentionDays: parseInt(process.env.SESSION_CLEANUP_RETENTION_DAYS || '30', 10),

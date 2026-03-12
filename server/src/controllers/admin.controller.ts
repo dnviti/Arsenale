@@ -1,30 +1,17 @@
 import { Response, NextFunction } from 'express';
-import { z } from 'zod';
 import { AuthRequest, assertAuthenticated } from '../types';
 import { sendEmail, getEmailStatus } from '../services/email';
 import * as auditService from '../services/audit.service';
 import { AppError } from '../middleware/error.middleware';
 import * as appConfigService from '../services/appConfig.service';
 import { getClientIp } from '../utils/ip';
-
-const testEmailSchema = z.object({
-  to: z.string().email(),
-});
-
-const selfSignupSchema = z.object({
-  enabled: z.boolean(),
-});
+import type { TestEmailInput, SelfSignupInput } from '../schemas/admin.schemas';
 
 export async function emailStatus(
   _req: AuthRequest,
   res: Response,
-  next: NextFunction,
 ) {
-  try {
-    res.json(getEmailStatus());
-  } catch (err) {
-    next(err);
-  }
+  res.json(getEmailStatus());
 }
 
 export async function sendTestEmail(
@@ -34,7 +21,7 @@ export async function sendTestEmail(
 ) {
   try {
     assertAuthenticated(req);
-    const { to } = testEmailSchema.parse(req.body);
+    const { to } = req.body as TestEmailInput;
     const status = getEmailStatus();
 
     await sendEmail({
@@ -57,9 +44,7 @@ export async function sendTestEmail(
     });
 
     res.json({ success: true, message: 'Test email sent successfully' });
-  } catch (err) {
-    if (err instanceof z.ZodError)
-      return next(new AppError(err.issues[0].message, 400));
+  } catch {
     next(
       new AppError(
         'Failed to send test email. Check your email provider configuration.',
@@ -72,38 +57,26 @@ export async function sendTestEmail(
 export async function getAppConfig(
   _req: AuthRequest,
   res: Response,
-  next: NextFunction,
 ) {
-  try {
-    const selfSignupEnabled = await appConfigService.getSelfSignupEnabled();
-    const selfSignupEnvLocked = appConfigService.isSelfSignupEnvLocked();
-    res.json({ selfSignupEnabled, selfSignupEnvLocked });
-  } catch (err) {
-    next(err);
-  }
+  const selfSignupEnabled = await appConfigService.getSelfSignupEnabled();
+  const selfSignupEnvLocked = appConfigService.isSelfSignupEnvLocked();
+  res.json({ selfSignupEnabled, selfSignupEnvLocked });
 }
 
 export async function setSelfSignup(
   req: AuthRequest,
   res: Response,
-  next: NextFunction,
 ) {
-  try {
-    assertAuthenticated(req);
-    const { enabled } = selfSignupSchema.parse(req.body);
-    await appConfigService.setSelfSignupEnabled(enabled);
+  assertAuthenticated(req);
+  const { enabled } = req.body as SelfSignupInput;
+  await appConfigService.setSelfSignupEnabled(enabled);
 
-    auditService.log({
-      userId: req.user.userId,
-      action: 'APP_CONFIG_UPDATE',
-      details: { key: 'selfSignupEnabled', value: enabled },
-      ipAddress: getClientIp(req),
-    });
+  auditService.log({
+    userId: req.user.userId,
+    action: 'APP_CONFIG_UPDATE',
+    details: { key: 'selfSignupEnabled', value: enabled },
+    ipAddress: getClientIp(req),
+  });
 
-    res.json({ selfSignupEnabled: enabled });
-  } catch (err) {
-    if (err instanceof z.ZodError)
-      return next(new AppError(err.issues[0].message, 400));
-    next(err);
-  }
+  res.json({ selfSignupEnabled: enabled });
 }

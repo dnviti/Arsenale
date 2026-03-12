@@ -1,34 +1,44 @@
-import { useState, useEffect, forwardRef } from 'react';
+import { useState, useEffect } from 'react';
 import {
   Dialog, AppBar, Toolbar, Typography, IconButton, Box,
   Alert, Button,
   DialogTitle, DialogContent, DialogContentText, DialogActions,
-  Slide,
 } from '@mui/material';
-import type { TransitionProps } from '@mui/material/transitions';
-import { Close as CloseIcon } from '@mui/icons-material';
+import {
+  Close as CloseIcon,
+  ChevronLeft as ChevronLeftIcon,
+  ChevronRight as ChevronRightIcon,
+} from '@mui/icons-material';
+import {
+  DndContext,
+  DragOverlay,
+  pointerWithin,
+  useSensor,
+  useSensors,
+  PointerSensor,
+} from '@dnd-kit/core';
+import type { DragStartEvent, DragEndEvent } from '@dnd-kit/core';
+import SecretTree from '../Keychain/SecretTree';
 import SecretListPanel from '../Keychain/SecretListPanel';
 import SecretDetailView from '../Keychain/SecretDetailView';
 import SecretDialog from '../Keychain/SecretDialog';
 import ShareSecretDialog from '../Keychain/ShareSecretDialog';
 import ExternalShareDialog from '../Keychain/ExternalShareDialog';
+import VaultFolderDialog from '../Keychain/VaultFolderDialog';
 import { useSecretStore } from '../../store/secretStore';
 import { useAuthStore } from '../../store/authStore';
+import { useUiPreferencesStore } from '../../store/uiPreferencesStore';
 import type { SecretListItem, SecretDetail } from '../../api/secrets.api';
+import type { VaultFolderData, VaultFolderScope } from '../../api/vault-folders.api';
 import { getSecret } from '../../api/secrets.api';
-
-const SlideUp = forwardRef(function SlideUp(
-  props: TransitionProps & { children: React.ReactElement },
-  ref: React.Ref<unknown>,
-) {
-  return <Slide direction="up" ref={ref} {...props} />;
-});
+import { SlideUp } from '../common/SlideUp';
 
 interface KeychainDialogProps {
   open: boolean;
   onClose: () => void;
 }
 
+const TREE_PANEL_WIDTH = 200;
 const LIST_PANEL_WIDTH = 320;
 
 export default function KeychainDialog({ open, onClose }: KeychainDialogProps) {
@@ -41,10 +51,40 @@ export default function KeychainDialog({ open, onClose }: KeychainDialogProps) {
   const initTenantVault = useSecretStore((s) => s.initTenantVault);
   const user = useAuthStore((s) => s.user);
 
+  const treeOpen = useUiPreferencesStore((s) => s.keychainTreeOpen);
+  const togglePref = useUiPreferencesStore((s) => s.toggle);
+
+  const moveSecret = useSecretStore((s) => s.moveSecret);
+
   const isAdmin = user?.tenantRole === 'OWNER' || user?.tenantRole === 'ADMIN';
   const hasTenant = !!user?.tenantId;
 
   const [initializingVault, setInitializingVault] = useState(false);
+  const [activeSecretDrag, setActiveSecretDrag] = useState<SecretListItem | null>(null);
+
+  // DnD sensors
+  const sensors = useSensors(
+    useSensor(PointerSensor, { activationConstraint: { distance: 8 } }),
+  );
+
+  const handleDragStart = (event: DragStartEvent) => {
+    const secret = event.active.data.current?.secret as SecretListItem | undefined;
+    if (secret) setActiveSecretDrag(secret);
+  };
+
+  const handleDragEnd = async (event: DragEndEvent) => {
+    setActiveSecretDrag(null);
+    const { active, over } = event;
+    if (!over) return;
+
+    const secret = active.data.current?.secret as SecretListItem | undefined;
+    if (!secret) return;
+
+    const targetFolderId = (over.data.current?.folderId as string | null) ?? null;
+    if (targetFolderId === (secret.folderId ?? null)) return;
+
+    await moveSecret(secret.id, targetFolderId);
+  };
 
   useEffect(() => {
     if (open && hasTenant) fetchTenantVaultStatus();
@@ -69,6 +109,13 @@ export default function KeychainDialog({ open, onClose }: KeychainDialogProps) {
   const [deleting, setDeleting] = useState(false);
   const [externalShareTarget, setExternalShareTarget] = useState<{ id: string; name: string } | null>(null);
 
+  // Folder dialog state
+  const [folderDialogOpen, setFolderDialogOpen] = useState(false);
+  const [editingFolder, setEditingFolder] = useState<VaultFolderData | null>(null);
+  const [folderDialogScope, setFolderDialogScope] = useState<VaultFolderScope>('PERSONAL');
+  const [folderDialogParentId, setFolderDialogParentId] = useState<string | null>(null);
+  const [folderDialogTeamId, setFolderDialogTeamId] = useState<string | null>(null);
+
   const handleCreateSecret = () => {
     setEditingSecret(null);
     setSecretDialogOpen(true);
@@ -80,7 +127,6 @@ export default function KeychainDialog({ open, onClose }: KeychainDialogProps) {
       setEditingSecret(detail);
       setSecretDialogOpen(true);
     } catch {
-      // If fetch fails (e.g., vault locked), still open with null
       setEditingSecret(null);
       setSecretDialogOpen(true);
     }
@@ -111,6 +157,21 @@ export default function KeychainDialog({ open, onClose }: KeychainDialogProps) {
     if (selectedSecret) {
       fetchSecret(selectedSecret.id);
     }
+  };
+
+  const handleCreateFolder = (scope: VaultFolderScope, parentId?: string, teamId?: string) => {
+    setEditingFolder(null);
+    setFolderDialogScope(scope);
+    setFolderDialogParentId(parentId || null);
+    setFolderDialogTeamId(teamId || null);
+    setFolderDialogOpen(true);
+  };
+
+  const handleEditFolder = (folder: VaultFolderData) => {
+    setEditingFolder(folder);
+    setFolderDialogScope(folder.scope);
+    setFolderDialogTeamId(folder.teamId);
+    setFolderDialogOpen(true);
   };
 
   return (
@@ -151,9 +212,55 @@ export default function KeychainDialog({ open, onClose }: KeychainDialogProps) {
         </Alert>
       )}
 
-      {/* Main content */}
+      {/* Main content — 3-column layout with DnD */}
+      <DndContext
+        sensors={sensors}
+        collisionDetection={pointerWithin}
+        onDragStart={handleDragStart}
+        onDragEnd={handleDragEnd}
+      >
       <Box sx={{ display: 'flex', flex: 1, overflow: 'hidden' }}>
-        {/* Left panel */}
+        {/* Folder tree panel */}
+        {treeOpen && (
+          <Box
+            sx={{
+              width: TREE_PANEL_WIDTH,
+              minWidth: TREE_PANEL_WIDTH,
+              borderRight: 1,
+              borderColor: 'divider',
+              bgcolor: 'background.paper',
+              overflow: 'hidden',
+              display: 'flex',
+              flexDirection: 'column',
+            }}
+          >
+            <SecretTree
+              onCreateFolder={handleCreateFolder}
+              onEditFolder={handleEditFolder}
+            />
+          </Box>
+        )}
+
+        {/* Tree toggle */}
+        <Box
+          sx={{
+            display: 'flex',
+            alignItems: 'center',
+            borderRight: 1,
+            borderColor: 'divider',
+          }}
+        >
+          <IconButton
+            size="small"
+            onClick={() => togglePref('keychainTreeOpen')}
+            title={treeOpen ? 'Hide folders' : 'Show folders'}
+            sx={{ borderRadius: 0, width: 20, height: '100%' }}
+          >
+            {treeOpen ? <ChevronLeftIcon sx={{ fontSize: 16 }} /> : <ChevronRightIcon sx={{ fontSize: 16 }} />}
+          </IconButton>
+        </Box>
+
+        {/* Secret list panel */}
         <Box
           sx={{
             width: LIST_PANEL_WIDTH,
@@ -174,7 +281,7 @@ export default function KeychainDialog({ open, onClose }: KeychainDialogProps) {
           />
         </Box>
 
-        {/* Right panel */}
+        {/* Detail panel */}
         <Box sx={{ flex: 1, overflow: 'auto', bgcolor: 'background.default' }}>
           {selectedSecret ? (
             <SecretDetailView
@@ -199,6 +306,28 @@ export default function KeychainDialog({ open, onClose }: KeychainDialogProps) {
         </Box>
       </Box>
 
+      {/* Drag overlay */}
+      <DragOverlay dropAnimation={null}>
+        {activeSecretDrag && (
+          <Box sx={{
+            bgcolor: 'background.paper',
+            boxShadow: 3,
+            borderRadius: 1,
+            px: 2,
+            py: 0.5,
+            display: 'flex',
+            alignItems: 'center',
+            gap: 1,
+            opacity: 0.9,
+            pointerEvents: 'none',
+            maxWidth: 220,
+          }}>
+            <Typography variant="body2" noWrap>{activeSecretDrag.name}</Typography>
+          </Box>
+        )}
+      </DragOverlay>
+      </DndContext>
+
       {/* Dialogs */}
       <SecretDialog
         open={secretDialogOpen}
@@ -219,6 +348,15 @@ export default function KeychainDialog({ open, onClose }: KeychainDialogProps) {
         onClose={() => setExternalShareTarget(null)}
         secretId={externalShareTarget?.id ?? ''}
         secretName={externalShareTarget?.name ?? ''}
+      />
+
+      <VaultFolderDialog
+        open={folderDialogOpen}
+        onClose={() => { setFolderDialogOpen(false); setEditingFolder(null); }}
+        folder={editingFolder}
+        parentId={folderDialogParentId}
+        scope={folderDialogScope}
+        teamId={folderDialogTeamId}
       />
 
       {/* Delete confirmation */}

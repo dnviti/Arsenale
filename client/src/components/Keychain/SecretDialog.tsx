@@ -13,6 +13,7 @@ import { useAuthStore } from '../../store/authStore';
 import { useTeamStore } from '../../store/teamStore';
 import type { SecretDetail, SecretType, SecretScope, SecretPayload } from '../../api/secrets.api';
 import type { TenantVaultStatus } from '../../api/secrets.api';
+import { useAsyncAction } from '../../hooks/useAsyncAction';
 
 interface SecretDialogProps {
   open: boolean;
@@ -73,8 +74,7 @@ export default function SecretDialog({ open, onClose, secret }: SecretDialogProp
 
   const [noteContent, setNoteContent] = useState('');
 
-  const [error, setError] = useState('');
-  const [loading, setLoading] = useState(false);
+  const { loading, error, setError, run } = useAsyncAction();
 
   const fileInputRef = useRef<HTMLInputElement>(null);
   const [fileTarget, setFileTarget] = useState<string>('');
@@ -198,15 +198,13 @@ export default function SecretDialog({ open, onClose, secret }: SecretDialogProp
   };
 
   const handleSubmit = async () => {
-    setError('');
     if (!name.trim()) { setError('Name is required'); return; }
     if (scope === 'TEAM' && !teamId) { setError('Please select a team'); return; }
 
     const payload = buildPayload();
     if (!payload) return;
 
-    setLoading(true);
-    try {
+    const ok = await run(async () => {
       if (isEditMode && secret) {
         await updateSecret(secret.id, {
           name: name.trim(),
@@ -227,15 +225,8 @@ export default function SecretDialog({ open, onClose, secret }: SecretDialogProp
           expiresAt: expiresAt ? new Date(expiresAt).toISOString() : undefined,
         });
       }
-      onClose();
-    } catch (err: unknown) {
-      const msg =
-        (err as { response?: { data?: { error?: string } } })?.response?.data?.error ||
-        (isEditMode ? 'Failed to update secret' : 'Failed to create secret');
-      setError(msg);
-    } finally {
-      setLoading(false);
-    }
+    }, isEditMode ? 'Failed to update secret' : 'Failed to create secret');
+    if (ok) onClose();
   };
 
   const handleAddTag = () => {

@@ -11,13 +11,20 @@
 ================================================================================
 
 
-
-
-
-
 ================================================================================
   SEZIONE B — TASK AGGIUNTIVI SUGGERITI
 ================================================================================
+
+
+# Scouted 2026-03-11 — Code Optimization & Cleanup
+
+
+
+
+
+
+
+
 
 
 ------------------------------------------------------------------------------
@@ -69,6 +76,58 @@
     MODIFICARE: .github/workflows/ssh-gateway-build.yml
     MODIFICARE: .github/workflows/guacenc-build.yml
 
+
+------------------------------------------------------------------------------
+[ ] NOTIF-210 — Notifiche desktop/mobile tramite Web Notifications API
+------------------------------------------------------------------------------
+  Priorita: MEDIA
+  Dipendenze: NOTIF-015
+
+  DESCRIZIONE:
+  Attualmente il sistema di notifiche mostra gli avvisi solo nell'interfaccia
+  web tramite l'icona a campanella (NotificationBell). Questo task estende il
+  sistema per inviare notifiche native al desktop o dispositivo mobile
+  dell'utente utilizzando la Web Notifications API del browser.
+  All'arrivo di una nuova notifica via Socket.IO, se l'utente ha concesso il
+  permesso, viene mostrata una notifica nativa del sistema operativo oltre
+  alla notifica in-app gia' esistente. L'utente puo' gestire il permesso
+  dalle impostazioni dell'applicazione.
+
+  DETTAGLI TECNICI:
+  1. Hook useDesktopNotifications:
+     - Gestisce lo stato del permesso (granted/denied/default) via
+       Notification.permission
+     - Espone requestPermission() che chiama Notification.requestPermission()
+     - Espone sendDesktopNotification(title, options) che crea una new
+       Notification() se il permesso e' granted
+     - Gestisce il click sulla notifica nativa per portare il focus alla
+       finestra dell'app e aprire il popover notifiche
+
+  2. Integrazione in NotificationBell.tsx:
+     - Al ricevimento dell'evento Socket.IO 'notification:new', oltre ad
+       aggiungere la notifica allo store, invocare
+       sendDesktopNotification() con il messaggio della notifica
+     - Mostrare l'icona della notifica nativa in base al tipo (riutilizzare
+       la mappatura notificationIcon esistente per il badge)
+     - Non inviare notifica desktop se il documento e' in focus
+       (document.hasFocus()) per evitare duplicazione
+
+  3. Preferenza utente in uiPreferencesStore:
+     - Aggiungere chiave 'desktopNotificationsEnabled' (default: false)
+     - Toggle nelle impostazioni per abilitare/disabilitare
+     - Al primo enable, richiedere il permesso al browser
+
+  4. UI in SettingsDialog:
+     - Aggiungere sezione "Notifiche" con toggle per notifiche desktop
+     - Mostrare stato attuale del permesso browser
+     - Se permesso negato a livello browser, mostrare messaggio informativo
+       con istruzioni per riabilitare dalle impostazioni del browser
+
+  File coinvolti:
+    CREARE:     client/src/hooks/useDesktopNotifications.ts
+    MODIFICARE: client/src/components/Layout/NotificationBell.tsx
+    MODIFICARE: client/src/store/uiPreferencesStore.ts
+    MODIFICARE: client/src/components/Settings/SettingsDialog.tsx
 
 
 
@@ -228,11 +287,363 @@
   SEZIONE F — PASSWORD KEYCHAIN / SECRET VAULT
 ================================================================================
 
+------------------------------------------------------------------------------
+[ ] VAULT-203 — Struttura a cartelle nella Keychain (come le connessioni)
+------------------------------------------------------------------------------
+  Priorita: MEDIA
+  Dipendenze: Nessuna
+
+  DESCRIZIONE:
+  Il modello VaultFolder esiste gia' nello schema Prisma con supporto
+  gerarchico (parentId) e multi-scope (personal/team/tenant), ma non ha
+  alcuna implementazione ne' lato server ne' lato client. I segreti nel
+  keychain vengono attualmente mostrati come lista piatta con filtri per
+  scope e tipo. Questo task implementa l'intero stack CRUD per le cartelle
+  del vault e integra la navigazione ad albero nel KeychainDialog con layout
+  a 3 colonne (albero | lista segreti | dettaglio), replicando il pattern
+  gia' usato per le connessioni (ConnectionTree / FolderDialog), incluso
+  drag-and-drop dei segreti tra cartelle tramite dnd-kit.
+
+  DETTAGLI TECNICI:
+
+  1. Backend — CRUD VaultFolder
+     - Creare route vault-folders.routes.ts con endpoint:
+       GET    /api/vault-folders          → lista ad albero (personal + team + tenant)
+       POST   /api/vault-folders          → crea cartella (name, scope, parentId?)
+       PUT    /api/vault-folders/:id      → rinomina / sposta (parentId)
+       DELETE /api/vault-folders/:id      → elimina, ricollega figli al parent
+     - Creare controller vault-folders.controller.ts con validazione Zod
+       (riusare pattern di folders.controller.ts e middleware REFAC-201)
+     - Creare service vault-folder.service.ts con logica:
+       getFolderTree(userId, teamIds, tenantId) → { personal, team, tenant }
+       createFolder / updateFolder / deleteFolder
+       Prevenire riferimenti circolari come in folder.service.ts
+     - Montare le route in app.ts sotto /api/vault-folders
+
+  2. Backend — Filtro folderId nei segreti
+     - Verificare che secret.service.ts filtri per folderId nella query
+       Prisma di listSecrets; in caso contrario aggiungere il filtro
+     - Aggiungere query param folderId nella route GET /api/secrets
+
+  3. Client — API e Store
+     - Creare vault-folders.api.ts con chiamate CRUD (seguire folders.api.ts)
+     - Estendere secretStore.ts:
+       - Aggiungere stato: vaultFolders[], vaultTeamFolders[],
+         vaultTenantFolders[], selectedFolderId
+       - Metodi: fetchVaultFolders(), moveSecret(secretId, folderId)
+       - Aggiornare fetchSecrets() per passare selectedFolderId come filtro
+
+  4. Client — UI nel KeychainDialog (layout 3 colonne + DnD)
+     - Creare SecretTree.tsx in components/Keychain/ replicando il pattern
+       di ConnectionTree.tsx:
+       - Albero gerarchico di VaultFolder con expand/collapse
+       - Nodo "Tutti i segreti" (senza filtro cartella)
+       - Nodo "Preferiti" per segreti con isFavorite
+       - Sezione team/tenant folders raggruppata per scope
+       - Click su cartella → filtra SecretListPanel per folderId
+       - Context menu: Rinomina, Sposta, Elimina cartella
+       - Drag-and-drop segreti tra cartelle tramite @dnd-kit
+     - Creare VaultFolderDialog.tsx per creazione/modifica cartelle
+       (seguire FolderDialog.tsx)
+     - Modificare KeychainDialog.tsx: layout a 3 colonne
+       (tree | lista segreti | dettaglio), pannello tree collassabile
+     - Persistere stati expand/collapse in uiPreferencesStore con chiavi
+       keychainFolderExpandState e keychainTreeOpen
+
+  File coinvolti:
+    CREARE:     server/src/routes/vault-folders.routes.ts
+    CREARE:     server/src/controllers/vault-folders.controller.ts
+    CREARE:     server/src/services/vault-folder.service.ts
+    CREARE:     client/src/api/vault-folders.api.ts
+    CREARE:     client/src/components/Keychain/SecretTree.tsx
+    CREARE:     client/src/components/Keychain/VaultFolderDialog.tsx
+    MODIFICARE: server/src/app.ts
+    MODIFICARE: server/src/routes/secret.routes.ts
+    MODIFICARE: server/src/services/secret.service.ts
+    MODIFICARE: client/src/store/secretStore.ts
+    MODIFICARE: client/src/components/Dialogs/KeychainDialog.tsx
+    MODIFICARE: client/src/components/Keychain/SecretListPanel.tsx
+    MODIFICARE: client/src/store/uiPreferencesStore.ts
 
 
+------------------------------------------------------------------------------
+[ ] VAULT-207 — Distribuzione asincrona chiave tenant vault (PendingVaultKeyDistribution)
+------------------------------------------------------------------------------
+  Priorita: CRITICA
+  Dipendenze: Nessuna
+
+  DESCRIZIONE:
+  Attualmente la distribuzione della chiave tenant vault richiede che ENTRAMBI
+  i vault (admin + utente target) siano sbloccati simultaneamente. Questo e'
+  praticamente impossibile da coordinare e blocca completamente gli utenti
+  nuovi del tenant con l'errore "You don't have access to the organization
+  vault yet". Il problema e' in distributeTenantKeyToUser() dentro
+  secret.service.ts: getMasterKey(targetUserId) fallisce se il target non ha
+  il vault aperto.
+
+  Soluzione: implementare distribuzione asincrona/deferred. Quando l'admin
+  distribuisce la chiave e il vault del target e' chiuso, la chiave cifrata
+  viene salvata in una tabella pending. Quando il target sblocca il proprio
+  vault, il sistema controlla automaticamente se ci sono distribuzioni pending
+  e le finalizza (ri-cifra la chiave tenant con la master key dell'utente).
+
+  DETTAGLI TECNICI:
+  1) Nuovo modello Prisma `PendingVaultKeyDistribution`:
+     - id: String @id @default(uuid())
+     - tenantId: String (FK -> Tenant)
+     - targetUserId: String (FK -> User)
+     - encryptedTenantVaultKey: String (cifrato con chiave server-side)
+     - tenantVaultKeyIV: String
+     - tenantVaultKeyTag: String
+     - distributorUserId: String (FK -> User)
+     - createdAt: DateTime @default(now())
+     - @@unique([tenantId, targetUserId])
+     La chiave tenant viene cifrata con una chiave server-side dedicata
+     (VAULT_ESCROW_KEY in .env, derivata via HMAC-SHA256 di tenantId +
+     segreto applicativo). Quando il target sblocca il vault, il server
+     decifra il pending e ri-cifra con la master key del target.
+
+  2) Modificare distributeTenantKeyToUser() in secret.service.ts:
+     - Se getMasterKey(targetUserId) ritorna null, NON lanciare errore
+     - Risolvere la tenant key dell'admin (resolveTenantKey), cifrare con
+       chiave server-side, salvare in PendingVaultKeyDistribution
+     - Ritornare { distributed: false, pending: true } al controller
+     - Se il target HA il vault aperto, comportamento invariato
+
+  3) Modificare initTenantVault() in secret.service.ts:
+     - Nel loop sui tenantUsers, per utenti con vault chiuso creare un
+       record PendingVaultKeyDistribution invece di saltarli silenziosamente
+     - Cosi' TUTTI i membri ricevono la chiave (subito o al prossimo unlock)
+
+  4) Nuovo metodo processPendingDistributions(userId) in secret.service.ts:
+     - Query: trovare tutti i PendingVaultKeyDistribution per targetUserId
+     - Per ciascuno: decifrare con chiave server-side, ri-cifrare con la
+       master key dell'utente, creare TenantVaultMember, eliminare pending
+     - Wrappare in transazione Prisma
+
+  5) Hook in vault.service.ts unlockVault() (e tutte le varianti):
+     - Dopo storeVaultSession(), chiamare processPendingDistributions(userId)
+     - Tutti i path di unlock: unlockVault, unlockVaultWithTotp,
+       unlockVaultWithWebAuthn, unlockVaultWithSms
+     - Gestire errori silenziosamente (log.warn) per non bloccare l'unlock
+
+  6) Aggiornare controller secret.controller.ts distributeKey():
+     - Gestire il caso { pending: true }, ritornare 202 Accepted
+     - Aggiungere campo pendingDistribution: boolean in tenantVaultStatus()
+
+  7) Client - KeychainDialog.tsx:
+     - Se pendingDistribution === true: "Organization vault key is pending.
+       It will be automatically distributed when you unlock your vault."
+     - Se !hasAccess e !pending: "Organization vault key not yet distributed.
+       Ask an admin to distribute the key."
+
+  8) Nuove AuditAction: TENANT_VAULT_KEY_PENDING, TENANT_VAULT_KEY_AUTO_DISTRIBUTE
+
+  File coinvolti:
+    MODIFICARE: server/prisma/schema.prisma
+    MODIFICARE: server/src/services/secret.service.ts
+    MODIFICARE: server/src/services/vault.service.ts
+    MODIFICARE: server/src/controllers/secret.controller.ts
+    MODIFICARE: server/src/routes/secret.routes.ts
+    MODIFICARE: server/src/config.ts
+    MODIFICARE: .env.example
+    MODIFICARE: client/src/components/Dialogs/KeychainDialog.tsx
+    MODIFICARE: client/src/store/secretStore.ts
+    MODIFICARE: client/src/api/secrets.api.ts
 
 
+------------------------------------------------------------------------------
+[ ] VAULT-208 — Preservazione vault su password reset (Element-style, nessun wipe automatico)
+------------------------------------------------------------------------------
+  Priorita: CRITICA
+  Dipendenze: Nessuna
 
+  DESCRIZIONE:
+  Quando un utente resetta la password senza recovery key, il sistema esegue
+  un vault wipe completo (passwordReset.service.ts righe 246-337): tutte le
+  credenziali connessioni, segreti vault, team/tenant vault keys vengono
+  cancellati. Questo e' catastrofico per qualsiasi utente.
+
+  Soluzione (stile Element/Matrix): NON cancellare MAI automaticamente i dati
+  cifrati. Se l'utente non fornisce la recovery key durante il reset, i dati
+  restano cifrati e il vault viene marcato come "in attesa di recovery".
+  L'utente puo' fornire la recovery key in qualsiasi momento (sul form di
+  reset password O nella sezione dedicata del Keychain). Se la recovery key
+  e' persa definitivamente, l'utente puo' scegliere esplicitamente di
+  resettare il vault (con warning e conferma esplicita). Stesso comportamento
+  per account personali e membri tenant.
+
+  DETTAGLI TECNICI:
+  1) Nuovo campo User: vaultNeedsRecovery Boolean @default(false)
+     Quando true, il vault e' bloccato e non sbloccabile con la password
+     corrente (la vecchia encryptedVaultKey resta cifrata con la vecchia
+     password-derived key).
+
+  2) Modificare completePasswordReset() in passwordReset.service.ts:
+     - Se l'utente NON fornisce la recovery key:
+       * NON eseguire il vault wipe (rimuovere il blocco $transaction)
+       * NON cancellare credenziali, segreti, team/tenant vault keys
+       * Aggiornare solo: passwordHash (bcrypt nuovo)
+       * Impostare vaultNeedsRecovery = true
+       * La vecchia encryptedVaultKey resta intatta nel DB
+       * Log audit VAULT_NEEDS_RECOVERY
+     - Se l'utente FORNISCE la recovery key: flusso invariato (vault
+       preservato immediatamente come oggi)
+
+  3) Recovery key sul form di password reset (ResetPasswordPage.tsx):
+     - Campo recovery key opzionale nel form di completamento reset
+     - Se fornito e valido: vault preservato (flusso esistente)
+     - Se lasciato vuoto: password cambiata, vault in pending recovery
+     - Messaggio informativo: "If you have your recovery key, enter it now
+       to preserve your vault. You can also enter it later from Keychain."
+
+  4) Zona dedicata recovery nel Keychain (KeychainDialog.tsx):
+     - Quando vaultNeedsRecovery === true, mostrare sezione dedicata:
+       * Alert/banner: "Your vault is locked after a password reset. Enter
+         your recovery key to restore access to your encrypted data."
+       * Campo input per recovery key
+       * Bottone "Restore Vault"
+     - Flow backend: nuovo endpoint POST /api/vault/recover-with-key
+       * Body: { recoveryKey: string }
+       * Decifrare vecchia master key con recovery key + storedSalt
+       * Ri-cifrare con la password corrente (derivare nuova key)
+       * Aggiornare encryptedVaultKey, vaultKeyIV, vaultKeyTag, vaultSalt
+       * Generare nuova recovery key (mostrarla all'utente)
+       * Aggiornare escrow recovery key nel DB
+       * Impostare vaultNeedsRecovery = false
+       * Log audit VAULT_RECOVERY_COMPLETE
+
+  5) Opzione "Reset vault e ricomincia da zero" (entrambi i punti):
+     - Bottone "Reset vault and start fresh" sia nel form di reset password
+       che nella zona recovery del Keychain
+     - Dialog di WARNING: "This will permanently delete ALL your encrypted
+       credentials, secrets, and vault keys. This action cannot be undone."
+     - Conferma esplicita: l'utente deve digitare "DELETE" per procedere
+     - Flow backend: nuovo endpoint POST /api/vault/force-reset
+       * Body: { confirmation: "DELETE" }
+       * Eseguire il vault wipe attuale (codice da passwordReset.service.ts)
+       * Generare nuova master key + nuova recovery key
+       * Impostare vaultNeedsRecovery = false
+       * Log audit VAULT_FORCE_RESET
+
+  6) Blocco vault quando vaultNeedsRecovery === true:
+     - vault.service.ts unlockVault(): se vaultNeedsRecovery, ritornare
+       errore specifico "Vault needs recovery key" (non tentare decryption)
+     - VaultLockedOverlay.tsx: se vaultNeedsRecovery, mostrare UI diversa
+       con link a "Go to Keychain to recover your vault"
+     - Tutte le risorse cifrate appaiono bloccate/illeggibili
+
+  7) Stato recovery nella risposta login:
+     - auth.service.ts login(): includere vaultNeedsRecovery nel payload
+     - Il client salva questo stato per mostrare l'UI appropriata
+
+  8) Nuove AuditAction:
+     - VAULT_NEEDS_RECOVERY (vault marcato come pending recovery)
+     - VAULT_RECOVERY_COMPLETE (vault ripristinato con recovery key)
+     - VAULT_FORCE_RESET (utente ha scelto di cancellare tutto)
+
+  File coinvolti:
+    MODIFICARE: server/prisma/schema.prisma
+    MODIFICARE: server/src/services/passwordReset.service.ts
+    MODIFICARE: server/src/services/vault.service.ts
+    MODIFICARE: server/src/services/crypto.service.ts
+    MODIFICARE: server/src/services/auth.service.ts
+    MODIFICARE: server/src/controllers/auth.controller.ts
+    MODIFICARE: server/src/controllers/vault.controller.ts
+    MODIFICARE: server/src/routes/vault.routes.ts
+    MODIFICARE: client/src/pages/ResetPasswordPage.tsx
+    MODIFICARE: client/src/components/Dialogs/KeychainDialog.tsx
+    MODIFICARE: client/src/components/Overlays/VaultLockedOverlay.tsx
+    MODIFICARE: client/src/api/vault.api.ts
+    MODIFICARE: client/src/store/secretStore.ts
+
+
+------------------------------------------------------------------------------
+[ ] VAULT-209 — Recovery key obbligatoria su cambio/reset password (conferma + download .key)
+------------------------------------------------------------------------------
+  Priorita: ALTA
+  Dipendenze: Nessuna
+
+  DESCRIZIONE:
+  Attualmente il cambio password (ChangePasswordSection.tsx) ri-cifra il vault
+  con la nuova password ma NON genera una nuova recovery key. L'utente perde
+  la possibilita' di recuperare il vault se dimentica la nuova password.
+  Inoltre, quando la recovery key viene mostrata (registrazione, reset), non
+  c'e' alcun meccanismo per verificare che l'utente l'abbia effettivamente
+  salvata.
+
+  Soluzione: dopo ogni cambio o reset password che genera una nuova recovery
+  key, mostrare un dialog obbligatorio multi-step:
+    1) Mostrare la nuova recovery key in monospace con opzione di copia
+    2) Permettere il download come file "arsenale-{timestamp}.key"
+    3) Al click su "Continue", chiedere all'utente di ri-digitare la key
+    4) Solo dopo verifica corretta: completare il flusso (logout/redirect)
+  Applicare lo stesso pattern sia al cambio password (settings) che al reset
+  password (ResetPasswordPage) quando la recovery key viene rigenerata.
+
+  DETTAGLI TECNICI:
+  1) Backend - user.service.ts changePassword():
+     - Dopo la ri-cifratura del vault (riga ~250), generare nuova recovery
+       key con generateRecoveryKey() e encryptMasterKeyWithRecovery()
+     - Aggiornare i campi User: encryptedVaultRecoveryKey,
+       vaultRecoveryKeyIV, vaultRecoveryKeyTag, vaultRecoveryKeySalt
+     - Ritornare { success: true, recoveryKey: string } invece di
+       { success: boolean }
+     - NON eseguire il logout immediatamente — il client lo fara' dopo
+       che l'utente ha confermato la recovery key
+
+  2) Backend - user.controller.ts changePassword():
+     - Passare la recoveryKey nella risposta JSON
+     - NON invalidare i refresh token fino alla conferma client-side
+       (oppure invalidarli ma dare tempo all'utente di vedere la key)
+
+  3) Client API - user.api.ts:
+     - Aggiornare tipo ritorno changePassword(): { success: boolean;
+       recoveryKey: string }
+
+  4) Nuovo componente client RecoveryKeyConfirmDialog:
+     - Props: { open, recoveryKey, onConfirmed, onClose? }
+     - Step 1 - "Save your recovery key":
+       * Recovery key mostrata in <Typography fontFamily="monospace">
+         con userSelect="all"
+       * Bottone "Copy to clipboard" con feedback visivo
+       * Bottone "Download as file" — genera e scarica file
+         "arsenale-{timestamp}.key" contenente la recovery key in plain text
+         (timestamp formato: YYYYMMDD-HHmmss)
+       * Bottone "Continue" per procedere allo step 2
+     - Step 2 - "Confirm your recovery key":
+       * TextField per ri-digitare la recovery key
+       * Validazione: confronto esatto con la key originale
+       * Se errata: messaggio errore inline "Key does not match"
+       * Se corretta: abilitare bottone "Done" → chiama onConfirmed()
+     - Il dialog e' NON dismissabile (no click-away, no escape, no X button)
+       fino a conferma completata — l'utente DEVE completare la verifica
+
+  5) Integrazione in ChangePasswordSection.tsx:
+     - Nuovo stato: 'showing-recovery-key' dopo 'entering-password'
+     - Dopo successo changePassword API: salvare recoveryKey nello state
+       locale, passare a fase 'showing-recovery-key'
+     - Mostrare RecoveryKeyConfirmDialog
+     - onConfirmed: eseguire logout (come oggi)
+
+  6) Integrazione in ResetPasswordPage.tsx:
+     - La risposta del reset con recovery key gia' include la nuova
+       recoveryKey — mostrare lo stesso RecoveryKeyConfirmDialog
+     - Dopo conferma: redirect a login
+
+  7) Download file .key:
+     - Usare Blob + URL.createObjectURL + link.click() pattern
+     - Contenuto file: solo la recovery key in plain text
+     - Nome: arsenale-{YYYYMMDD-HHmmss}.key
+     - MIME type: text/plain
+
+  File coinvolti:
+    CREARE:     client/src/components/common/RecoveryKeyConfirmDialog.tsx
+    MODIFICARE: server/src/services/user.service.ts
+    MODIFICARE: server/src/controllers/user.controller.ts
+    MODIFICARE: client/src/api/user.api.ts
+    MODIFICARE: client/src/components/Settings/ChangePasswordSection.tsx
+    MODIFICARE: client/src/pages/ResetPasswordPage.tsx
 
 
 
@@ -1525,6 +1936,444 @@
   4) Se intercetta pattern (es. `rm -rf /`, `DROP TABLE`), droppa il pacchetto 
      (evitando l'esecuzione remota), chiude la sessione (`session.end()`)
   5) Trigger Audit log: SESSION_TERMINATED_POLICY_VIOLATION
-  6) Notifica immediata via notification.service e (se configurato) webhook 
+  6) Notifica immediata via notification.service e (se configurato) webhook
      esterno (es. Slack/Teams)
 
+
+# Scouted 2025-03-11 — Browser Extension
+
+------------------------------------------------------------------------------
+[ ] BEXT-101 — Scaffold browser extension with Manifest V3 and multi-account management
+------------------------------------------------------------------------------
+  Priorita: ALTA
+  Dipendenze: Nessuna
+
+  DESCRIZIONE:
+  Create the foundational browser extension project as a new workspace in the
+  monorepo (clients/browser-extensions/). This task covers the Chrome
+  Manifest V3 scaffold, Vite + React + TypeScript build toolchain (matching
+  multi-account settings UI where users add, edit, remove, and switch between
+  Arsenale server instances (each with its own URL, user identity, and stored
+  tokens). The popup shell includes an account selector dropdown, vault status
+  indicator, and placeholder sections for Keychain and Connections.
+
+  DETTAGLI TECNICI:
+  1) New clients/browser-extensions/ workspace added to root package.json
+     workspaces array. Manifest V3 targeting Chrome primary, Firefox secondary
+     via polyfill/WXT.
+  2) Service worker (background.ts) handles ALL API calls to Arsenale servers,
+     bypassing CORS entirely. Popup/options pages communicate with the service
+     worker via chrome.runtime.sendMessage.
+  3) Multi-account storage in chrome.storage.local. Each account entry:
+     { id, label, serverUrl, userId, email, accessToken, tenantId?,
+       tenantName?, lastUsed, vaultUnlocked }
+  4) Settings/options page: list configured accounts, add account form with
+     /api/health connectivity check, edit label, remove, set default.
+  5) Popup shell: account switcher dropdown at top, vault lock/unlock status,
+     tabbed sections for Keychain (BEXT-103) and Connections (BEXT-104).
+  6) Build scripts: npm run dev:extension (Vite watch + HMR),
+     npm run build:extension (production dist/).
+     Add clients/browser-extensions/ to root verify script for typecheck
+     and lint.
+
+  File coinvolti:
+    CREARE:  clients/browser-extensions/ (new workspace directory)
+    CREARE:  clients/browser-extensions/manifest.json
+    CREARE:  clients/browser-extensions/src/background.ts (service worker)
+    CREARE:  clients/browser-extensions/src/popup/ (React popup app)
+    CREARE:  clients/browser-extensions/src/options/ (React options/settings)
+    CREARE:  clients/browser-extensions/src/lib/accountStore.ts
+    CREARE:  clients/browser-extensions/src/lib/apiClient.ts
+    CREARE:  clients/browser-extensions/vite.config.ts, tsconfig.json, package.json
+    MODIFICARE: package.json (add browser-extensions workspace)
+
+
+------------------------------------------------------------------------------
+[ ] BEXT-102 — Extension authentication flow with JWT, CSRF, and MFA support
+------------------------------------------------------------------------------
+  Priorita: ALTA
+  Dipendenze: BEXT-101
+
+  DESCRIZIONE:
+  Implement the full authentication lifecycle for the browser extension:
+  login (email+password), MFA challenge handling (TOTP, SMS, WebAuthn),
+  token storage, automatic refresh, tenant switching, and logout. Since the
+  extension cannot rely on httpOnly cookies (different origin), the server
+  refresh endpoint must accept the refresh token from the request body as a
+  fallback. CSRF validation is skipped for extension clients (immune to CSRF).
+
+  DETTAGLI TECNICI:
+  1) Server-side change: modify auth.controller.ts refresh() to accept
+     refreshToken from req.body when cookie is absent. Skip CSRF validation
+     for requests with valid Bearer token and no cookies (extension context).
+  2) Login flow in popup: email+password form. If requiresMFA, show TOTP
+     code input, SMS request+verify, or WebAuthn challenge. If
+     mfaSetupRequired, open Arsenale web UI in a new tab for setup.
+  3) On success: store accessToken and refreshToken in chrome.storage.local
+     per account entry.
+  4) Token refresh: chrome.alarms API sets alarm for (JWT expiry - 60s).
+     Service worker calls refresh endpoint with token in body. If refresh
+     fails (401), mark account as "session expired" and show badge.
+  5) Tenant switching: after login, if tenantMemberships has multiple
+     entries, show tenant picker. Call POST /api/auth/switch-tenant.
+  6) Logout: call POST /api/auth/logout with refresh token in body, clear
+     stored tokens for the account.
+
+  File coinvolti:
+    CREARE:  clients/browser-extensions/src/lib/auth.ts
+    CREARE:  clients/browser-extensions/src/popup/pages/LoginPage.tsx
+    CREARE:  clients/browser-extensions/src/popup/pages/MfaPage.tsx
+    CREARE:  clients/browser-extensions/src/popup/pages/TenantPickerPage.tsx
+    MODIFICARE: server/src/controllers/auth.controller.ts (body refresh token)
+    MODIFICARE: server/src/middleware/csrf.middleware.ts (extension bypass)
+
+
+------------------------------------------------------------------------------
+[ ] BEXT-103 — Keychain integration: vault unlock, secret listing, and copy
+------------------------------------------------------------------------------
+  Priorita: MEDIA
+  Dipendenze: BEXT-102
+
+  DESCRIZIONE:
+  Add vault unlock and keychain browsing to the extension popup. Users can
+  unlock the vault (via password or MFA), browse secrets by type and folder,
+  search, view secret details, and copy individual fields (username, password,
+  API key, etc.) to the clipboard with auto-clear after 30 seconds. Decrypted
+  secret data is NEVER cached in chrome.storage — only held in popup memory.
+
+  DETTAGLI TECNICI:
+  1) Vault status: on popup open, call GET /api/vault/status. If locked,
+     show unlock prompt (password or MFA buttons). Display vault lock status
+     in popup header per-account.
+  2) Secret listing: call GET /api/secrets with filters (scope, type, search,
+     tags, folderId, isFavorite). Compact scrollable list with type icons
+     (LOGIN, SSH_KEY, CERTIFICATE, API_KEY, SECURE_NOTE). Search bar, folder
+     navigation via GET /api/vault-folders, favorites toggle.
+  3) Secret detail: click to expand/open detail view. Call GET /api/secrets/:id
+     for full decrypted data. Copy button per field using
+     navigator.clipboard.writeText(). Password fields masked by default with
+     reveal toggle.
+  4) Clipboard auto-clear: chrome.alarms fires after 30s (configurable) to
+     clear clipboard via navigator.clipboard.writeText('').
+  5) If vault auto-lock fires server-side (TTL expires), detect on next API
+     call failure and re-prompt for unlock.
+
+  File coinvolti:
+    CREARE:  clients/browser-extensions/src/popup/pages/KeychainPage.tsx
+    CREARE:  clients/browser-extensions/src/popup/components/VaultUnlockForm.tsx
+    CREARE:  clients/browser-extensions/src/popup/components/SecretList.tsx
+    CREARE:  clients/browser-extensions/src/popup/components/SecretDetail.tsx
+    CREARE:  clients/browser-extensions/src/lib/vaultApi.ts
+    CREARE:  clients/browser-extensions/src/lib/secretsApi.ts
+    CREARE:  clients/browser-extensions/src/lib/clipboard.ts (copy + auto-clear)
+
+
+------------------------------------------------------------------------------
+[ ] BEXT-104 — Connection listing and one-click session launch in browser tab
+------------------------------------------------------------------------------
+  Priorita: MEDIA
+  Dipendenze: BEXT-102
+
+  DESCRIZIONE:
+  Add connection browsing and one-click session launch to the extension popup.
+  Users see their RDP, SSH, and VNC connections organized by scope and folder,
+  and can click to open the connection in the Arsenale web UI in a new browser
+  tab. The extension does NOT embed viewers — it deep-links into the web
+  client via an autoconnect query parameter.
+
+  DETTAGLI TECNICI:
+  1) Connection listing: call GET /api/connections, display grouped by scope
+     (My / Shared / Team) or by folder. Show type icon (RDP/SSH/VNC), name,
+     host, favorite status. Search/filter bar. Favorite toggle via
+     PATCH /api/connections/:id/favorite.
+  2) One-click launch: open new browser tab to {serverUrl}/?autoconnect={id}.
+     The web client Dashboard page reads the autoconnect query param on mount
+     and auto-opens a tab for that connection.
+  3) Client-side change: add autoconnect query param handling to Dashboard.
+     On mount, if param present and user authenticated, open the connection.
+     Login page preserves autoconnect param on redirect.
+  4) Quick info: secondary action on connection shows host:port, description,
+     linked credential name. Option to copy host:port to clipboard.
+
+  File coinvolti:
+    CREARE:  clients/browser-extensions/src/popup/pages/ConnectionsPage.tsx
+    CREARE:  clients/browser-extensions/src/popup/components/ConnectionList.tsx
+    CREARE:  clients/browser-extensions/src/popup/components/ConnectionItem.tsx
+    CREARE:  clients/browser-extensions/src/lib/connectionsApi.ts
+    MODIFICARE: client/src/pages/Dashboard.tsx (autoconnect query param)
+    MODIFICARE: client/src/pages/Login.tsx (preserve autoconnect on redirect)
+
+
+------------------------------------------------------------------------------
+[ ] BEXT-105 — Contextual credential autofill on web pages (content script)
+------------------------------------------------------------------------------
+  Priorita: BASSA
+  Dipendenze: BEXT-103
+
+  DESCRIZIONE:
+  Implement a content script that detects login forms on web pages, matches
+  them against LOGIN-type secrets in the keychain by URL/domain, and offers
+  to autofill username and password fields. This is the most complex BEXT
+  task and is intentionally low priority — core value is delivered by
+  BEXT-103 and BEXT-104.
+
+  DETTAGLI TECNICI:
+  1) Content script (content_scripts in manifest) scans page DOM for login
+     forms: input[type=password], nearby text/email inputs, form elements.
+     Communicates with service worker via chrome.runtime.sendMessage.
+  2) URL/domain matching: service worker maintains a lightweight index of
+     { secretId, url, domain, name } from cached listSecrets response
+     (refreshed periodically or on popup open). Match current page URL
+     against secret.data.url (prefix) or domain.
+  3) Autofill UI: if matches found, inject floating icon near detected
+     fields via shadow DOM (isolates from host page styles/CSP). Click shows
+     dropdown of matching credentials (name + username). On selection, fetch
+     full secret data via service worker, fill form fields.
+  4) If vault is locked, show inline prompt to unlock first.
+  5) Badge: update extension badge with matching credential count for
+     current tab (chrome.tabs.onUpdated / onActivated).
+  6) Preferences: allow disabling autofill per-site or globally in
+     extension options page.
+
+  File coinvolti:
+    CREARE:  clients/browser-extensions/src/content/autofill.ts (content script)
+    CREARE:  clients/browser-extensions/src/content/formDetector.ts (DOM scanning)
+    CREARE:  clients/browser-extensions/src/content/autofillUI.ts (shadow DOM dropdown)
+    CREARE:  clients/browser-extensions/src/lib/urlMatcher.ts (URL/domain matching)
+    MODIFICARE: clients/browser-extensions/manifest.json (content_scripts, permissions)
+    MODIFICARE: clients/browser-extensions/src/options/ (autofill preferences)
+
+# Scouted 2026-03-11 — PWA (Progressive Web App)
+
+[ ] PWA-001 — Core PWA: manifest, service worker, and installability via vite-plugin-pwa
+  Install vite-plugin-pwa, configure web app manifest (name, icons, display: standalone,
+  theme_color), add missing meta tags to index.html (theme-color, description,
+  apple-mobile-web-app-capable), configure online-first caching strategy for static assets
+  only (no API/WebSocket caching), add service worker registration. Existing icons in
+  client/public/ (192, 512, maskable variants) are ready to use. Test install prompt on
+  Chrome, Edge, Safari desktop.
+
+[ ] PWA-002 — PWA update notification: prompt user to reload when new version is available
+  Detect service worker updates via onNeedRefresh callback from vite-plugin-pwa's
+  useRegisterSW hook. Show a non-intrusive MUI Snackbar prompting user to reload for the
+  latest version. Handle skipWaiting + clients.claim for seamless update. Critical for
+  security-sensitive app to avoid running stale cached code.
+
+[ ] PWA-003 — PWA app shortcuts for quick actions (New Connection, Open Keychain)
+  Add shortcuts array to the web app manifest with 2-3 quick actions (e.g. "New Connection",
+  "Open Keychain"). Each shortcut deep-links to the app with a query param that triggers the
+  corresponding dialog. Enables right-click taskbar icon quick access on desktop PWA installs.
+
+
+# Scouted 2026-03-11 — Zero-Trust Tunnel (Cloudflare Tunnel-style)
+
+------------------------------------------------------------------------------
+[ ] ZT-201 — Zero-trust tunnel: TunnelBroker service, WSS endpoint, auto token/cert generation
+------------------------------------------------------------------------------
+  Priorita: ALTA
+  Dipendenze: GATE-036 (completato), SSHGW-051 (completato)
+
+  DESCRIZIONE:
+  Implement the server-side TunnelBroker that accepts outbound-only WSS
+  connections from gateway agents, enabling zero-trust environments where no
+  inbound ports can be exposed on gateways (like Cloudflare Tunnel, but
+  self-hosted). The broker manages a registry of connected tunnels, multiplexes
+  TCP streams over binary-framed WebSocket, and provides a net.Duplex-compatible
+  openStream() API for transparent integration with SSH2 and guacamole-lite.
+
+  DETTAGLI TECNICI:
+  1) Prisma migration: add tunnelEnabled, encryptedTunnelToken (AES-256-GCM),
+     tunnelTokenHash (SHA-256 unique), tunnelConnectedAt, tunnelLastHeartbeat,
+     tunnelClientVersion, tunnelClientIp, tunnelCaCert, tunnelCaKey (encrypted),
+     tunnelClientCert, tunnelClientCertExp to Gateway model. Add
+     tunnelProxyHost/tunnelProxyPort to ManagedGatewayInstance.
+  2) New server/src/services/tunnel.service.ts: TunnelBroker class with
+     Map<gatewayId, TunnelConnection> registry, openStream(gatewayId, host, port)
+     returning net.Duplex, local TCP proxy creation for GUACD tunnels.
+  3) New server/src/socket/tunnel.handler.ts: raw WebSocket (ws library, not
+     Socket.IO) endpoint at /api/tunnel/connect. Binary multiplexing protocol:
+     4-byte header [type, flags, streamID(u16)], types OPEN/DATA/CLOSE/PING/PONG.
+  4) Auto-generation: when tunnelEnabled is set to true, server auto-generates
+     256-bit tunnel token + per-gateway mTLS CA (ed25519) + client certificate
+     (90-day validity). All crypto material encrypted at rest.
+  5) Authentication: tunnel agent presents token via Authorization header +
+     client cert via mTLS. Server validates with constant-time comparison.
+     Token bound to specific gateway ID.
+  6) New Zod schemas: server/src/schemas/tunnel.schemas.ts
+  7) REST routes: POST /gateways/:id/tunnel-token (auto-generate),
+     DELETE /gateways/:id/tunnel-token (revoke), integrated into gateway CRUD.
+  8) New AuditAction values: TUNNEL_CONNECT, TUNNEL_DISCONNECT,
+     TUNNEL_TOKEN_GENERATE, TUNNEL_TOKEN_ROTATE.
+
+  File coinvolti:
+    MODIFICARE: server/prisma/schema.prisma
+    CREARE:     server/src/services/tunnel.service.ts
+    CREARE:     server/src/socket/tunnel.handler.ts
+    CREARE:     server/src/schemas/tunnel.schemas.ts
+    MODIFICARE: server/src/services/gateway.service.ts (token CRUD)
+    MODIFICARE: server/src/routes/gateway.routes.ts (new endpoints)
+    MODIFICARE: server/src/index.ts (attach WSS endpoint)
+
+------------------------------------------------------------------------------
+[ ] ZT-202 — Zero-trust tunnel: embedded Tunnel Agent in gateway containers (auto-activating)
+------------------------------------------------------------------------------
+  Priorita: ALTA
+  Dipendenze: ZT-201
+
+  DESCRIZIONE:
+  Create the tunnel-agent workspace — a lightweight Node.js process bundled
+  into every managed gateway container image (ssh-gateway and guacd custom).
+  The agent is dormant by default and auto-activates when tunnel env vars are
+  present. For non-managed gateways, a standalone Docker image is provided.
+  Everything is fully automatic: no manual token copying, no certificate
+  management, no user interaction required.
+
+  DETTAGLI TECNICI:
+  1) New tunnel-agent/ workspace in monorepo with src/index.ts, src/tunnel.ts
+     (WSS client, reconnection, heartbeats), src/tcpForwarder.ts (stream
+     bridging to local services), src/auth.ts (mTLS + token), src/config.ts.
+  2) Auto-activation: reads TUNNEL_SERVER_URL, TUNNEL_TOKEN, TUNNEL_GATEWAY_ID,
+     TUNNEL_CA_CERT, TUNNEL_CLIENT_CERT, TUNNEL_CLIENT_KEY from env. If absent,
+     process exits cleanly (dormant mode).
+  3) Outbound WSS connection to server with token in Authorization header and
+     client cert in TLS handshake. Persistent connection with 15s ping/pong.
+  4) Auto-reconnect: exponential backoff 1s -> 2s -> 4s -> ... -> 60s max.
+  5) Stream handling: on OPEN frame from server, open local TCP connection to
+     target host:port (e.g. localhost:4822 for guacd, localhost:2222 for sshd),
+     bridge data bidirectionally via DATA/CLOSE frames.
+  6) Certificate auto-renewal: 7 days before expiry, send CERT_RENEW frame;
+     server signs fresh cert and delivers in-band. Zero downtime.
+  7) Local health reporting: agent probes local service and includes health
+     status in heartbeat metadata { healthy, latencyMs, activeStreams }.
+  8) tunnel-agent/Dockerfile for standalone deployment.
+  9) Embed in ssh-gateway Dockerfile and custom guacd Dockerfile: add
+     tunnel-agent as optional entrypoint alongside main service.
+  10) Modify managedGateway.service.ts buildContainerConfig(): when
+      tunnelEnabled=true, inject tunnel env vars, set publishPorts=false
+      (no host port mappings), pass all crypto material as env vars.
+
+  File coinvolti:
+    CREARE:     tunnel-agent/ (new workspace)
+    CREARE:     tunnel-agent/src/index.ts, tunnel.ts, tcpForwarder.ts, auth.ts
+    CREARE:     tunnel-agent/Dockerfile
+    MODIFICARE: ssh-gateway/Dockerfile (embed tunnel agent)
+    MODIFICARE: server/src/services/managedGateway.service.ts (buildContainerConfig)
+    MODIFICARE: package.json (add tunnel-agent workspace)
+
+------------------------------------------------------------------------------
+[ ] ZT-203 — Zero-trust tunnel: transparent SSH/RDP/VNC traffic routing through tunnel
+------------------------------------------------------------------------------
+  Priorita: ALTA
+  Dipendenze: ZT-201, ZT-202
+
+  DESCRIZIONE:
+  Integrate the TunnelBroker into SSH, RDP, and VNC connection flows so that
+  when a gateway has tunnelEnabled=true, traffic routes transparently through
+  the tunnel instead of direct TCP connections. Existing direct-connection
+  gateways continue to work unchanged.
+
+  DETTAGLI TECNICI:
+  1) ssh.service.ts: add optional sock: stream.Duplex param to
+     SshConnectionParams and BastionConnectionParams. When provided, SSH2
+     Client.connect() uses sock instead of host/port (already supported by
+     SSH2 library, proven pattern at line 112 for bastion target connections).
+  2) ssh.handler.ts: before calling createSshConnectionViaBastion() or
+     createSshConnection(), check tunnelBroker.hasTunnel(gateway.id). If true,
+     call tunnelBroker.openStream(gatewayId, bastionHost, bastionPort) to get
+     a net.Duplex, then pass as sock param.
+  3) session.controller.ts (RDP/VNC): for tunneled GUACD gateways, call
+     tunnelBroker.getLocalProxy(gatewayId) which returns { host: '127.0.0.1',
+     port: <dynamicPort> }. Pass this as guacdHost/guacdPort to
+     generateGuacamoleToken(). guacamole-lite connects to localhost — zero
+     changes to the library.
+  4) loadBalancer.service.ts: when selecting instances for tunneled managed
+     gateways, return tunnelProxyHost/tunnelProxyPort instead of container
+     host/port.
+  5) Fallback: if tunnel is disconnected at connection time, return a clear
+     error ("Gateway tunnel is disconnected — the gateway may be unreachable")
+     rather than timing out on a direct connection attempt.
+
+  File coinvolti:
+    MODIFICARE: server/src/services/ssh.service.ts (sock param)
+    MODIFICARE: server/src/socket/ssh.handler.ts (tunnel resolution)
+    MODIFICARE: server/src/controllers/session.controller.ts (local proxy)
+    MODIFICARE: server/src/services/loadBalancer.service.ts (tunnel proxy addr)
+
+------------------------------------------------------------------------------
+[ ] ZT-204 — Zero-trust tunnel: automatic health monitoring and certificate rotation
+------------------------------------------------------------------------------
+  Priorita: MEDIA
+  Dipendenze: ZT-201, ZT-202
+
+  DESCRIZIONE:
+  Adapt the gateway health monitoring system to work through tunnels, and
+  implement automatic mTLS certificate rotation. When tunnelEnabled=true,
+  health is determined by tunnel heartbeats (superior to remote TCP probes
+  because the agent measures actual local service health).
+
+  DETTAGLI TECNICI:
+  1) gatewayMonitor.service.ts: new tunnel monitoring mode. When
+     tunnelEnabled=true, skip TCP probes. Instead, check TunnelBroker
+     registry for connection state and last heartbeat timestamp.
+  2) Health status mapping: connected + recent heartbeat + agent reports
+     healthy = REACHABLE. Disconnected or heartbeat timeout (>45s) =
+     UNREACHABLE. Connected but agent reports unhealthy = DEGRADED.
+  3) Instance-level health for managed gateways: tunnel agent's heartbeat
+     metadata includes per-instance local health check result. Server updates
+     ManagedGatewayInstance.healthStatus accordingly.
+  4) Certificate rotation: server-side scheduler checks tunnelClientCertExp
+     for all tunneled gateways. When < 7 days to expiry, generates new cert
+     signed by gateway's CA and sends via CERT_RENEW response frame through
+     the active tunnel.
+  5) For managed instances: if cert rotation requires restart (e.g., mTLS
+     handshake cert cannot be hot-swapped), server triggers rolling restart
+     via orchestrator with new env vars — automatic, no downtime.
+  6) Tunnel metrics emitted via Socket.IO to client: tunnel uptime, RTT
+     latency (from PING/PONG), active stream count, bytes transferred.
+
+  File coinvolti:
+    MODIFICARE: server/src/services/gatewayMonitor.service.ts
+    MODIFICARE: server/src/services/tunnel.service.ts (cert rotation logic)
+    MODIFICARE: server/src/services/managedGateway.service.ts (rolling restart)
+    MODIFICARE: server/src/socket/gatewayMonitor.handler.ts (tunnel events)
+
+------------------------------------------------------------------------------
+[ ] ZT-205 — Zero-trust tunnel: UI toggle with auto-deploy and live status indicators
+------------------------------------------------------------------------------
+  Priorita: MEDIA
+  Dipendenze: ZT-203, ZT-204
+
+  DESCRIZIONE:
+  Add tunnel configuration UI to the gateway management interface. For managed
+  gateways, enabling the toggle auto-deploys everything — the admin just flips
+  a switch and the tunnel is live. For non-managed gateways, a single copyable
+  connection string is provided (encodes server URL + token + gateway ID).
+
+  DETTAGLI TECNICI:
+  1) GatewayDialog.tsx: new "Zero-Trust Tunnel" accordion section. Toggle
+     switch "Enable Zero-Trust Tunnel". When enabled on managed gateways:
+     - Server auto-generates token + certs (single API call)
+     - Host/port fields become read-only (tunnel handles routing)
+     - publishPorts automatically disabled
+     - Status shows "Deploying..." then "Connected" when tunnel is live
+  2) GatewayDialog.tsx for non-managed gateways: when tunnel enabled, show
+     a single copyable connection string (base64-encoded JSON with serverUrl,
+     tunnelToken, gatewayId). Instructions: "Run this Docker command on the
+     gateway machine" with pre-built docker run command using the connection
+     string as env var.
+  3) GatewaySection.tsx: tunnel status badge next to health badge.
+     Green tunnel icon = connected, red = disconnected, grey = not configured.
+     Tooltip: connected since, RTT latency, active streams, agent version.
+  4) Token management: "Rotate Token" button (confirms, triggers rolling
+     restart for managed gateways). "Revoke Token" (disables tunnel entirely).
+  5) Socket.IO events: new tunnel:status event for real-time status updates
+     in the gateway list/detail views.
+  6) Certificate info display: show cert expiry date, auto-renewal status
+     ("Next renewal in X days"), no manual certificate management needed.
+
+  File coinvolti:
+    MODIFICARE: client/src/components/Gateways/GatewayDialog.tsx
+    MODIFICARE: client/src/components/Gateways/GatewaySection.tsx
+    MODIFICARE: client/src/api/gateways.api.ts (tunnel endpoints)
+    MODIFICARE: client/src/store/gatewayStore.ts (tunnel state)
+    MODIFICARE: server/src/socket/gatewayMonitor.handler.ts (tunnel events)

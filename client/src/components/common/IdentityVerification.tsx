@@ -5,6 +5,7 @@ import {
 import { Key as KeyIcon, Fingerprint as FingerprintIcon } from '@mui/icons-material';
 import { startAuthentication } from '@simplewebauthn/browser';
 import { confirmIdentityVerification, type VerificationMethod } from '../../api/user.api';
+import { extractApiError } from '../../utils/apiError';
 
 interface IdentityVerificationProps {
   verificationId: string;
@@ -81,9 +82,7 @@ export default function IdentityVerification({
         setError('Verification failed. Please try again.');
       }
     } catch (err: unknown) {
-      const msg = (err as { response?: { data?: { error?: string } } })?.response?.data?.error
-        || 'Verification failed. Please try again.';
-      setError(msg);
+      setError(extractApiError(err, 'Verification failed. Please try again.'));
     } finally {
       setLoading(false);
     }

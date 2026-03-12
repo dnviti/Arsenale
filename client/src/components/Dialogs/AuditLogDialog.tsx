@@ -1,12 +1,11 @@
-import { useState, useEffect, useCallback, useRef, forwardRef, Fragment } from 'react';
+import { useState, useEffect, useCallback, useRef, Fragment } from 'react';
 import {
   Dialog, AppBar, Toolbar, Typography, Box, IconButton, Card, CardContent,
   Table, TableHead, TableBody, TableRow, TableCell, TablePagination,
   Select, MenuItem, FormControl, InputLabel, TextField, Stack,
-  CircularProgress, Chip, Alert, Slide, Collapse, TableSortLabel, InputAdornment,
+  CircularProgress, Chip, Alert, Collapse, TableSortLabel, InputAdornment,
   Tooltip,
 } from '@mui/material';
-import type { TransitionProps } from '@mui/material/transitions';
 import {
   Close as CloseIcon,
   Search as SearchIcon,
@@ -19,13 +18,7 @@ import { getAuditLogs, getAuditGateways, getAuditCountries, AuditLogEntry, Audit
 import { useUiPreferencesStore } from '../../store/uiPreferencesStore';
 import { ACTION_LABELS, getActionColor, formatDetails, ALL_ACTIONS, TARGET_TYPES } from '../Audit/auditConstants';
 import IpGeoCell from '../Audit/IpGeoCell';
-
-const SlideUp = forwardRef(function SlideUp(
-  props: TransitionProps & { children: React.ReactElement },
-  ref: React.Ref<unknown>,
-) {
-  return <Slide direction="up" ref={ref} {...props} />;
-});
+import { SlideUp } from '../common/SlideUp';
 
 interface AuditLogDialogProps {
   open: boolean;

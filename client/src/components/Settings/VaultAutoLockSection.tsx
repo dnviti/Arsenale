@@ -4,6 +4,7 @@ import {
   CircularProgress,
 } from '@mui/material';
 import { getVaultAutoLock, setVaultAutoLock, VaultAutoLockResponse } from '../../api/vault.api';
+import { extractApiError } from '../../utils/apiError';
 
 const OPTIONS: { label: string; value: number | null }[] = [
   { label: 'Server default', value: null },
@@ -35,10 +36,7 @@ export default function VaultAutoLockSection() {
       const result = await setVaultAutoLock(value);
       setData(result);
     } catch (err: unknown) {
-      setError(
-        (err as { response?: { data?: { error?: string } } })?.response?.data?.error ||
-        'Failed to update auto-lock preference'
-      );
+      setError(extractApiError(err, 'Failed to update auto-lock preference'));
     } finally {
       setSaving(false);
     }

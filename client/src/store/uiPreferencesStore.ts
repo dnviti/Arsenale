@@ -40,12 +40,15 @@ interface UiPreferences {
   connAuditLogSortOrder: string;
   auditLogAutoRefreshPaused: boolean;
   lastActiveTenantId: string;
+  keychainTreeOpen: boolean;
+  keychainFolderExpandState: Record<string, boolean>;
 }
 
 interface UiPreferencesState extends UiPreferences {
   set: <K extends keyof UiPreferences>(key: K, value: UiPreferences[K]) => void;
-  toggle: (key: keyof Omit<UiPreferences, 'sidebarTeamSections' | 'settingsActiveTab' | 'keychainScopeFilter' | 'keychainTypeFilter' | 'keychainSortBy' | 'orchestrationDashboardTab' | 'orchestrationRefreshInterval' | 'gatewayActiveSubTab' | 'auditLogAction' | 'auditLogSearch' | 'auditLogTargetType' | 'auditLogGatewayId' | 'auditLogSortBy' | 'auditLogSortOrder' | 'tenantAuditLogAction' | 'tenantAuditLogSearch' | 'tenantAuditLogTargetType' | 'tenantAuditLogGatewayId' | 'tenantAuditLogUserId' | 'tenantAuditLogSortBy' | 'tenantAuditLogSortOrder' | 'tenantAuditLogViewMode' | 'connAuditLogAction' | 'connAuditLogSearch' | 'connAuditLogGatewayId' | 'connAuditLogUserId' | 'connAuditLogSortBy' | 'connAuditLogSortOrder' | 'lastActiveTenantId'>) => void;
+  toggle: (key: keyof Omit<UiPreferences, 'sidebarTeamSections' | 'settingsActiveTab' | 'keychainScopeFilter' | 'keychainTypeFilter' | 'keychainSortBy' | 'orchestrationDashboardTab' | 'orchestrationRefreshInterval' | 'gatewayActiveSubTab' | 'auditLogAction' | 'auditLogSearch' | 'auditLogTargetType' | 'auditLogGatewayId' | 'auditLogSortBy' | 'auditLogSortOrder' | 'tenantAuditLogAction' | 'tenantAuditLogSearch' | 'tenantAuditLogTargetType' | 'tenantAuditLogGatewayId' | 'tenantAuditLogUserId' | 'tenantAuditLogSortBy' | 'tenantAuditLogSortOrder' | 'tenantAuditLogViewMode' | 'connAuditLogAction' | 'connAuditLogSearch' | 'connAuditLogGatewayId' | 'connAuditLogUserId' | 'connAuditLogSortBy' | 'connAuditLogSortOrder' | 'lastActiveTenantId' | 'keychainFolderExpandState'>) => void;
   toggleTeamSection: (teamId: string) => void;
+  toggleKeychainFolder: (folderId: string) => void;
 }
 
 const defaults: UiPreferences = {
@@ -87,6 +90,8 @@ const defaults: UiPreferences = {
   connAuditLogSortOrder: 'desc',
   auditLogAutoRefreshPaused: false,
   lastActiveTenantId: '',
+  keychainTreeOpen: true,
+  keychainFolderExpandState: {},
 };
 
 export const useUiPreferencesStore = create<UiPreferencesState>()(
@@ -101,6 +106,13 @@ export const useUiPreferencesStore = create<UiPreferencesState>()(
           sidebarTeamSections: {
             ...state.sidebarTeamSections,
             [teamId]: !(state.sidebarTeamSections[teamId] ?? true),
+          },
+        })),
+      toggleKeychainFolder: (folderId) =>
+        set((state) => ({
+          keychainFolderExpandState: {
+            ...state.keychainFolderExpandState,
+            [folderId]: !(state.keychainFolderExpandState[folderId] ?? true),
           },
         })),
     }),

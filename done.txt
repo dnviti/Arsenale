@@ -342,6 +342,20 @@
   Dipendenze: AUDIT-013 (completato), ZT-045 (completato)
   COMPLETATO: Added per-connection audit log accessible via right-click context menu "Activity Log". Backend: composite index @@index([targetId, createdAt]) on AuditLog, getConnectionAuditLogs and getConnectionAuditUsers service functions, controller handlers with permissionService.canViewConnection access checks, routes GET /audit/connection/:connectionId and /users. Frontend: ConnectionAuditLogDialog full-screen dialog with filters, expandable rows, colored action chips, pagination, admin-only user filter Autocomplete and CSV export. Context menu item propagated through treeHelpers, ConnectionTree, TeamConnectionSection to MainLayout.
 
+------------------------------------------------------------------------------
+[x] REFAC-205 — Migrare i dialog rimanenti al hook useAsyncAction
+------------------------------------------------------------------------------
+  Priorita: MEDIA
+  Dipendenze: REFAC-202 (completato)
+  COMPLETATO: Migrated 9 dialog components (FolderDialog, TeamDialog, ExportDialog, ShareDialog, ShareFolderDialog, CreateUserDialog, UserProfileDialog, ConnectionDialog, ImportDialog) from manual useState loading/error + try-catch boilerplate to the useAsyncAction hook. Removed extractApiError imports (handled internally by the hook). Skipped ConnectAsDialog (no async operations). Each dialog now uses run() for async actions with automatic error handling and loading state management.
+
+------------------------------------------------------------------------------
+[x] SHR-211 — Aggiornamento dinamico risorse condivise senza reload pagina
+------------------------------------------------------------------------------
+  Priorita: ALTA
+  Dipendenze: NOTIF-015
+  COMPLETATO: Built reusable notification action framework with central registry (notificationActions.tsx) mapping each NotificationType to icon, onReceive store refresh, and onNavigate deep-link action. Created useShareSync hook that subscribes to Zustand notification store with 500ms debounced refresh for connections and secrets. Updated NotificationBell to use registry for icons and navigate on click (open connection tab, keychain dialog, recordings dialog, or settings). Added two new server-side notification types: TENANT_INVITATION (emitted on user invite) and RECORDING_READY (emitted on recording completion). Framework is extensible — adding future notification types requires only a registry entry.
+
 ================================================================================
   SEZIONE B — TASK AGGIUNTIVI SUGGERITI
 ================================================================================
@@ -1277,6 +1291,14 @@
   File coinvolti:
     MODIFICATO: client/src/components/Dialogs/AuditLogDialog.tsx
     MODIFICATO: client/src/store/uiPreferencesStore.ts
+
+
+------------------------------------------------------------------------------
+[x] REFAC-206 — Estendere middleware Zod validate per query params e path params
+------------------------------------------------------------------------------
+  Priorita: MEDIA
+  Dipendenze: REFAC-201 (completato)
+  COMPLETATO: Extended validate() middleware with combined ValidateSchemaMap overload (validate({ body, query, params })). Added validatedQuery<T>() and validatedParams<T>() typed accessor helpers. Replaced 8 unsafe 'as unknown as' casts across audit, secret, notification, and recording controllers. Converted one audit route to use the combined validate API as demonstration.
 
 
 ================================================================================
@@ -2692,6 +2714,14 @@
     MODIFICATO: client/src/components/Dialogs/AuditLogDialog.tsx (30+ new action labels and colors)
 
 
+------------------------------------------------------------------------------
+[x] OPT-202 — Add composite Prisma indexes for audit query performance
+------------------------------------------------------------------------------
+  Priorita: ALTA
+  Dipendenze: Nessuna
+  COMPLETATO: Added 3 composite indexes to Prisma schema — @@index([userId, action, createdAt]) on AuditLog, @@index([tenantId, isActive]) on TenantMember, @@index([expiresAt, userId]) on VaultSecret. Migration 20260311171324_opt_202 created and applied.
+
+
 ================================================================================
   SEZIONE H — SCOUTED FEATURES
 ================================================================================
@@ -3078,6 +3108,17 @@
   File coinvolti:
     CREARE:     .github/workflows/guacenc-build.yml
 
+------------------------------------------------------------------------------
+[x] CLEAN-201 — Rimuovere log di debug e standardizzare pattern risposta API client
+------------------------------------------------------------------------------
+  Priorita: BASSA
+  Dipendenze: Nessuna
+  COMPLETATO: Removed 2 debug console.log from terminalSettingsStore.ts. Standardized all 22 API client files (~163 functions) to use destructuring pattern: const { data } = await api.method(); return data. Renamed data parameters to payload in 15 functions to avoid shadowing conflicts.
+
+  File coinvolti:
+    MODIFICARE: client/src/store/terminalSettingsStore.ts
+    MODIFICARE: client/src/api/*.api.ts (tutti i 22 file API)
+
 
 ================================================================================
   SEZIONE G — IP ADDRESS INTELLIGENCE
@@ -3160,4 +3201,95 @@
     MODIFICATO: client/src/components/Settings/TenantAuditLogSection.tsx
     MODIFICATO: client/src/store/uiPreferencesStore.ts
     MODIFICATO: client/src/api/audit.api.ts
+
+
+================================================================================
+  SEZIONE H — SCOUTED FEATURES
+================================================================================
+
+------------------------------------------------------------------------------
+[x] REFAC-201 — Extract shared Zod validation middleware and centralize schemas
+------------------------------------------------------------------------------
+  Priorita: ALTA
+  Dipendenze: Nessuna
+  COMPLETATO: Created validate.middleware.ts with validate() and validateUuidParam() middleware. Centralized SSH/RDP/VNC Zod schemas in common.schemas.ts. Refactored all 23 controllers to use route-level validation instead of inline try/catch/ZodError blocks. 141 validation usages across 24 route files. Created centralized schema files under server/src/schemas/.
+
+  FILE COINVOLTI:
+  - server/src/middleware/validate.middleware.ts (new)
+  - server/src/schemas/connection.schemas.ts (new)
+  - server/src/schemas/common.schemas.ts (new)
+  - All 23 files in server/src/controllers/*.controller.ts
+  - All route files in server/src/routes/*.routes.ts
+
+------------------------------------------------------------------------------
+[x] REFAC-202 — Extract client shared utilities (SlideUp, apiError, useAsyncAction)
+------------------------------------------------------------------------------
+  Priorita: ALTA
+  Dipendenze: Nessuna
+  COMPLETATO: Created shared SlideUp component (common/SlideUp.tsx), extractApiError utility (utils/apiError.ts), and useAsyncAction hook (hooks/useAsyncAction.ts). Removed 7 duplicate SlideUp definitions from dialog files. Replaced inline Axios error casts across 43 files with extractApiError. Piloted useAsyncAction in InviteDialog. Updated CLAUDE.md with new patterns. Bundle size reduced ~2.5 KB.
+
+  FILE COINVOLTI:
+  - client/src/components/common/SlideUp.tsx (new)
+  - client/src/utils/apiError.ts (new)
+  - client/src/hooks/useAsyncAction.ts (new)
+  - 7 dialog files (SlideUp deduplication)
+  - 43 files (inline error cast replacement)
+  - CLAUDE.md (updated patterns)
+
+------------------------------------------------------------------------------
+[x] OPT-201 — Lazy-load full-screen dialogs in MainLayout
+------------------------------------------------------------------------------
+  Priorita: ALTA
+  Dipendenze: REFAC-202 (SlideUp extraction should happen first)
+  COMPLETATO: Converted all 14 dialog imports in MainLayout.tsx to React.lazy() with conditional Suspense wrappers. Created useLazyMount hook to preserve close animations by keeping dialogs mounted after first open. Build produces 14 separate dialog chunks (~230 KB removed from initial bundle). npm run verify passes.
+
+  FILE COINVOLTI:
+  - client/src/components/Layout/MainLayout.tsx (modified)
+  - client/src/hooks/useLazyMount.ts (new)
+
+------------------------------------------------------------------------------
+[x] SEC-201 — Rate limiting on vault unlock and session creation endpoints
+------------------------------------------------------------------------------
+  Priorita: ALTA
+  Dipendenze: Nessuna
+  COMPLETATO: Added rate limiting to vault unlock (5/min) and MFA unlock (10/min) endpoints, and session creation (20/min) for RDP/VNC/SSH. All limits configurable via env vars. Fixed info-leaking error messages in sharing services that revealed vault/login state. Uses express-rate-limit with ipKeyGenerator for IPv6 safety.
+
+  FILE COINVOLTI:
+  - server/src/middleware/vaultRateLimit.middleware.ts (new)
+  - server/src/middleware/sessionRateLimit.middleware.ts (new)
+  - server/src/routes/vault.routes.ts (modified)
+  - server/src/routes/session.routes.ts (modified)
+  - server/src/config.ts (modified)
+  - server/src/services/secretSharing.service.ts (modified)
+  - server/src/services/sharing.service.ts (modified)
+
+------------------------------------------------------------------------------
+[x] REFAC-203 — Async controller wrapper per eliminare boilerplate try-catch-next
+------------------------------------------------------------------------------
+  Priorita: ALTA
+  Dipendenze: Nessuna
+  COMPLETATO: Created asyncHandler() wrapper in server/src/middleware/asyncHandler.ts. Applied route-level wrapping across 25 route files. Removed ~176 boilerplate try-catch-next blocks from 26 controller files. Preserved 16 Category C catch blocks with custom logic (auth error mapping, session audit logging, JSON parse error handling). Reduced catch block count from ~192 to 16.
+
+  FILE COINVOLTI:
+  - server/src/middleware/asyncHandler.ts (new)
+  - All 26 files in server/src/controllers/*.controller.ts (modified)
+  - 25 route files in server/src/routes/*.routes.ts (modified)
+
+------------------------------------------------------------------------------
+[x] REFAC-204 — Estrarre utility condivise nei servizi (tenant boundary, re-encryption, vault key)
+------------------------------------------------------------------------------
+  Priorita: ALTA
+  Dipendenze: Nessuna
+  COMPLETATO: Added requireMasterKey() and reEncryptField() to crypto.service.ts, assertShareableTenantBoundary() to tenantScope.ts. Removed 3 duplicate local requireMasterKey functions (connection, totp, gateway). Replaced 2 identical 16-line tenant boundary blocks with single-line calls (sharing, secretSharing). Replaced ~30 lines of decrypt+encrypt boilerplate with reEncryptField calls. Replaced 9+ inline getMasterKey+throw patterns across team.service.ts and secret.service.ts.
+
+  FILE COINVOLTI:
+  - server/src/services/crypto.service.ts (modified — added requireMasterKey, reEncryptField)
+  - server/src/utils/tenantScope.ts (modified — added assertShareableTenantBoundary)
+  - server/src/services/connection.service.ts (modified)
+  - server/src/services/totp.service.ts (modified)
+  - server/src/services/gateway.service.ts (modified)
+  - server/src/services/sharing.service.ts (modified)
+  - server/src/services/secretSharing.service.ts (modified)
+  - server/src/services/team.service.ts (modified)
+  - server/src/services/secret.service.ts (modified)
 

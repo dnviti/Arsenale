@@ -7,6 +7,30 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [1.3.2] - 2026-03-12
+
+### Added
+- Vault folders for keychain secret organization
+- Notification action framework with deep-links and auto-refresh (SHR-211)
+
+### Changed
+- Composite Prisma indexes for audit query performance (OPT-202)
+- Lazy-load 14 full-screen dialogs in MainLayout (OPT-201)
+- Extract client shared utilities — SlideUp, extractApiError, useAsyncAction (REFAC-202)
+- Extract shared Zod validation middleware and centralize schemas (REFAC-201)
+- Add asyncHandler wrapper to eliminate try-catch-next boilerplate (REFAC-203)
+- Extract shared utilities for vault key, tenant boundary, and re-encryption (REFAC-204)
+- Migrate 9 dialog components to useAsyncAction hook (REFAC-205)
+- Extend Zod validate middleware with combined API and typed helpers (REFAC-206)
+- Remove debug logs and standardize API response destructuring (CLEAN-201)
+- Consolidate duplicated patterns and extract shared utilities
+
+### Fixed
+- Add OAuth rate limiting
+
+### Security
+- Rate-limit vault unlock and session creation endpoints (SEC-201)
+
 ## [1.3.1] - 2026-03-11
 
 ### Added
@@ -132,7 +156,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Email verification preventing unverified account login
 - ESLint security plugin enforced in CI
 
-[Unreleased]: https://github.com/dnviti/arsenale/compare/v1.3.1...HEAD
+[Unreleased]: https://github.com/dnviti/arsenale/compare/v1.3.2...HEAD
+[1.3.2]: https://github.com/dnviti/arsenale/compare/v1.3.1...v1.3.2
 [1.3.1]: https://github.com/dnviti/arsenale/compare/v1.3.0...v1.3.1
 [1.3.0]: https://github.com/dnviti/arsenale/compare/v1.2.0...v1.3.0
 [1.2.0]: https://github.com/dnviti/arsenale/compare/v1.1.0...v1.2.0

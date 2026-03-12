@@ -9,6 +9,7 @@ import {
 } from '@mui/icons-material';
 import { getEmailStatus, sendTestEmail } from '../../api/admin.api';
 import type { EmailStatus } from '../../api/admin.api';
+import { extractApiError } from '../../utils/apiError';
 
 export default function EmailProviderSection() {
   const [status, setStatus] = useState<EmailStatus | null>(null);
@@ -34,10 +35,7 @@ export default function EmailProviderSection() {
       const result = await sendTestEmail(testTo);
       setSuccess(result.message);
     } catch (err: unknown) {
-      const msg =
-        (err as { response?: { data?: { error?: string } } })?.response?.data
-          ?.error || 'Failed to send test email';
-      setError(msg);
+      setError(extractApiError(err, 'Failed to send test email'));
     } finally {
       setSending(false);
     }

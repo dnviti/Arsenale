@@ -16,6 +16,8 @@ import type {
   UpdateSecretInput,
   TenantVaultStatus,
 } from '../api/secrets.api';
+import { listVaultFolders } from '../api/vault-folders.api';
+import type { VaultFolderData } from '../api/vault-folders.api';
 
 interface SecretState {
   secrets: SecretListItem[];
@@ -25,6 +27,12 @@ interface SecretState {
   filters: SecretListFilters;
   tenantVaultStatus: TenantVaultStatus | null;
   expiringCount: number;
+
+  // Vault folders
+  vaultFolders: VaultFolderData[];
+  vaultTeamFolders: VaultFolderData[];
+  vaultTenantFolders: VaultFolderData[];
+  selectedFolderId: string | null;
 
   fetchSecrets: () => Promise<void>;
   fetchSecret: (id: string) => Promise<void>;
@@ -37,6 +45,11 @@ interface SecretState {
   fetchTenantVaultStatus: () => Promise<void>;
   initTenantVault: () => Promise<void>;
   fetchExpiringCount: () => Promise<void>;
+
+  // Vault folder actions
+  fetchVaultFolders: () => Promise<void>;
+  setSelectedFolderId: (folderId: string | null) => void;
+  moveSecret: (secretId: string, folderId: string | null) => Promise<void>;
 }
 
 export const useSecretStore = create<SecretState>((set, get) => ({
@@ -48,10 +61,21 @@ export const useSecretStore = create<SecretState>((set, get) => ({
   tenantVaultStatus: null,
   expiringCount: 0,
 
+  // Vault folders
+  vaultFolders: [],
+  vaultTeamFolders: [],
+  vaultTenantFolders: [],
+  selectedFolderId: null,
+
   fetchSecrets: async () => {
     set({ loading: true, error: null });
     try {
-      const secrets = await listSecrets(get().filters);
+      const { filters, selectedFolderId } = get();
+      const effectiveFilters = { ...filters };
+      if (selectedFolderId !== null) {
+        effectiveFilters.folderId = selectedFolderId;
+      }
+      const secrets = await listSecrets(effectiveFilters);
       set({ secrets, loading: false });
     } catch {
       set({ error: 'Failed to load secrets', loading: false });
@@ -142,5 +166,33 @@ export const useSecretStore = create<SecretState>((set, get) => ({
     } catch {
       // ignore — vault may be locked
     }
+  },
+
+  // Vault folder actions
+  fetchVaultFolders: async () => {
+    try {
+      const result = await listVaultFolders();
+      set({
+        vaultFolders: result.personal,
+        vaultTeamFolders: result.team,
+        vaultTenantFolders: result.tenant,
+      });
+    } catch {
+      // ignore — vault may be locked
+    }
+  },
+
+  setSelectedFolderId: (folderId: string | null) => {
+    set({ selectedFolderId: folderId });
+    get().fetchSecrets();
+  },
+
+  moveSecret: async (secretId: string, folderId: string | null) => {
+    await apiUpdateSecret(secretId, { folderId });
+    const { selectedSecret } = get();
+    if (selectedSecret?.id === secretId) {
+      await get().fetchSecret(secretId);
+    }
+    await get().fetchSecrets();
   },
 }));

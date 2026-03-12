@@ -1,4 +1,5 @@
 import { useState, useEffect, Fragment } from 'react';
+import { useCopyToClipboard } from '../../hooks/useCopyToClipboard';
 import {
   Box, Button, Alert, CircularProgress, Table, TableBody, TableCell,
   TableContainer, TableHead, TableRow, Chip, Dialog, DialogTitle,
@@ -25,6 +26,7 @@ import SessionDashboard from '../orchestration/SessionDashboard';
 import ScalingControls from '../orchestration/ScalingControls';
 import GatewayInstanceList from '../orchestration/GatewayInstanceList';
 import GatewayTemplateSection from '../gateway/GatewayTemplateSection';
+import { extractApiError } from '../../utils/apiError';
 
 interface TestState {
   gatewayId: string;
@@ -74,7 +76,7 @@ export default function GatewaySection({ onNavigateToTab }: GatewaySectionProps)
   const [keyActionLoading, setKeyActionLoading] = useState(false);
   const [rotateConfirmOpen, setRotateConfirmOpen] = useState(false);
   const [rotatePushInfo, setRotatePushInfo] = useState<string | null>(null);
-  const [copied, setCopied] = useState(false);
+  const { copied, copy: copyToClipboard } = useCopyToClipboard();
   const [expandedRows, setExpandedRows] = useState<Set<string>>(new Set());
 
   const hasTenant = Boolean(user?.tenantId);
@@ -113,7 +115,7 @@ export default function GatewaySection({ onNavigateToTab }: GatewaySectionProps)
       setDeleteTarget(null);
     } catch (err: unknown) {
       const axiosErr = err as {
-        response?: { status?: number; data?: { error?: string; connectionCount?: number } };
+        response?: { status?: number; data?: { connectionCount?: number } };
       };
       if (axiosErr?.response?.status === 409 && axiosErr.response.data?.connectionCount) {
         setForceDeleteInfo({
@@ -122,7 +124,7 @@ export default function GatewaySection({ onNavigateToTab }: GatewaySectionProps)
         });
         setDeleteTarget(null);
       } else {
-        setError(axiosErr?.response?.data?.error || 'Failed to delete gateway');
+        setError(extractApiError(err, 'Failed to delete gateway'));
         setDeleteTarget(null);
       }
     } finally {
@@ -137,10 +139,7 @@ export default function GatewaySection({ onNavigateToTab }: GatewaySectionProps)
     try {
       await deleteGatewayAction(forceDeleteInfo.gateway.id, true);
     } catch (err: unknown) {
-      setError(
-        (err as { response?: { data?: { error?: string } } })?.response?.data?.error ||
-        'Failed to delete gateway'
-      );
+      setError(extractApiError(err, 'Failed to delete gateway'));
     } finally {
       setDeleting(false);
       setForceDeleteInfo(null);
@@ -189,9 +188,7 @@ export default function GatewaySection({ onNavigateToTab }: GatewaySectionProps)
           loading: false,
           result: {
             ok: false,
-            error:
-              (err as { response?: { data?: { error?: string } } })?.response?.data?.error ||
-              'Push key request failed',
+            error: extractApiError(err, 'Push key request failed'),
           },
         },
       }));
@@ -204,10 +201,7 @@ export default function GatewaySection({ onNavigateToTab }: GatewaySectionProps)
     try {
       await generateSshKeyPairAction();
     } catch (err: unknown) {
-      setError(
-        (err as { response?: { data?: { error?: string } } })?.response?.data?.error ||
-        'Failed to generate SSH key pair'
-      );
+      setError(extractApiError(err, 'Failed to generate SSH key pair'));
     } finally {
       setKeyActionLoading(false);
     }
@@ -231,10 +225,7 @@ export default function GatewaySection({ onNavigateToTab }: GatewaySectionProps)
         setRotatePushInfo(msg);
       }
     } catch (err: unknown) {
-      setError(
-        (err as { response?: { data?: { error?: string } } })?.response?.data?.error ||
-        'Failed to rotate SSH key pair'
-      );
+      setError(extractApiError(err, 'Failed to rotate SSH key pair'));
     } finally {
       setKeyActionLoading(false);
     }
@@ -242,9 +233,7 @@ export default function GatewaySection({ onNavigateToTab }: GatewaySectionProps)
 
   const handleCopyPublicKey = async () => {
     if (!sshKeyPair) return;
-    await navigator.clipboard.writeText(sshKeyPair.publicKey);
-    setCopied(true);
-    setTimeout(() => setCopied(false), 2000);
+    await copyToClipboard(sshKeyPair.publicKey);
   };
 
   const handleDownloadPublicKey = () => {
@@ -258,10 +247,7 @@ export default function GatewaySection({ onNavigateToTab }: GatewaySectionProps)
       const pem = await downloadSshPrivateKey();
       triggerDownload(pem, 'tenant_ed25519');
     } catch (err: unknown) {
-      setError(
-        (err as { response?: { data?: { error?: string } } })?.response?.data?.error ||
-        'Failed to download private key'
-      );
+      setError(extractApiError(err, 'Failed to download private key'));
     }
   };
 

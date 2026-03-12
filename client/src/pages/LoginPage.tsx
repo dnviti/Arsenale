@@ -14,6 +14,7 @@ import { useAuthStore } from '../store/authStore';
 import { useVaultStore } from '../store/vaultStore';
 import { useUiPreferencesStore } from '../store/uiPreferencesStore';
 import OAuthButtons from '../components/OAuthButtons';
+import { extractApiError } from '../utils/apiError';
 
 type Step = 'credentials' | 'mfa-choice' | 'totp' | 'sms' | 'webauthn' | 'mfa-setup' | 'tenant-select';
 
@@ -141,8 +142,7 @@ export default function LoginPage() {
       useUiPreferencesStore.getState().set('lastActiveTenantId', selectedTenantId);
       navigate('/');
     } catch (err: unknown) {
-      const msg = (err as { response?: { data?: { error?: string } } })?.response?.data?.error || 'Failed to select organization';
-      setError(msg);
+      setError(extractApiError(err, 'Failed to select organization'));
     } finally {
       setLoading(false);
     }
@@ -204,10 +204,8 @@ export default function LoginPage() {
         completeLogin(data);
       }
     } catch (err: unknown) {
-      const axiosErr = err as { response?: { status?: number; data?: { error?: string } } };
-      const msg = axiosErr?.response?.data?.error || 'Login failed';
-      setError(msg);
-      if (axiosErr?.response?.status === 403) {
+      setError(extractApiError(err, 'Login failed'));
+      if ((err as { response?: { status?: number } })?.response?.status === 403) {
         setShowResend(true);
       }
     } finally {
@@ -223,10 +221,7 @@ export default function LoginPage() {
       const data = await verifyTotpApi(tempToken, totpCode);
       completeLogin(data);
     } catch (err: unknown) {
-      const msg =
-        (err as { response?: { data?: { error?: string } } })?.response?.data?.error ||
-        'Invalid code';
-      setError(msg);
+      setError(extractApiError(err, 'Invalid code'));
     } finally {
       setLoading(false);
     }
@@ -240,10 +235,7 @@ export default function LoginPage() {
       const data = await verifySmsApi(tempToken, smsCode);
       completeLogin(data);
     } catch (err: unknown) {
-      const msg =
-        (err as { response?: { data?: { error?: string } } })?.response?.data?.error ||
-        'Invalid code';
-      setError(msg);
+      setError(extractApiError(err, 'Invalid code'));
     } finally {
       setLoading(false);
     }
@@ -262,10 +254,7 @@ export default function LoginPage() {
       if ((err as Error)?.name === 'NotAllowedError') {
         setError('Authentication was cancelled or timed out.');
       } else {
-        const msg =
-          (err as { response?: { data?: { error?: string } } })?.response?.data?.error ||
-          'WebAuthn authentication failed.';
-        setError(msg);
+        setError(extractApiError(err, 'WebAuthn authentication failed.'));
       }
     } finally {
       setLoading(false);
@@ -285,10 +274,7 @@ export default function LoginPage() {
         await requestSmsCodeApi(tempToken);
         setStep('sms');
       } catch (err: unknown) {
-        const msg =
-          (err as { response?: { data?: { error?: string } } })?.response?.data?.error ||
-          'Failed to send SMS code';
-        setError(msg);
+        setError(extractApiError(err, 'Failed to send SMS code'));
       } finally {
         setSmsSending(false);
       }
@@ -319,10 +305,7 @@ export default function LoginPage() {
       const data = await mfaSetupVerifyApi(tempToken, mfaSetupCode);
       completeLogin(data);
     } catch (err: unknown) {
-      const msg =
-        (err as { response?: { data?: { error?: string } } })?.response?.data?.error ||
-        'Invalid code';
-      setError(msg);
+      setError(extractApiError(err, 'Invalid code'));
     } finally {
       setLoading(false);
     }

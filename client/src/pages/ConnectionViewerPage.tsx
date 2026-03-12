@@ -6,6 +6,7 @@ import { getConnection, ConnectionData } from '../api/connections.api';
 import { useAuthStore } from '../store/authStore';
 import SshTerminal from '../components/Terminal/SshTerminal';
 import RdpViewer from '../components/RDP/RdpViewer';
+import { extractApiError } from '../utils/apiError';
 
 export default function ConnectionViewerPage() {
   const { id } = useParams<{ id: string }>();
@@ -56,10 +57,7 @@ export default function ConnectionViewerPage() {
         document.title = `${data.name} - Arsenale`;
       })
       .catch((err) => {
-        setError(
-          (err as { response?: { data?: { error?: string } } })?.response?.data?.error ||
-          'Failed to load connection'
-        );
+        setError(extractApiError(err, 'Failed to load connection'));
       })
       .finally(() => setLoading(false));
   }, [authReady, id]);

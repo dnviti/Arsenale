@@ -9,6 +9,7 @@ import {
   type EmailChangeInitResult, type VerificationMethod,
 } from '../../api/user.api';
 import IdentityVerification from '../common/IdentityVerification';
+import { useAsyncAction } from '../../hooks/useAsyncAction';
 
 interface ProfileSectionProps {
   onHasPasswordResolved: (hasPassword: boolean) => void;
@@ -23,16 +24,14 @@ export default function ProfileSection({ onHasPasswordResolved, linkedProvider }
   const [username, setUsername] = useState('');
   const [email, setEmail] = useState('');
   const [avatarPreview, setAvatarPreview] = useState<string | null>(null);
-  const [loading, setLoading] = useState(false);
-  const [error, setError] = useState('');
+  const { loading, error, setError, run } = useAsyncAction();
   const [success, setSuccess] = useState('');
   const fileInputRef = useRef<HTMLInputElement>(null);
 
   // Email change state
   const [emailChangePhase, setEmailChangePhase] = useState<EmailChangePhase>('idle');
   const [newEmail, setNewEmail] = useState('');
-  const [emailChangeError, setEmailChangeError] = useState('');
-  const [emailChangeLoading, setEmailChangeLoading] = useState(false);
+  const { loading: emailChangeLoading, error: emailChangeError, setError: setEmailChangeError, run: runEmailChange } = useAsyncAction();
   const [codeOld, setCodeOld] = useState('');
   const [codeNew, setCodeNew] = useState('');
   const [verificationId, setVerificationId] = useState('');
@@ -81,19 +80,12 @@ export default function ProfileSection({ onHasPasswordResolved, linkedProvider }
 
   const handleProfileSave = async (e: React.FormEvent) => {
     e.preventDefault();
-    setError('');
     setSuccess('');
-    setLoading(true);
-    try {
+    const ok = await run(async () => {
       const result = await updateProfile({ username: username || undefined });
       updateUser({ username: result.username });
-      setSuccess('Profile updated successfully');
-    } catch (err: unknown) {
-      const msg = (err as { response?: { data?: { error?: string } } })?.response?.data?.error || 'Failed to update profile';
-      setError(msg);
-    } finally {
-      setLoading(false);
-    }
+    }, 'Failed to update profile');
+    if (ok) setSuccess('Profile updated successfully');
   };
 
   const handleInitiateEmailChange = async () => {
@@ -101,9 +93,7 @@ export default function ProfileSection({ onHasPasswordResolved, linkedProvider }
       setEmailChangeError('Please enter a different email address.');
       return;
     }
-    setEmailChangeError('');
-    setEmailChangeLoading(true);
-    try {
+    await runEmailChange(async () => {
       const result: EmailChangeInitResult = await initiateEmailChange(newEmail);
       if (result.flow === 'dual-otp') {
         setEmailChangePhase('dual-otp');
@@ -113,12 +103,7 @@ export default function ProfileSection({ onHasPasswordResolved, linkedProvider }
         setVerificationMetadata(result.metadata);
         setEmailChangePhase('identity-verifying');
       }
-    } catch (err: unknown) {
-      const msg = (err as { response?: { data?: { error?: string } } })?.response?.data?.error || 'Failed to initiate email change';
-      setEmailChangeError(msg);
-    } finally {
-      setEmailChangeLoading(false);
-    }
+    }, 'Failed to initiate email change');
   };
 
   const handleConfirmDualOtp = async () => {
@@ -126,36 +111,28 @@ export default function ProfileSection({ onHasPasswordResolved, linkedProvider }
       setEmailChangeError('Please enter both 6-digit codes.');
       return;
     }
-    setEmailChangeError('');
-    setEmailChangeLoading(true);
-    try {
+    const ok = await runEmailChange(async () => {
       const result = await confirmEmailChange({ codeOld, codeNew });
       setEmail(result.email);
       updateUser({ email: result.email });
+    }, 'Failed to confirm email change');
+    if (ok) {
       setSuccess('Email changed successfully');
       resetEmailChange();
-    } catch (err: unknown) {
-      const msg = (err as { response?: { data?: { error?: string } } })?.response?.data?.error || 'Failed to confirm email change';
-      setEmailChangeError(msg);
-    } finally {
-      setEmailChangeLoading(false);
     }
   };
 
   const handleIdentityVerified = async (vId: string) => {
-    setEmailChangeLoading(true);
-    try {
+    const ok = await runEmailChange(async () => {
       const result = await confirmEmailChange({ verificationId: vId });
       setEmail(result.email);
       updateUser({ email: result.email });
+    }, 'Failed to confirm email change');
+    if (ok) {
       setSuccess('Email changed successfully');
       resetEmailChange();
-    } catch (err: unknown) {
-      const msg = (err as { response?: { data?: { error?: string } } })?.response?.data?.error || 'Failed to confirm email change';
-      setEmailChangeError(msg);
+    } else {
       setEmailChangePhase('entering-email');
-    } finally {
-      setEmailChangeLoading(false);
     }
   };
 

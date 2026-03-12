@@ -15,6 +15,7 @@ import TeamDialog from '../Dialogs/TeamDialog';
 import UserPicker from '../UserPicker';
 import type { UserSearchResult } from '../../api/user.api';
 import type { TeamData } from '../../api/team.api';
+import { extractApiError } from '../../utils/apiError';
 
 const TEAM_ROLES = ['TEAM_ADMIN', 'TEAM_EDITOR', 'TEAM_VIEWER'] as const;
 
@@ -77,10 +78,7 @@ export default function TeamSection({ onNavigateToTab }: TeamSectionProps) {
         clearSelectedTeam();
       }
     } catch (err: unknown) {
-      setError(
-        (err as { response?: { data?: { error?: string } } })?.response?.data?.error ||
-        'Failed to delete team'
-      );
+      setError(extractApiError(err, 'Failed to delete team'));
     } finally {
       setDeleting(false);
       setDeleteTarget(null);
@@ -94,10 +92,7 @@ export default function TeamSection({ onNavigateToTab }: TeamSectionProps) {
     try {
       await addMember(selectedTeam.id, selectedUser.id, addMemberRole);
     } catch (err: unknown) {
-      setError(
-        (err as { response?: { data?: { error?: string } } })?.response?.data?.error ||
-        'Failed to add member'
-      );
+      setError(extractApiError(err, 'Failed to add member'));
     } finally {
       setAddingMember(false);
     }
@@ -108,10 +103,7 @@ export default function TeamSection({ onNavigateToTab }: TeamSectionProps) {
     try {
       await updateMemberRole(teamId, userId, newRole as 'TEAM_ADMIN' | 'TEAM_EDITOR' | 'TEAM_VIEWER');
     } catch (err: unknown) {
-      setError(
-        (err as { response?: { data?: { error?: string } } })?.response?.data?.error ||
-        'Failed to update role'
-      );
+      setError(extractApiError(err, 'Failed to update role'));
     }
   };
 
@@ -121,10 +113,7 @@ export default function TeamSection({ onNavigateToTab }: TeamSectionProps) {
     try {
       await removeMember(removeTarget.teamId, removeTarget.userId);
     } catch (err: unknown) {
-      setError(
-        (err as { response?: { data?: { error?: string } } })?.response?.data?.error ||
-        'Failed to remove member'
-      );
+      setError(extractApiError(err, 'Failed to remove member'));
     }
     setRemoveTarget(null);
   };

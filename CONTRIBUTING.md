@@ -132,6 +132,68 @@ Use the provided templates:
 
 PRs that fail the quality gate or lack a clear description will not be reviewed.
 
+## Release Process
+
+We manage releases by routing all changes through Pull Requests, which allows GitHub to automatically track authors and referenced issues. When a new version tag is pushed, a GitHub Action automatically drafts a release with generated release notes.
+
+**Major releases require a beta phase.** When a major version bump is detected, the release is automatically tagged as `vX.0.0-beta` and marked as a prerelease on GitHub. The beta stays until explicitly promoted to stable with `/release stable`.
+
+### Using LLM Agent Skills (Recommended)
+
+If you are using Claude Code with the project's skills:
+
+#### Minor / Patch release
+
+1. **Prepare:** On `develop`, run `/release [minor|patch]`. This bumps versions, generates changelog entries, and commits.
+2. **Create the PR:** Run `/git-publish`. This pushes `develop`, creates a PR to `main`, and enables auto-merge.
+3. **Tag:** After the PR merges, tag the release on `main`:
+   ```bash
+   git fetch origin main
+   git tag -a vX.Y.Z origin/main -m "Release vX.Y.Z"
+   git push origin vX.Y.Z
+   ```
+4. **Publish:** The tag push triggers the Release and Docker Build workflows. Visit the [Releases](https://github.com/dnviti/arsenale/releases) page, review the draft, and click **Publish release**.
+
+#### Major release (beta → stable)
+
+1. **Beta:** On `develop`, run `/release major`. The version is automatically set to `X.0.0-beta`.
+2. **Create the PR:** Run `/git-publish`. Push, PR, auto-merge — same as above.
+3. **Tag the beta:** After the PR merges:
+   ```bash
+   git fetch origin main
+   git tag -a vX.0.0-beta origin/main -m "Release vX.0.0-beta"
+   git push origin vX.0.0-beta
+   ```
+   The GitHub release is created as a **prerelease**. Docker images are tagged `X.0.0-beta`.
+4. **Iterate:** Continue developing on `develop`. The beta stays until you explicitly promote it.
+5. **Promote:** When ready, run `/release stable`. This strips the `-beta` suffix and creates a stable `X.0.0` release.
+6. **Create the PR:** Run `/git-publish` again for the stable release.
+7. **Tag the stable release:** After the PR merges:
+   ```bash
+   git fetch origin main
+   git tag -a vX.0.0 origin/main -m "Release vX.0.0"
+   git push origin vX.0.0
+   ```
+8. **Publish:** Review and publish the stable release on GitHub.
+
+### Manual Release
+
+If you prefer doing it manually:
+
+1. Create a `feat/release-X.Y.Z` branch from `develop`.
+2. Manually bump the `"version"` field in all `package.json` files. For major releases, use `X.0.0-beta` first.
+3. Update `CHANGELOG.md` following the Keep a Changelog format.
+4. Commit your changes with `chore(release): vX.Y.Z` (or `chore(release): vX.Y.Z-beta`) and push the branch.
+5. Open a Pull Request from `feat/release-X.Y.Z` into `main` (or first to `develop` and then `main`).
+6. After merging the PR into `main`, tag the release:
+   ```bash
+   git fetch origin main
+   git tag -a vX.Y.Z origin/main -m "Release vX.Y.Z"
+   git push origin vX.Y.Z
+   ```
+7. The tag push triggers the Release and Docker Build workflows. Beta tags (`v*-beta`) are automatically marked as prereleases. Go to the GitHub UI, edit the draft release, and publish.
+8. To promote a beta to stable, repeat the process with the `-beta` suffix removed from the version.
+
 ## Security Vulnerabilities
 
 Please do **not** open public issues for security vulnerabilities. See [SECURITY.md](SECURITY.md) for the responsible disclosure process.

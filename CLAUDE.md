@@ -53,7 +53,7 @@ Copy `.env.example` to `.env`. PostgreSQL is used in both development and produc
 
 ## Architecture
 
-**Monorepo** with npm workspaces: `server/` and `client/`.
+**Monorepo** with npm workspaces: `server/`, `client/`, and `clients/browser-extensions/`.
 
 ### Server (Express + TypeScript)
 
@@ -78,6 +78,15 @@ Layered architecture: **Routes → Controllers → Services → Prisma ORM**
 - `client/src/hooks/` — Custom hooks (`useAuth`, `useSocket`)
 - UI framework: Material-UI (MUI) v6
 
+### Browser Extension (Chrome Manifest V3)
+
+- `clients/browser-extensions/` — Browser extension workspace (Chrome primary, Firefox secondary)
+- `clients/browser-extensions/src/background.ts` — Service worker: handles all API calls to Arsenale servers (bypasses CORS), token refresh via chrome.alarms
+- `clients/browser-extensions/src/popup/` — React popup app: account switcher, keychain browsing, connection listing
+- `clients/browser-extensions/src/options/` — React options/settings page: multi-account management, server URL configuration
+- `clients/browser-extensions/src/content/` — Content scripts for credential autofill on web pages
+- `clients/browser-extensions/src/lib/` — Shared utilities: account storage, API client, auth, vault/secrets/connections API wrappers
+
 ## Key Patterns
 
 ### Real-Time Connections
@@ -98,7 +107,7 @@ JWT-based with access tokens (short-lived) and refresh tokens (stored in DB). Th
 Features that overlay the main workspace (settings, keychain, audit log, etc.) **must** be implemented as full-screen MUI `Dialog` components rendered from `MainLayout`, not as separate page routes. This preserves active RDP/SSH sessions. The only routed page is the main connections dashboard.
 
 **Pattern (SettingsDialog / AuditLogDialog / KeychainDialog):**
-- Define a local `SlideUp` transition via `forwardRef` using `<Slide direction="up">`
+- Import the shared `SlideUp` transition: `import { SlideUp } from '../common/SlideUp'`
 - Props: `{ open: boolean; onClose: () => void }`
 - Root element: `<Dialog fullScreen open={open} onClose={onClose} TransitionComponent={SlideUp}>`
 - AppBar: `<AppBar position="static" sx={{ position: 'relative' }}>` + `<Toolbar variant="dense">` with `CloseIcon` button and title
@@ -107,6 +116,10 @@ Features that overlay the main workspace (settings, keychain, audit log, etc.) *
 - Dialog rendered at the fragment root level in `MainLayout`, outside the blur wrapper `Box`
 
 **Rule:** Never create a new page route for UI that opens over the dashboard. Use this dialog pattern instead.
+
+### API Error Handling
+
+Use `extractApiError(err, fallbackMessage)` from `client/src/utils/apiError.ts` for API error extraction in catch blocks. Never use inline type casts for Axios error responses. For dialog form submissions with loading/error state, prefer the `useAsyncAction` hook from `client/src/hooks/useAsyncAction.ts`.
 
 ### UI Preferences Persistence
 
@@ -156,3 +169,32 @@ Use `/idea-create` to add ideas, `/idea-approve` to promote an idea to a task, `
 | Client stores | `*Store.ts` | `authStore.ts` |
 | Client API | `*.api.ts` | `connections.api.ts` |
 | Client hooks | `use*.ts` | `useAuth.ts` |
+
+### GitHub Issues Integration
+
+When `.claude/github-issues.json` exists with `"enabled": true`, all task and idea skills automatically sync with GitHub Issues. Both text files and GitHub Issues are co-authoritative (dual sync).
+
+**Config file:** `.claude/github-issues.json` — controls whether GitHub sync is active, the target repo, and label mappings. Copy `.claude/github-issues.example.json` to get started.
+
+**Setup:**
+1. Copy `.claude/github-issues.example.json` to `.claude/github-issues.json` and set `"enabled": true`
+2. Run `bash scripts/setup-github-labels.sh` to create all required labels
+3. Ensure `gh` CLI is authenticated (`gh auth status`)
+
+**Behavior when enabled:**
+- `/task-create` creates a GitHub Issue with task labels (`claude-code`, `task`, `priority:*`, `status:todo`, `section:*`)
+- `/task-pick` updates issue status labels (todo → in-progress → done) and closes issue on completion
+- `/idea-create` creates a GitHub Issue with `idea` label
+- `/idea-approve` closes idea issue, creates task issue with cross-reference
+- `/idea-disapprove` closes idea issue with reason
+- `/idea-refactor` updates issue body when ideas are revised
+- `/git-publish` links PRs to related issues via `Refs #N`
+- `/release` enriches GitHub Releases with issue cross-references
+
+**Issue title format:** `[PREFIX-NNN] Task Title` or `[IDEA-NNN] Idea Title` — the bracketed code is used to look up issues via `gh issue list --search`.
+
+**Dual sync rules:**
+- Skills write to text files first, then sync to GitHub
+- If GitHub sync fails, warn but don't fail the operation
+- Text files win in case of discrepancy
+- `GitHub: #NNN` is stored in each task/idea block for fast lookup

@@ -43,10 +43,11 @@ import {
 } from '@dnd-kit/core';
 import type { DragStartEvent, DragEndEvent } from '@dnd-kit/core';
 import {
-  getErrorMessage, matchesSearch, buildFolderTree, pruneFolderTree,
+  matchesSearch, buildFolderTree, pruneFolderTree,
   collectFolderConnections, folderHasSubfolders,
   ConnectionItem, FolderItem,
 } from './treeHelpers';
+import { extractApiError } from '../../utils/apiError';
 import TeamConnectionSection from './TeamConnectionSection';
 
 // --- ConnectionTree ---
@@ -120,7 +121,7 @@ export default function ConnectionTree({ onEditConnection, onShareConnection, on
     try {
       await moveConn(connection.id, targetFolderId);
     } catch (err) {
-      notify(getErrorMessage(err, 'Failed to move connection'));
+      notify(extractApiError(err, 'Failed to move connection'));
     }
   };
 
@@ -144,7 +145,7 @@ export default function ConnectionTree({ onEditConnection, onShareConnection, on
       await updateConnection(moveTarget.id, { folderId: newFolderId });
       await fetchConnections();
     } catch (err) {
-      notify(getErrorMessage(err, 'Failed to move connection'));
+      notify(extractApiError(err, 'Failed to move connection'));
     }
     setMoveTarget(null);
   };
@@ -155,7 +156,7 @@ export default function ConnectionTree({ onEditConnection, onShareConnection, on
       await deleteConnection(deleteTarget.id);
       await fetchConnections();
     } catch (err) {
-      notify(getErrorMessage(err, 'Failed to delete connection'));
+      notify(extractApiError(err, 'Failed to delete connection'));
     }
     setDeleteTarget(null);
   };
@@ -220,7 +221,7 @@ export default function ConnectionTree({ onEditConnection, onShareConnection, on
       await deleteFolder(deleteFolderTarget.id);
       await fetchConnections();
     } catch (err) {
-      notify(getErrorMessage(err, 'Failed to delete folder'));
+      notify(extractApiError(err, 'Failed to delete folder'));
     }
     setDeleteFolderTarget(null);
   };

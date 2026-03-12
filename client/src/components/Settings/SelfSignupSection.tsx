@@ -3,6 +3,7 @@ import {
   Card, CardContent, Typography, Switch, FormControlLabel, Alert, CircularProgress, Box,
 } from '@mui/material';
 import { getAppConfig, setSelfSignup } from '../../api/admin.api';
+import { extractApiError } from '../../utils/apiError';
 
 export default function SelfSignupSection() {
   const [enabled, setEnabled] = useState(true);
@@ -25,10 +26,7 @@ export default function SelfSignupSection() {
       await setSelfSignup(newValue);
       setEnabled(newValue);
     } catch (err: unknown) {
-      const msg =
-        (err as { response?: { data?: { error?: string } } })?.response?.data?.error ||
-        'Failed to update setting';
-      setError(msg);
+      setError(extractApiError(err, 'Failed to update setting'));
     } finally {
       setSaving(false);
     }

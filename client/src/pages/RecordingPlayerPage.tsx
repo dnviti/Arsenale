@@ -7,6 +7,7 @@ import type { Recording } from '../api/recordings.api';
 import { useAuthStore } from '../store/authStore';
 import GuacPlayer from '../components/Recording/GuacPlayer';
 import SshPlayer from '../components/Recording/SshPlayer';
+import { extractApiError } from '../utils/apiError';
 
 export default function RecordingPlayerPage() {
   const { id } = useParams<{ id: string }>();
@@ -57,10 +58,7 @@ export default function RecordingPlayerPage() {
         document.title = `${data.connection.name} (${data.protocol}) - Recording - Arsenale`;
       })
       .catch((err) => {
-        setError(
-          (err as { response?: { data?: { error?: string } } })?.response?.data?.error ||
-          'Failed to load recording'
-        );
+        setError(extractApiError(err, 'Failed to load recording'));
       })
       .finally(() => setLoading(false));
   }, [authReady, id]);
