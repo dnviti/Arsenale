@@ -2,7 +2,6 @@
 name: test-engineer
 description: Create, update, or optimize tests and CI/CD pipelines. Covers unit tests, integration tests, end-to-end tests, and GitHub Actions workflow configuration.
 disable-model-invocation: true
-allowed-tools: Bash, Read, Grep, Glob, Edit, Write
 argument-hint: "[scope: unit|integration|e2e|pipeline|coverage|all] [target file or area]"
 ---
 

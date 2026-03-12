@@ -2,7 +2,6 @@
 name: git-publish
 description: Push develop and open an auto-merging PR into main.
 disable-model-invocation: true
-allowed-tools: Bash
 ---
 
 # Publish develop to main

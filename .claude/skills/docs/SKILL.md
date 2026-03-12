@@ -2,7 +2,6 @@
 name: docs
 description: "Manage all project documentation. Operations: create, update, verify (docs/ folder); sync (task files + doc alignment); claude-md (update CLAUDE.md from code changes). Usage: /docs <operation> [args]."
 disable-model-invocation: true
-allowed-tools: Bash, Read, Grep, Glob, Edit, Write
 argument-hint: "<create|update|verify|sync|claude-md> [category or context]"
 ---
 

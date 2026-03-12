@@ -1,25 +1,47 @@
 ---
 name: idea-approve
-description: Approve an idea from ideas.txt, convert it into a full task with technical details, and add it to to-do.txt. This is the ONLY bridge from ideas to the task pipeline.
+description: Approve an idea, convert it into a full task with technical details, and promote it to the task pipeline. This is the ONLY bridge from ideas to tasks.
 disable-model-invocation: true
-allowed-tools: Bash, Read, Grep, Glob, Edit, Write
 argument-hint: "[IDEA-NNN]"
 ---
 
 # Approve an Idea
 
-You are the idea approval gateway for the Arsenale project. Your job is to take an idea from `ideas.txt`, flesh it out with codebase-informed technical details, and promote it to a full task in `to-do.txt`.
+You are the idea approval gateway for the Arsenale project. Your job is to take an idea, flesh it out with codebase-informed technical details, and promote it to a full task.
 
 This skill is the **ONLY** bridge between the idea backlog and the task pipeline. Ideas must go through this process to become actionable tasks.
 
-Always respond and work in English. However, the task block content (field labels, descriptions, technical details) MUST be written in **Italian**, following the exact format of existing tasks.
+## Mode Detection
+
+Determine the operating mode by reading the GitHub Issues config:
+
+```bash
+GH_ENABLED="$(jq -r '.enabled // false' .claude/github-issues.json 2>/dev/null)"
+GH_SYNC="$(jq -r '.sync // false' .claude/github-issues.json 2>/dev/null)"
+GH_REPO="$(jq -r '.repo' .claude/github-issues.json 2>/dev/null)"
+```
+
+Three modes:
+- **GitHub-only mode** (`GH_ENABLED=true` AND `GH_SYNC != true`): All operations happen on GitHub Issues. No local file reads or writes. All content must be in **English**.
+- **Dual sync mode** (`GH_ENABLED=true` AND `GH_SYNC=true`): Write to local files first, then sync to GitHub. Task block content is in **Italian**.
+- **Local only mode** (`GH_ENABLED=false` or config missing): Write to local files only. Task block content is in **Italian**.
 
 ## Current State
 
-### Ideas available for approval:
+### GitHub-only mode queries:
+
+Ideas available for approval:
+!`jq -r 'if (.enabled == true) and (.sync != true) then .repo else empty end' .claude/github-issues.json 2>/dev/null | xargs -I{} gh issue list --repo {} --label idea --state open --json number,title --jq '.[] | "#\(.number) \(.title)"' 2>/dev/null`
+
+Highest task IDs from GitHub (last 20):
+!`jq -r 'if (.enabled == true) and (.sync != true) then .repo else empty end' .claude/github-issues.json 2>/dev/null | xargs -I{} gh issue list --repo {} --label task --state all --limit 500 --json title --jq '.[].title' 2>/dev/null | grep -oE '[A-Z][A-Z0-9]+-[0-9]{3}' | sort -t'-' -k2 -n | tail -20`
+
+### Local / dual sync mode queries:
+
+Ideas available for approval:
 !`grep -E '^IDEA-[0-9]{3}' ideas.txt 2>/dev/null | tr -d '\r'`
 
-### Highest task IDs (last 20, sorted by number):
+Highest task IDs (last 20, sorted by number):
 !`grep -rohE '[A-Z][A-Z0-9]+-[0-9]{3}' to-do.txt progressing.txt done.txt 2>/dev/null | sort -t'-' -k2 -n | tail -20`
 
 ### All task prefixes currently in use:
@@ -36,18 +58,28 @@ The user wants to approve: **$ARGUMENTS**
 
 ### Step 1: Select the Idea
 
+**GitHub-only mode:**
+- **If an IDEA-NNN code was provided**: Search GitHub Issues: `gh issue list --repo "$GH_REPO" --search "[IDEA-NNN] in:title" --label idea --state open --json number,title`. If not found, inform the user and list available idea issues.
+- **If no argument was provided**: List all open idea issues from the Current State data above. Use `AskUserQuestion` to ask the user which idea to approve.
+- If there are no open idea issues, inform the user: "No ideas available for approval. Use `/idea-create` to add ideas first."
+
+**Local / dual sync mode:**
 - **If an IDEA-NNN code was provided**: Find that idea in `ideas.txt`. If not found, inform the user and list available ideas.
 - **If no argument was provided**: List all ideas from `ideas.txt` with their codes, titles, and categories. Use `AskUserQuestion` to ask the user which idea to approve.
-
-If `ideas.txt` has no ideas, inform the user: "No ideas available for approval. Use `/idea-create` to add ideas first."
+- If `ideas.txt` has no ideas, inform the user: "No ideas available for approval. Use `/idea-create` to add ideas first."
 
 ### Step 2: Read the Full Idea
 
-Read the complete idea block from `ideas.txt` — everything between its `------` separator lines. Extract:
-- Title
-- Categoria
-- DESCRIZIONE
-- MOTIVAZIONE
+**GitHub-only mode:**
+- Fetch the full idea issue body: `gh issue view IDEA_ISSUE_NUMBER --repo "$GH_REPO" --json title,body,number`
+- Extract the title, description, and motivation from the issue body.
+
+**Local / dual sync mode:**
+- Read the complete idea block from `ideas.txt` — everything between its `------` separator lines. Extract:
+  - Title
+  - Categoria
+  - DESCRIZIONE
+  - MOTIVAZIONE
 
 Present the idea to the user as context for what will be converted.
 
@@ -106,8 +138,15 @@ Analyze the idea's description and category to select an appropriate task prefix
 
 ### Step 4: Compute the Next Task Number
 
-Task numbering is **globally sequential** across all prefixes and all three task files.
+Task numbering is **globally sequential** across all prefixes.
 
+**GitHub-only mode:**
+1. From the "Highest task IDs from GitHub" data above, extract all numeric parts.
+2. **Ignore false positives** like `AES-256` or `SHA-256`.
+3. Find the maximum number.
+4. The new task number = `max + 1`, zero-padded to 3 digits.
+
+**Local / dual sync mode:**
 1. From the "Highest task IDs" data above, extract all numeric parts.
 2. **Ignore false positives** like `AES-256` or `SHA-256`.
 3. Find the maximum number.
@@ -115,21 +154,44 @@ Task numbering is **globally sequential** across all prefixes and all three task
 
 ### Step 5: Explore the Codebase
 
-Before writing the task block, explore the codebase to generate accurate technical details:
+Before writing the task, explore the codebase to generate accurate technical details:
 
 1. **Read the Prisma schema** (`server/prisma/schema.prisma`) — especially if the idea involves database changes.
 2. **Read relevant existing files** based on the idea description:
    - Backend ideas → check `server/src/routes/`, `server/src/controllers/`, `server/src/services/`, `server/src/middleware/`
    - Frontend ideas → check `client/src/components/`, `client/src/pages/`, `client/src/store/`, `client/src/hooks/`, `client/src/api/`
    - Infrastructure ideas → check `docker-compose.dev.yml`, `docker-compose.yml`, Dockerfiles
-3. **Look at similar completed tasks** in `done.txt` for pattern reference.
-4. **Identify files to create and modify** — be specific about file paths. Use `Glob` to verify paths exist before listing them under `MODIFICARE`.
+3. **Look at similar completed tasks** — in local/dual mode check `done.txt`, in GitHub-only mode search closed task issues.
+4. **Identify files to create and modify** — be specific about file paths. Use `Glob` to verify paths exist before listing them.
 
-### Step 6: Draft the Full Task Block
+### Step 6: Draft the Full Task
 
-Convert the idea into a complete task block, expanding the high-level idea with concrete technical details from your codebase exploration.
+**GitHub-only mode — draft as a GitHub Issue in English:**
 
-**Template:**
+Title: `[PREFIX-NNN] Task Title`
+
+Body:
+```
+**Code:** PREFIX-NNN | **Priority:** HIGH/MEDIUM/LOW | **Section:** SECTION X | **Dependencies:** DEPS
+**Promoted from:** [IDEA-NNN] #IDEA_ISSUE_NUMBER
+
+## Description
+Expanded description in English based on the original idea. More detailed than
+the idea, explaining what, why, and the scope. Approximately 4-10 lines.
+
+## Technical Details
+Detailed technical implementation plan in English, structured by layer/file.
+Include specific code snippets, function signatures, endpoint paths.
+
+## Files Involved
+**CREATE:** path/to/new/file.ts
+**MODIFY:** path/to/existing/file.ts
+
+---
+*Generated by Claude Code via `/idea-approve`*
+```
+
+**Local / dual sync mode — draft as a task block in Italian:**
 
 ```
 ------------------------------------------------------------------------------
@@ -153,7 +215,7 @@ Convert the idea into a complete task block, expanding the high-level idea with 
     MODIFICARE: path/to/existing/file.ts
 ```
 
-**Formatting rules:**
+**Formatting rules (local / dual sync mode only):**
 - Header separator lines are exactly 78 dashes
 - Status prefix is `[ ] ` (pending)
 - Title line format: `[ ] PREFIX-NNN — Task Title` (use `—` em dash)
@@ -166,12 +228,12 @@ Convert the idea into a complete task block, expanding the high-level idea with 
 
 ### Step 7: Present the Draft and Ask for Confirmation
 
-Present the complete task block to the user, along with:
+Present the complete task (issue draft or task block) to the user, along with:
 
 1. **Original idea:** IDEA-NNN and its title
 2. **New task code:** PREFIX-NNN
 3. **Suggested section:** Which section (A–G) and why
-4. **Suggested priority:** ALTA / MEDIA / BASSA and why
+4. **Suggested priority:** HIGH/MEDIUM/LOW (GitHub-only) or ALTA/MEDIA/BASSA (local/dual)
 
 Then use `AskUserQuestion` with these options:
 - **"Looks good, approve it"** — proceed to Step 8
@@ -180,6 +242,14 @@ Then use `AskUserQuestion` with these options:
 
 ### Step 8: Check for Duplicates
 
+**GitHub-only mode:**
+Search GitHub Issues for similar tasks:
+```bash
+gh issue list --repo "$GH_REPO" --label task --state all --search "keyword1" --json number,title,state
+gh issue list --repo "$GH_REPO" --label task --state all --search "keyword2" --json number,title,state
+```
+
+**Local / dual sync mode:**
 Search all task files for key concepts:
 ```
 grep -i "keyword1" to-do.txt progressing.txt done.txt
@@ -190,7 +260,12 @@ If a similar task exists, warn the user and ask whether to proceed or abort.
 
 ### Step 9: Insert the Task and Remove the Idea
 
-This step performs TWO operations:
+This step varies by mode:
+
+**GitHub-only mode:**
+Skip local file operations entirely. The task issue creation and idea issue closure happen in Step 9.5.
+
+**Local / dual sync mode — two operations:**
 
 **9a. Add the task to `to-do.txt`:**
 1. Use `grep -n` to find the target section header and the next section header.
@@ -207,26 +282,62 @@ Use the `Edit` tool for both operations.
 
 ### Step 9.5: Sync to GitHub Issues
 
-Check if GitHub Issues integration is enabled:
+**GitHub-only mode** — this IS the primary operation:
 
-```bash
-GH_ENABLED="$(jq -r '.enabled // false' .claude/github-issues.json 2>/dev/null)"
-```
-
-**If `GH_ENABLED` is `true`:**
-
-1. Read the repo: `GH_REPO="$(jq -r '.repo' .claude/github-issues.json)"`
-
-2. **Close the idea issue:**
+1. **Close the idea issue:**
    ```bash
-   IDEA_ISSUE=$(gh issue list --repo "$GH_REPO" --search "[IDEA-NNN] in:title" --label idea --json number --jq '.[0].number' 2>/dev/null)
+   IDEA_ISSUE=$(gh issue list --repo "$GH_REPO" --search "[IDEA-NNN] in:title" --label idea --state open --json number --jq '.[0].number' 2>/dev/null)
    ```
    If found:
    ```bash
    gh issue close "$IDEA_ISSUE" --repo "$GH_REPO" --comment "Approved and promoted to task [PREFIX-NNN]." 2>/dev/null || true
    ```
 
-3. **Create the task issue:**
+2. **Create the task issue:**
+   ```bash
+   PRIORITY_LABEL="$(jq -r ".labels.priority.\"$PRIORITY\"" .claude/github-issues.json)"
+   SECTION_LABEL="$(jq -r ".labels.sections.\"$SECTION_LETTER\"" .claude/github-issues.json)"
+   TASK_ISSUE_URL=$(gh issue create --repo "$GH_REPO" \
+     --title "[PREFIX-NNN] Task Title" \
+     --body "$(cat <<'EOF'
+   **Code:** PREFIX-NNN | **Priority:** HIGH/MEDIUM/LOW | **Section:** SECTION X | **Dependencies:** DEPS
+   **Promoted from:** [IDEA-NNN] #IDEA_ISSUE
+
+   ## Description
+   [Description content in English]
+
+   ## Technical Details
+   [Technical details content in English]
+
+   ## Files Involved
+   **CREATE:** list
+   **MODIFY:** list
+
+   ---
+   *Generated by Claude Code via `/idea-approve`*
+   EOF
+   )" \
+     --label "claude-code,task,$PRIORITY_LABEL,status:todo,$SECTION_LABEL")
+   ```
+
+3. **Cross-reference** between the idea and task issues:
+   ```bash
+   TASK_ISSUE_NUM=$(echo "$TASK_ISSUE_URL" | grep -oE '[0-9]+$')
+   gh issue comment "$IDEA_ISSUE" --repo "$GH_REPO" --body "Task issue: #$TASK_ISSUE_NUM" 2>/dev/null || true
+   ```
+
+**Dual sync mode** — sync after local operations:
+
+1. **Close the idea issue:**
+   ```bash
+   IDEA_ISSUE=$(gh issue list --repo "$GH_REPO" --search "[IDEA-NNN] in:title" --label idea --state open --json number --jq '.[0].number' 2>/dev/null)
+   ```
+   If found:
+   ```bash
+   gh issue close "$IDEA_ISSUE" --repo "$GH_REPO" --comment "Approved and promoted to task [PREFIX-NNN]." 2>/dev/null || true
+   ```
+
+2. **Create the task issue:**
    ```bash
    PRIORITY_LABEL="$(jq -r ".labels.priority.\"$PRIORITY\"" .claude/github-issues.json)"
    SECTION_LABEL="$(jq -r ".labels.sections.\"$SECTION_LETTER\"" .claude/github-issues.json)"
@@ -253,32 +364,38 @@ GH_ENABLED="$(jq -r '.enabled // false' .claude/github-issues.json 2>/dev/null)"
      --label "claude-code,task,$PRIORITY_LABEL,status:todo,$SECTION_LABEL")
    ```
 
-4. Extract the task issue number and write `GitHub: #NNN` to the new task block in `to-do.txt`.
+3. Extract the task issue number and write `GitHub: #NNN` to the new task block in `to-do.txt`.
 
-5. **Update the idea issue close comment** with a cross-reference to the task issue (if both succeeded):
+4. **Cross-reference** between the idea and task issues:
    ```bash
    TASK_ISSUE_NUM=$(echo "$TASK_ISSUE_URL" | grep -oE '[0-9]+$')
    gh issue comment "$IDEA_ISSUE" --repo "$GH_REPO" --body "Task issue: #$TASK_ISSUE_NUM" 2>/dev/null || true
    ```
 
-**If `GH_ENABLED` is `false` or the file is missing:** Skip this step.
+**Local only mode:** Skip this step entirely.
 
-**If any `gh` command fails:** Warn but do NOT fail — the local operations are already complete.
+**If any `gh` command fails:** Warn but do NOT fail — in dual sync mode the local operations are already complete. In GitHub-only mode, report the failure clearly since no local fallback exists.
 
 ### Step 10: Confirm and Report
 
-After successfully completing both operations, report:
+After successfully completing all operations, report:
 
 > "Idea **IDEA-NNN** has been approved and promoted to task **PREFIX-NNN — Task Title**.
 >
 > - **Task code:** PREFIX-NNN
-> - **Priority:** ALTA/MEDIA/BASSA
-> - **Dependencies:** list or Nessuna
-> - **Section:** SEZIONE X — Section Name
+> - **Priority:** HIGH/MEDIUM/LOW or ALTA/MEDIA/BASSA
+> - **Dependencies:** list or None/Nessuna
+> - **Section:** SECTION X — Section Name
 > - **Files to create:** N
 > - **Files to modify:** N
 >
-> The idea has been removed from `ideas.txt`. The task is now in `to-do.txt` and can be picked up with `/task-pick PREFIX-NNN`."
+> *(mode-specific details below)*
+
+**GitHub-only mode:** "The idea issue has been closed and the task issue has been created on GitHub. Pick it up with `/task-pick PREFIX-NNN`."
+
+**Dual sync mode:** "The idea has been removed from `ideas.txt`. The task is now in `to-do.txt` and synced to GitHub. Pick it up with `/task-pick PREFIX-NNN`."
+
+**Local only mode:** "The idea has been removed from `ideas.txt`. The task is now in `to-do.txt` and can be picked up with `/task-pick PREFIX-NNN`."
 
 ## Section Selection Guide
 
@@ -294,12 +411,13 @@ After successfully completing both operations, report:
 
 ## Important Rules
 
-1. **This is the ONLY way ideas become tasks** — ideas must never be added to `to-do.txt` by any other means.
-2. **NEVER modify `progressing.txt` or `done.txt`** — only add to `to-do.txt` and remove from `ideas.txt`.
+1. **This is the ONLY way ideas become tasks** — ideas must never be added to the task pipeline by any other means.
+2. **In local/dual mode, NEVER modify `progressing.txt` or `done.txt`** — only add to `to-do.txt` and remove from `ideas.txt`.
 3. **NEVER reuse a task number** — always use global max + 1.
 4. **NEVER skip user confirmation** — always present the draft and wait for approval.
-5. **Italian content in task blocks** — same conventions as existing tasks.
+5. **Language rules:** GitHub-only mode uses English for all content. Local/dual sync mode uses Italian for task block content.
 6. **Accurate file paths** — verify with `Glob` before listing.
-7. **Follow the exact task formatting** — same indentation, dash count (78), field order as existing tasks.
+7. **Follow the exact task formatting** — in local/dual mode use same indentation, dash count (78), field order as existing tasks.
 8. **NEVER use the `KEYS` prefix** — permanently cancelled.
-9. **Always remove the approved idea from `ideas.txt`** — an approved idea must not remain in the idea backlog.
+9. **Always remove the approved idea from its source** — in local/dual mode remove from `ideas.txt`; in GitHub-only mode close the idea issue. An approved idea must not remain in the backlog.
+10. **GitHub-only mode has no local files** — never read or write `ideas.txt`, `to-do.txt`, `progressing.txt`, or `done.txt` when in GitHub-only mode.

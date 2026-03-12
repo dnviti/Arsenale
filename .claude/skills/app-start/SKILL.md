@@ -2,7 +2,6 @@
 name: app-start
 description: Start the Arsenale development environment. Checks for running processes, starts Docker containers, runs Prisma setup, and launches the dev server with error monitoring.
 disable-model-invocation: true
-allowed-tools: Bash
 ---
 
 # Start the Application

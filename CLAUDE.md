@@ -135,9 +135,19 @@ All user-facing UI layout state **must** be persisted via the centralized `uiPre
 - Add new preference keys and their defaults to the store's type and initial state
 - Exclude transient state (dialogs, menus, loading flags) — only persist what the user would expect to survive a page reload
 
-### Task Files
+### Task & Idea Management
 
-Tasks are split across three files by status:
+Tasks and ideas are managed through one of three modes, controlled by `.claude/github-issues.json`:
+
+| `enabled` | `sync` | Mode | Data Source |
+|-----------|--------|------|-------------|
+| `true` | `false` (or absent) | **GitHub-only** | GitHub Issues only. No local files. |
+| `true` | `true` | **Dual sync** | Local files first, then GitHub Issues. |
+| `false` | — | **Local only** | Local text files only. |
+
+**GitHub-only mode (current):** Tasks are GitHub Issues with status labels (`status:todo`, `status:in-progress`, `status:done`). Ideas are GitHub Issues with the `idea` label. No local task/idea text files exist.
+
+**Local/Dual mode (when enabled):** Tasks are split across three files by status:
 
 | File | Status | Symbol |
 |------|--------|--------|
@@ -145,11 +155,7 @@ Tasks are split across three files by status:
 | `progressing.txt` | In-progress tasks | `[~]` |
 | `done.txt` | Completed tasks | `[x]` |
 
-When a task changes status, move it to the corresponding file.
-
-### Idea Files
-
-Ideas are stored separately from tasks and must be explicitly approved before entering the task pipeline:
+Ideas are stored separately:
 
 | File | Purpose |
 |------|---------|
@@ -172,29 +178,38 @@ Use `/idea-create` to add ideas, `/idea-approve` to promote an idea to a task, `
 
 ### GitHub Issues Integration
 
-When `.claude/github-issues.json` exists with `"enabled": true`, all task and idea skills automatically sync with GitHub Issues. Both text files and GitHub Issues are co-authoritative (dual sync).
+**Config file:** `.claude/github-issues.json` — controls the operating mode, target repo, and label mappings. Copy `.claude/github-issues.example.json` to get started.
 
-**Config file:** `.claude/github-issues.json` — controls whether GitHub sync is active, the target repo, and label mappings. Copy `.claude/github-issues.example.json` to get started.
+**Config parameters:**
+- `enabled` (boolean): Whether GitHub Issues integration is active
+- `sync` (boolean): Whether to maintain dual sync with local text files. When `false` (or absent), GitHub is the sole data source.
+- `repo` (string): Target GitHub repository (e.g., `dnviti/arsenale`)
+- `labels` (object): Label mappings for source, type, priority, status, and sections
 
 **Setup:**
-1. Copy `.claude/github-issues.example.json` to `.claude/github-issues.json` and set `"enabled": true`
-2. Run `bash scripts/setup-github-labels.sh` to create all required labels
-3. Ensure `gh` CLI is authenticated (`gh auth status`)
+1. Copy `.claude/github-issues.example.json` to `.claude/github-issues.json`
+2. Set `"enabled": true` and configure `"sync"` (`false` for GitHub-only, `true` for dual sync)
+3. Run `bash scripts/setup-github-labels.sh` to create all required labels
+4. Ensure `gh` CLI is authenticated (`gh auth status`)
 
-**Behavior when enabled:**
-- `/task-create` creates a GitHub Issue with task labels (`claude-code`, `task`, `priority:*`, `status:todo`, `section:*`)
+**Behavior in GitHub-only mode** (`enabled: true`, `sync: false`):
+- All task/idea data lives exclusively in GitHub Issues — no local text files
+- `/task-create` creates a GitHub Issue with labels (`claude-code`, `task`, `priority:*`, `status:todo`, `section:*`)
 - `/task-pick` updates issue status labels (todo → in-progress → done) and closes issue on completion
+- `/task-pick` selects next task by priority label: `priority:high` > `priority:medium` > `priority:low`
 - `/idea-create` creates a GitHub Issue with `idea` label
 - `/idea-approve` closes idea issue, creates task issue with cross-reference
 - `/idea-disapprove` closes idea issue with reason
 - `/idea-refactor` updates issue body when ideas are revised
 - `/git-publish` links PRs to related issues via `Refs #N`
 - `/release` enriches GitHub Releases with issue cross-references
+- All new content is written in English
 
-**Issue title format:** `[PREFIX-NNN] Task Title` or `[IDEA-NNN] Idea Title` — the bracketed code is used to look up issues via `gh issue list --search`.
-
-**Dual sync rules:**
-- Skills write to text files first, then sync to GitHub
+**Behavior in dual sync mode** (`enabled: true`, `sync: true`):
+- Skills write to local text files first, then sync to GitHub
 - If GitHub sync fails, warn but don't fail the operation
 - Text files win in case of discrepancy
 - `GitHub: #NNN` is stored in each task/idea block for fast lookup
+- Task/idea content is written in Italian (local files) with English communication
+
+**Issue title format:** `[PREFIX-NNN] Task Title` or `[IDEA-NNN] Idea Title` — the bracketed code is used to look up issues via `gh issue list --search`.

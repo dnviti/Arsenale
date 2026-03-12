@@ -2,7 +2,6 @@
 name: github-pages-updater
 description: Create or update the GitHub Pages presentation website to reflect the project's current features, improvements, and capabilities. Also manages the deployment pipeline.
 disable-model-invocation: true
-allowed-tools: Bash, Read, Grep, Glob, Edit, Write
 argument-hint: "[update|create|audit]"
 ---
 

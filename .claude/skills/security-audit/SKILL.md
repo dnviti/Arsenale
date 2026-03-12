@@ -3,7 +3,6 @@ name: security-audit
 description: Perform a security audit of the codebase and generate a report with findings and remediation steps.
 disable-model-invocation: true
 argument-hint: "[scope: auth|encryption|api|client|dependencies|config|infrastructure|code]"
-allowed-tools: Bash, Read, Grep, Glob, Write
 ---
 
 # Security Audit

@@ -1,20 +1,40 @@
 ---
 name: task-continue
-description: Resume work on an in-progress task from progressing.txt. Assesses current implementation state and presents what remains.
+description: Resume work on an in-progress task from progressing.txt or GitHub Issues. Assesses current implementation state and presents what remains.
 disable-model-invocation: true
-allowed-tools: Bash, Read, Grep, Glob, AskUserQuestion
 argument-hint: "[TASK-CODE]"
 ---
 
 # Continue an In-Progress Task
 
-You are a task manager for the Arsenale project. Your job is to help the user resume work on a task that is already in-progress in `progressing.txt`.
+You are a task manager for the Arsenale project. Your job is to help the user resume work on a task that is already in-progress.
 
 This skill does NOT close or commit tasks — use `/task-pick` for that.
 
+## Mode Detection
+
+Determine the operating mode first:
+
+```bash
+GH_ENABLED="$(jq -r '.enabled // false' .claude/github-issues.json 2>/dev/null)"
+GH_SYNC="$(jq -r '.sync // false' .claude/github-issues.json 2>/dev/null)"
+GH_REPO="$(jq -r '.repo' .claude/github-issues.json 2>/dev/null)"
+```
+
+- **GitHub-only mode** (`GH_ENABLED=true` AND `GH_SYNC != true`): Read task data from GitHub Issues. No local file operations.
+- **Dual sync / Local only mode**: Read task data from local files (`progressing.txt`).
+
+---
+
 ## Current Task State
 
-### In-progress tasks (from progressing.txt):
+### GitHub-only mode — In-progress tasks:
+
+```bash
+gh issue list --repo "$GH_REPO" --label "task,status:in-progress" --state open --json number,title --jq '.[] | "\(.title)"' 2>/dev/null
+```
+
+### Local/Dual mode — In-progress tasks (from progressing.txt):
 !`grep '^\[~\]' progressing.txt 2>/dev/null | tr -d '\r'`
 
 ## Instructions
@@ -25,15 +45,18 @@ The user wants to continue working on a task. The argument provided is: **$ARGUM
 
 ### Step 1: Select the Task
 
-Read `progressing.txt` and identify all tasks marked `[~]`.
+**In GitHub-only mode:**
+- Query in-progress tasks: `gh issue list --repo "$GH_REPO" --label "task,status:in-progress" --state open --json number,title`
+- If a task code was provided, search: `gh issue list --repo "$GH_REPO" --search "[TASK-CODE] in:title" --label "task,status:in-progress" --json number,title`
 
-- **If no `[~]` tasks exist:** Inform the user there are no in-progress tasks and suggest using `/task-pick` to pick one up. Stop here.
+**In local/dual mode:**
+- Read `progressing.txt` and identify all tasks marked `[~]`.
 
-- **If a task code was provided as argument:** Find that specific task in `progressing.txt`. If not found, inform the user and list the available in-progress tasks.
-
-- **If no argument was provided and exactly one `[~]` task exists:** Use that task automatically.
-
-- **If no argument was provided and multiple `[~]` tasks exist:** Use `AskUserQuestion` to let the user choose which task to continue.
+**Common logic:**
+- **If no in-progress tasks exist:** Inform the user there are no in-progress tasks and suggest using `/task-pick` to pick one up. Stop here.
+- **If a task code was provided as argument:** Find that specific task. If not found, inform the user and list the available in-progress tasks.
+- **If no argument was provided and exactly one in-progress task exists:** Use that task automatically.
+- **If no argument was provided and multiple in-progress tasks exist:** Use `AskUserQuestion` to let the user choose which task to continue.
 
 ### Step 1.5: Switch to the task branch
 
@@ -48,29 +71,34 @@ git branch --list "task/<task-code-lowercase>"
 
 ### Step 2: Read the Full Task Block
 
-Read the complete task block from `progressing.txt` for the selected task — everything between its `------` separator lines.
+**In GitHub-only mode:**
+- Find the issue number: `gh issue list --repo "$GH_REPO" --search "[TASK-CODE] in:title" --label task --json number --jq '.[0].number'`
+- Read the full issue body: `gh issue view $ISSUE_NUM --repo "$GH_REPO" --json body --jq '.body'`
+- Parse the issue body to extract:
+  - **Description** section
+  - **Technical Details** section
+  - **Files Involved** section (files to CREATE and MODIFY)
 
-Extract these key sections:
-- **DESCRIZIONE** — what the task is about
-- **DETTAGLI TECNICI** — the technical implementation details
-- **FILE COINVOLTI** — files to CREARE (create) and MODIFICARE (modify)
+**In local/dual mode:**
+- Read the complete task block from `progressing.txt` for the selected task — everything between its `------` separator lines.
+- Extract: **DESCRIZIONE**, **DETTAGLI TECNICI**, **FILE COINVOLTI** (files to CREARE and MODIFICARE)
 
 ### Step 3: Assess Current Implementation State
 
-For each file in the FILE COINVOLTI section, check what has already been done:
+For each file in the FILES INVOLVED section, check what has already been done:
 
-**For files marked CREARE (create):**
+**For files marked CREATE:**
 1. Use `Glob` to check if the file exists at the specified path
 2. If not found at the exact path, search for the filename in nearby directories
-3. If found, read it and check for key exports, components, or functions described in DETTAGLI TECNICI
+3. If found, read it and check for key exports, components, or functions described in Technical Details
 4. Note whether the file is: **missing**, **stub/empty**, or **implemented** (with details)
 
-**For files marked MODIFICARE (modify):**
+**For files marked MODIFY:**
 1. Read the file to understand its current state
-2. Use `Grep` to check for key changes described in DETTAGLI TECNICI (new imports, function names, route paths, component names, API endpoints, store fields, UI elements)
+2. Use `Grep` to check for key changes described in Technical Details (new imports, function names, route paths, component names, API endpoints, store fields, UI elements)
 3. Note which changes are: **already applied** vs. **still needed**
 
-**Cross-check against DETTAGLI TECNICI:**
+**Cross-check against Technical Details:**
 For each numbered technical requirement, check whether code artifacts prove it was implemented.
 
 ### Step 4: Explore Related Code

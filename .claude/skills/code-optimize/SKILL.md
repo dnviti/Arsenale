@@ -2,7 +2,6 @@
 name: code-optimize
 description: Analyze and optimize code for duplication, performance, security, and convention adherence.
 disable-model-invocation: true
-allowed-tools: Bash, Read, Grep, Glob, Edit, Write, TaskOutput, WebSearch
 argument-hint: "[target path or 'all']"
 ---
 

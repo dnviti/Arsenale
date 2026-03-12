@@ -1,5 +1,6 @@
 {
   "enabled": false,
+  "sync": false,
   "repo": "owner/repo",
   "labels": {
     "source": "claude-code",

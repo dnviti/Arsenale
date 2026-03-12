@@ -2,7 +2,6 @@
 name: project-initialization
 description: Initialize a new project from scratch. Guides through choosing a tech stack, scaffolds the project, and configures the skills ecosystem.
 disable-model-invocation: true
-allowed-tools: Bash, Read, Write, Edit, Grep, Glob, AskUserQuestion, WebSearch, WebFetch
 argument-hint: "[project purpose or stack]"
 ---
 

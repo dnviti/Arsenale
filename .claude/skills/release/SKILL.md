@@ -2,7 +2,6 @@
 name: release
 description: Manage semantic versioning, changelog generation, and git tagging.
 disable-model-invocation: true
-allowed-tools: Bash, Read, Grep, Glob, Edit, Write, AskUserQuestion
 argument-hint: "[major|minor|patch|stable] or empty for auto-detection"
 ---
 
@@ -97,7 +96,10 @@ Also check for `BREAKING CHANGE:` in commit bodies:
 git log <LAST_TAG>..HEAD --no-merges --format="%B" | grep -c "BREAKING CHANGE"
 ```
 
-**Cross-reference with done.txt:** For any task codes found in commits, read `done.txt` and extract the task title for richer changelog entries.
+**Cross-reference task titles:** For any task codes found in commits, look up the task title for richer changelog entries.
+
+- **In GitHub-only mode** (`GH_ENABLED=true` AND `GH_SYNC != true` — check `.claude/github-issues.json`): Use `gh issue list --repo "$GH_REPO" --search "[$CODE] in:title" --label task --json title --jq '.[0].title'` to find task titles.
+- **In local/dual mode**: Read `done.txt` and extract the task title.
 
 **If zero meaningful changes are found** (only `chore: update` type commits with no features or fixes):
 

@@ -2,7 +2,6 @@
 name: app-restart
 description: Restart the Arsenale development environment. Stops existing processes, then starts fresh with Docker + Prisma setup and dev server, with error monitoring.
 disable-model-invocation: true
-allowed-tools: Bash
 ---
 
 # Restart the Application
