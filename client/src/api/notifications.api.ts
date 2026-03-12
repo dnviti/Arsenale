@@ -3,7 +3,13 @@ import api from './client';
 export type NotificationType =
   | 'CONNECTION_SHARED'
   | 'SHARE_PERMISSION_UPDATED'
-  | 'SHARE_REVOKED';
+  | 'SHARE_REVOKED'
+  | 'SECRET_SHARED'
+  | 'SECRET_SHARE_REVOKED'
+  | 'SECRET_EXPIRING'
+  | 'SECRET_EXPIRED'
+  | 'TENANT_INVITATION'
+  | 'RECORDING_READY';
 
 export interface NotificationEntry {
   id: string;
