@@ -210,7 +210,154 @@ export async function switchTenant(userId: string, targetTenantId: string) {
   return issueTokens(user);
 }
 
+async function tryLdapLogin(
+  email: string,
+  password: string,
+  ipAddress?: string | string[],
+) {
+  const ldapService = await import('./ldap.service');
+  const ldapEntry = await ldapService.authenticateUser(email, password);
+  if (!ldapEntry) return null;
+
+  // LDAP auth succeeded — find or create user
+  let user = await prisma.user.findUnique({
+    where: { email: ldapEntry.email.toLowerCase() },
+    select: {
+      id: true, email: true, username: true, avatarData: true, enabled: true,
+      vaultSalt: true, encryptedVaultKey: true, vaultKeyIV: true, vaultKeyTag: true,
+      vaultSetupComplete: true,
+      totpEnabled: true, smsMfaEnabled: true, webauthnEnabled: true,
+      tenantMemberships: {
+        where: { isActive: true },
+        take: 1,
+        include: { tenant: { select: { mfaRequired: true } } },
+      },
+    },
+  });
+
+  if (!user) {
+    if (!config.ldap.autoProvision) return null;
+
+    // Auto-provision new user from LDAP
+    const newUser = await prisma.user.create({
+      data: {
+        email: ldapEntry.email.toLowerCase(),
+        username: ldapEntry.displayName || ldapEntry.uid,
+        vaultSetupComplete: false,
+        emailVerified: true,
+      },
+      select: {
+        id: true, email: true, username: true, avatarData: true, enabled: true,
+        vaultSalt: true, encryptedVaultKey: true, vaultKeyIV: true, vaultKeyTag: true,
+        vaultSetupComplete: true,
+        totpEnabled: true, smsMfaEnabled: true, webauthnEnabled: true,
+        tenantMemberships: {
+          where: { isActive: true },
+          take: 1,
+          include: { tenant: { select: { mfaRequired: true } } },
+        },
+      },
+    });
+
+    // Link LDAP account
+    await prisma.oAuthAccount.create({
+      data: {
+        userId: newUser.id,
+        provider: 'LDAP',
+        providerUserId: ldapEntry.providerUserId,
+        providerEmail: ldapEntry.email.toLowerCase(),
+        samlAttributes: {
+          dn: ldapEntry.dn,
+          uid: ldapEntry.uid,
+          groups: ldapEntry.groups,
+        },
+      },
+    });
+
+    // Auto-assign to default tenant if configured
+    if (config.ldap.defaultTenantId) {
+      await prisma.tenantMember.create({
+        data: {
+          tenantId: config.ldap.defaultTenantId,
+          userId: newUser.id,
+          role: 'MEMBER',
+        },
+      }).catch(() => { /* already a member */ });
+    }
+
+    auditService.log({
+      userId: newUser.id,
+      action: 'LDAP_USER_CREATED',
+      details: { email: ldapEntry.email, uid: ldapEntry.uid },
+      ipAddress,
+    });
+
+    user = newUser;
+  }
+
+  if (!user.enabled) {
+    throw new AppError('Your account has been disabled. Contact your administrator.', 403);
+  }
+
+  // Unlock vault if set up (LDAP users may or may not have vault)
+  if (user.vaultSalt && user.encryptedVaultKey && user.vaultKeyIV && user.vaultKeyTag) {
+    const derivedKey = await deriveKeyFromPassword(password, user.vaultSalt);
+    const mk = decryptMasterKey(
+      { ciphertext: user.encryptedVaultKey, iv: user.vaultKeyIV, tag: user.vaultKeyTag },
+      derivedKey,
+    );
+    storeVaultSession(user.id, mk);
+    storeVaultRecovery(user.id, mk);
+    mk.fill(0);
+    derivedKey.fill(0);
+  }
+
+  auditService.log({ userId: user.id, action: 'LDAP_LOGIN', ipAddress });
+  log.verbose(`LDAP login successful for user ${user.id} (${email})`);
+
+  // MFA checks
+  const mfaMethods: ('totp' | 'sms' | 'webauthn')[] = [];
+  if (user.totpEnabled) mfaMethods.push('totp');
+  if (user.smsMfaEnabled) mfaMethods.push('sms');
+  if (user.webauthnEnabled) mfaMethods.push('webauthn');
+
+  if (mfaMethods.length > 0) {
+    const tempToken = jwt.sign(
+      { userId: user.id, purpose: 'mfa-verify' },
+      config.jwtSecret,
+      { expiresIn: '5m' } as jwt.SignOptions,
+    );
+    return {
+      requiresMFA: true as const,
+      requiresTOTP: mfaMethods.includes('totp') as true,
+      methods: mfaMethods,
+      tempToken,
+    };
+  }
+
+  // Tenant mandatory MFA check
+  const activeTenantMembership = user.tenantMemberships[0];
+  if (activeTenantMembership?.tenant.mfaRequired && !user.totpEnabled && !user.smsMfaEnabled && !user.webauthnEnabled) {
+    const setupToken = jwt.sign(
+      { userId: user.id, purpose: 'mfa-setup' },
+      config.jwtSecret,
+      { expiresIn: '15m' } as jwt.SignOptions,
+    );
+    return { mfaSetupRequired: true as const, tempToken: setupToken };
+  }
+
+  const tokens = await issueTokens(user);
+  return { requiresMFA: false as const, ...tokens };
+}
+
 export async function login(email: string, password: string, ipAddress?: string | string[]) {
+  // Try LDAP first if enabled
+  const ldapService = await import('./ldap.service');
+  if (ldapService.isEnabled()) {
+    const ldapResult = await tryLdapLogin(email, password, ipAddress);
+    if (ldapResult) return ldapResult;
+  }
+
   const user = await prisma.user.findUnique({
     where: { email },
     include: {
@@ -221,6 +368,7 @@ export async function login(email: string, password: string, ipAddress?: string 
       },
     },
   });
+
   if (!user) {
     auditService.log({
       action: 'LOGIN_FAILURE',

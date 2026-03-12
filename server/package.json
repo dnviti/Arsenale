@@ -41,6 +41,7 @@
     "guacamole-lite": "^1.2.0",
     "helmet": "^8.1.0",
     "jsonwebtoken": "^9.0.3",
+    "ldapts": "^8.1.7",
     "mailgun.js": "^12.7.1",
     "maxmind": "^5.0.5",
     "multer": "^2.1.1",

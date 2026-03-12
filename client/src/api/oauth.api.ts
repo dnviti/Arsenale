@@ -9,6 +9,8 @@ export interface OAuthProviders {
   oidcProviderName?: string;
   saml?: boolean;
   samlProviderName?: string;
+  ldap?: boolean;
+  ldapProviderName?: string;
 }
 
 export interface LinkedAccount {

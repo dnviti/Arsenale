@@ -7,6 +7,7 @@ import * as gatewayService from './gateway.service';
 import * as auditService from './audit.service';
 
 let rotationTask: ScheduledTask | null = null;
+let ldapSyncTask: ScheduledTask | null = null;
 
 export function startKeyRotationJob(): void {
   const cronExpr = config.keyRotationCron;
@@ -133,10 +134,41 @@ export async function processKeyRotations(): Promise<void> {
   logger.info('[scheduler] Key rotation check complete.');
 }
 
+export function startLdapSyncJob(): void {
+  if (!config.ldap.syncEnabled || !config.ldap.enabled) return;
+
+  const cronExpr = config.ldap.syncCron;
+  if (!cron.validate(cronExpr)) {
+    logger.error(
+      `[scheduler] Invalid LDAP_SYNC_CRON expression: "${cronExpr}". ` +
+        'LDAP sync job will NOT run.',
+    );
+    return;
+  }
+
+  ldapSyncTask = cron.schedule(
+    cronExpr,
+    () => {
+      import('./ldap.service').then((ldap) =>
+        ldap.syncUsers().catch((err) => {
+          logger.error('[scheduler] Unhandled error in LDAP syncUsers:', err);
+        }),
+      );
+    },
+    { timezone: 'UTC' },
+  );
+
+  logger.info(`[scheduler] LDAP sync job scheduled: "${cronExpr}" (UTC)`);
+}
+
 export function stopAllJobs(): void {
   if (rotationTask) {
     rotationTask.stop();
     rotationTask = null;
-    logger.info('[scheduler] All scheduled jobs stopped.');
   }
+  if (ldapSyncTask) {
+    ldapSyncTask.stop();
+    ldapSyncTask = null;
+  }
+  logger.info('[scheduler] All scheduled jobs stopped.');
 }

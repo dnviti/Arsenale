@@ -31,6 +31,7 @@ import GatewaySection from '../Settings/GatewaySection';
 import EmailProviderSection from '../Settings/EmailProviderSection';
 import SelfSignupSection from '../Settings/SelfSignupSection';
 import TenantAuditLogSection from '../Settings/TenantAuditLogSection';
+import LdapConfigSection from '../Settings/LdapConfigSection';
 import { SlideUp } from '../common/SlideUp';
 
 interface TabDef {
@@ -203,6 +204,7 @@ export default function SettingsDialog({ open, onClose, initialTab, linkedProvid
             <Stack spacing={3}>
               <SelfSignupSection />
               <EmailProviderSection />
+              <LdapConfigSection />
               <TenantAuditLogSection onViewUserProfile={onViewUserProfile} onGeoIpClick={onGeoIpClick} />
             </Stack>
           )}

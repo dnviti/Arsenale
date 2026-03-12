@@ -129,6 +129,8 @@ export function getAvailableProviders(_req: Request, res: Response) {
     oidcProviderName: config.oauth.oidc.providerName,
     saml: config.oauth.saml.enabled,
     samlProviderName: config.oauth.saml.providerName,
+    ldap: config.ldap.enabled && !!config.ldap.serverUrl,
+    ldapProviderName: config.ldap.providerName,
   });
 }
 
