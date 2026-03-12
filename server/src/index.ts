@@ -9,6 +9,7 @@ import { setupSocketIO } from './socket';
 import { logger, toGuacamoleLogLevel } from './utils/logger';
 import prisma from './lib/prisma';
 import { startKeyRotationJob, startLdapSyncJob, stopAllJobs } from './services/scheduler.service';
+import { startAllSyncJobs, stopAllSyncJobs } from './services/syncScheduler.service';
 import { startAllMonitors, stopAllMonitors } from './services/gatewayMonitor.service';
 import { cleanupExpiredShares } from './services/externalShare.service';
 import { cleanupExpiredTokens } from './services/auth.service';
@@ -99,6 +100,9 @@ async function main() {
   // Start scheduled jobs
   startKeyRotationJob();
   startLdapSyncJob();
+  startAllSyncJobs().catch((err) => {
+    logger.error('Failed to start sync jobs:', err);
+  });
 
   // Start gateway health monitors
   startAllMonitors();
@@ -342,6 +346,7 @@ async function main() {
     logger.info('Shutting down...');
     stopAllMonitors();
     stopAllJobs();
+    stopAllSyncJobs();
 
     // Close all active sessions gracefully
     try {
