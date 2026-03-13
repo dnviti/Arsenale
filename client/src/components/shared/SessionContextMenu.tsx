@@ -98,28 +98,35 @@ export default function SessionContextMenu({
         {...(container ? { container, disablePortal: true } : {})}
       >
         {/* Clipboard operations */}
-        <MenuItem
-          onClick={() => handleAction(onCopy)}
-          disabled={!!dlpPolicy?.disableCopy}
-        >
-          <ListItemIcon><CopyIcon fontSize="small" /></ListItemIcon>
-          <ListItemText>Copy</ListItemText>
-          <Typography variant="body2" sx={{ color: 'text.secondary', ml: 2 }}>
-            {protocol === 'SSH' ? 'Ctrl+Shift+C' : ''}
-          </Typography>
-        </MenuItem>
-        <MenuItem
-          onClick={() => handleAction(onPaste)}
-          disabled={!!dlpPolicy?.disablePaste}
-        >
-          <ListItemIcon><PasteIcon fontSize="small" /></ListItemIcon>
-          <ListItemText>Paste</ListItemText>
-          <Typography variant="body2" sx={{ color: 'text.secondary', ml: 2 }}>
-            {protocol === 'SSH' ? 'Ctrl+Shift+V' : ''}
-          </Typography>
-        </MenuItem>
-
-        <Divider />
+        {onCopy !== undefined && (
+          <MenuItem
+            onClick={() => handleAction(onCopy)}
+            disabled={!!dlpPolicy?.disableCopy || !navigator.clipboard?.writeText}
+          >
+            <ListItemIcon><CopyIcon fontSize="small" /></ListItemIcon>
+            <ListItemText>Copy</ListItemText>
+            {protocol === 'SSH' && (
+              <Typography variant="body2" sx={{ color: 'text.secondary', ml: 2 }}>
+                Ctrl+Shift+C
+              </Typography>
+            )}
+          </MenuItem>
+        )}
+        {onPaste !== undefined && (
+          <MenuItem
+            onClick={() => handleAction(onPaste)}
+            disabled={!!dlpPolicy?.disablePaste || !navigator.clipboard?.readText}
+          >
+            <ListItemIcon><PasteIcon fontSize="small" /></ListItemIcon>
+            <ListItemText>Paste</ListItemText>
+            {protocol === 'SSH' && (
+              <Typography variant="body2" sx={{ color: 'text.secondary', ml: 2 }}>
+                Ctrl+Shift+V
+              </Typography>
+            )}
+          </MenuItem>
+        )}
+        {(onCopy !== undefined || onPaste !== undefined) && <Divider />}
 
         {/* Special keys — RDP/VNC only */}
         {isGuac && onSendKeys && (

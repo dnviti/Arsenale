@@ -1,4 +1,5 @@
 import { useEffect, useRef, useState, useMemo, useCallback } from 'react';
+import { useFullscreen } from '../../hooks/useFullscreen';
 import { Box, CircularProgress, Typography, Alert } from '@mui/material';
 import { FolderOpen as FolderOpenIcon } from '@mui/icons-material';
 import { Terminal } from '@xterm/xterm';
@@ -40,7 +41,6 @@ export default function SshTerminal({ connectionId, tabId, credentials, sshTermi
   const dlpPolicyRef = useRef<ResolvedDlpPolicy | null>(null);
   useEffect(() => { dlpPolicyRef.current = dlpPolicy; }, [dlpPolicy]);
   const [contextMenu, setContextMenu] = useState<{ top: number; left: number } | null>(null);
-  const [isFullscreen, setIsFullscreen] = useState(false);
   const accessToken = useAuthStore((s) => s.accessToken);
   const userDefaults = useTerminalSettingsStore((s) => s.userDefaults);
   const webUiMode = useThemeStore((s) => s.mode);
@@ -268,20 +268,7 @@ export default function SshTerminal({ connectionId, tabId, credentials, sshTermi
     connectSession,
   );
 
-  // Track fullscreen state
-  useEffect(() => {
-    const onFsChange = () => setIsFullscreen(!!document.fullscreenElement);
-    document.addEventListener('fullscreenchange', onFsChange);
-    return () => document.removeEventListener('fullscreenchange', onFsChange);
-  }, []);
-
-  const toggleFullscreen = useCallback(() => {
-    if (document.fullscreenElement) {
-      document.exitFullscreen().catch(() => {});
-    } else {
-      containerRef.current?.requestFullscreen().catch(() => {});
-    }
-  }, []);
+  const [isFullscreen, toggleFullscreen] = useFullscreen(containerRef);
 
   // Context menu action handlers
   const handleCopy = useCallback(() => {
