@@ -1,6 +1,10 @@
 import { useEffect, useRef, useState, useMemo, useCallback } from 'react';
 import { Box, CircularProgress, Typography, Alert } from '@mui/material';
-import { FolderOpen as FolderOpenIcon } from '@mui/icons-material';
+import {
+  FolderOpen as FolderOpenIcon,
+  Fullscreen as FullscreenIcon,
+  FullscreenExit as FullscreenExitIcon,
+} from '@mui/icons-material';
 import { Terminal } from '@xterm/xterm';
 import { FitAddon } from '@xterm/addon-fit';
 import { io, Socket } from 'socket.io-client';
@@ -15,6 +19,7 @@ import FloatingToolbar, { ToolbarAction } from '../shared/FloatingToolbar';
 import ReconnectOverlay from '../shared/ReconnectOverlay';
 import SftpBrowser from '../SSH/SftpBrowser';
 import { useAutoReconnect } from '../../hooks/useAutoReconnect';
+import { useKeyboardCapture } from '../../hooks/useKeyboardCapture';
 import { isSshPermanentError, isTransientDisconnect } from '../../utils/reconnectClassifier';
 import type { ResolvedDlpPolicy } from '../../api/connections.api';
 import '@xterm/xterm/css/xterm.css';
@@ -110,6 +115,25 @@ export default function SshTerminal({ connectionId, tabId: _tabId, credentials, 
 
   const sftpHiddenByDlp = dlpPolicy?.disableDownload && dlpPolicy?.disableUpload;
 
+  // Keyboard capture and fullscreen
+  const { isFullscreen, toggleFullscreen } = useKeyboardCapture({
+    focusRef: termRef,
+    fullscreenRef: containerRef,
+    isActive: true,
+    onFullscreenChange: () => {
+      setTimeout(() => {
+        fitAddonRef.current?.fit();
+        if (socketRef.current?.connected && terminalRef.current) {
+          socketRef.current.emit('resize', {
+            cols: terminalRef.current.cols,
+            rows: terminalRef.current.rows,
+          });
+        }
+      }, 100);
+    },
+    suppressBrowserKeys: false,
+  });
+
   const toolbarActions = useMemo<ToolbarAction[]>(() => {
     const actions: ToolbarAction[] = [];
     if (!sftpHiddenByDlp) {
@@ -121,8 +145,15 @@ export default function SshTerminal({ connectionId, tabId: _tabId, credentials, 
         active: sftpOpen,
       });
     }
+    actions.push({
+      id: 'fullscreen',
+      icon: isFullscreen ? <FullscreenExitIcon fontSize="small" /> : <FullscreenIcon fontSize="small" />,
+      tooltip: isFullscreen ? 'Exit Fullscreen' : 'Fullscreen',
+      onClick: toggleFullscreen,
+      active: isFullscreen,
+    });
     return actions;
-  }, [sftpOpen, togglePref, sftpHiddenByDlp]);
+  }, [sftpOpen, togglePref, sftpHiddenByDlp, isFullscreen, toggleFullscreen]);
 
   // Refit terminal when SFTP drawer opens/closes
   useEffect(() => {
