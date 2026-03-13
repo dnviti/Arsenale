@@ -65,9 +65,39 @@ export type UpdateMembershipExpiryInput = z.infer<typeof updateMembershipExpiryS
 // IPv4 CIDR: e.g. 10.0.0.0/8  |  IPv6 CIDR: e.g. 2001:db8::/32  |  single IPs without prefix
 // eslint-disable-next-line security/detect-unsafe-regex
 const cidrRegex = /^(?:(?:\d{1,3}\.){3}\d{1,3}(?:\/\d{1,2})?|[0-9a-fA-F:]+(?:\/\d{1,3})?)$/;
+
+/** Semantic validation: check octet ranges (0-255) and prefix lengths (IPv4: 0-32, IPv6: 0-128). */
+function isSemanticallyCidr(entry: string): boolean {
+  const slash = entry.lastIndexOf('/');
+  const ipPart = slash === -1 ? entry : entry.slice(0, slash);
+  const prefixStr = slash === -1 ? null : entry.slice(slash + 1);
+
+  if (ipPart.includes(':')) {
+    // IPv6
+    if (prefixStr !== null) {
+      const p = parseInt(prefixStr, 10);
+      if (isNaN(p) || p < 0 || p > 128) return false;
+    }
+    return true;
+  }
+  // IPv4
+  const parts = ipPart.split('.');
+  if (parts.length !== 4) return false;
+  if (parts.some((o) => { const n = +o; return isNaN(n) || n < 0 || n > 255; })) return false;
+  if (prefixStr !== null) {
+    const p = parseInt(prefixStr, 10);
+    if (isNaN(p) || p < 0 || p > 32) return false;
+  }
+  return true;
+}
+
 export const ipAllowlistSchema = z.object({
   enabled: z.boolean(),
   mode: z.enum(['flag', 'block']),
-  entries: z.array(z.string().regex(cidrRegex, 'Invalid IP/CIDR format')).max(200),
+  entries: z.array(
+    z.string()
+      .regex(cidrRegex, 'Invalid IP/CIDR format')
+      .refine(isSemanticallyCidr, 'Invalid IP address or prefix length'),
+  ).max(200),
 });
 export type IpAllowlistInput = z.infer<typeof ipAllowlistSchema>;
