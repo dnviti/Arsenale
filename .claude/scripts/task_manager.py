@@ -622,12 +622,38 @@ def cmd_prefixes(args):
 def cmd_sections(args):
     root = find_project_root()
     fp = root / args.file
-    if not fp.exists():
-        print(json.dumps({"error": f"File {args.file} not found"}))
-        sys.exit(1)
 
-    sections = parse_sections(fp)
-    print(json.dumps(sections, indent=2))
+    # If local file exists, parse sections from it (local/dual modes)
+    if fp.exists():
+        sections = parse_sections(fp)
+        print(json.dumps(sections, indent=2))
+        return
+
+    # File doesn't exist — try loading sections from platform config
+    for candidate in ["issues-tracker.json", "github-issues.json"]:
+        cfg_path = root / ".claude" / candidate
+        if cfg_path.exists():
+            with open(cfg_path, "r", encoding="utf-8") as f:
+                data = json.load(f)
+            cfg_sections = data.get("labels", {}).get("sections", {})
+            if cfg_sections:
+                sections = []
+                for letter in sorted(cfg_sections.keys()):
+                    label = cfg_sections[letter]
+                    # "section:multi-tenant" → "Multi Tenant"
+                    name = label.replace("section:", "").replace("-", " ").title()
+                    sections.append({
+                        "letter": letter,
+                        "name": name,
+                        "line_number": None,
+                    })
+                print(json.dumps(sections, indent=2))
+                return
+            break
+
+    # No file and no config sections — report error
+    print(json.dumps({"error": f"File {args.file} not found"}))
+    sys.exit(1)
 
 
 # ── Subcommand: duplicates ──────────────────────────────────────────────────
