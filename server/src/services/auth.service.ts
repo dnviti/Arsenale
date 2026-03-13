@@ -690,10 +690,10 @@ export async function refreshAccessToken(refreshToken: string, binding?: { ip: s
     throw new Error('Invalid or expired refresh token');
   }
 
-  // Token binding verification: reject if IP/UA changed
-  if (config.tokenBindingEnabled && stored.ipUaHash && binding) {
-    const currentHash = computeBindingHash(binding.ip, binding.userAgent);
-    if (currentHash !== stored.ipUaHash) {
+  // Token binding verification: reject if IP/UA changed or binding info is missing
+  if (config.tokenBindingEnabled && stored.ipUaHash) {
+    const currentHash = binding ? computeBindingHash(binding.ip, binding.userAgent) : null;
+    if (!currentHash || currentHash !== stored.ipUaHash) {
       // Revoke entire token family — likely session hijacking
       await prisma.refreshToken.deleteMany({
         where: { tokenFamily: stored.tokenFamily },
@@ -701,10 +701,12 @@ export async function refreshAccessToken(refreshToken: string, binding?: { ip: s
       auditService.log({
         userId: stored.userId,
         action: 'TOKEN_HIJACK_ATTEMPT',
-        ipAddress: binding.ip,
+        ipAddress: binding?.ip ?? 'unknown',
         details: {
           tokenFamily: stored.tokenFamily,
-          reason: 'Refresh token presented from different IP/User-Agent',
+          reason: binding
+            ? 'Refresh token presented from different IP/User-Agent'
+            : 'Refresh token presented without binding info',
         },
       });
       log.warn(

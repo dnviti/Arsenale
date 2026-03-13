@@ -26,7 +26,7 @@ export function authenticate(
     if (config.tokenBindingEnabled && payload.ipUaHash) {
       const currentHash = computeBindingHash(
         getClientIp(req),
-        req.headers['user-agent'] ?? '',
+        req.get('user-agent') ?? '',
       );
       if (currentHash !== payload.ipUaHash) {
         auditService.log({

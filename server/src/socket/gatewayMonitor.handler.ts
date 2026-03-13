@@ -3,7 +3,8 @@ import { AuthPayload } from '../types';
 import { verifyJwt } from '../utils/jwt';
 import { config } from '../config';
 import { getSocketClientIp } from '../utils/ip';
-import { computeBindingHash } from '../utils/tokenBinding';
+import { computeBindingHash, getSocketUserAgent } from '../utils/tokenBinding';
+import * as auditService from '../services/audit.service';
 import {
   setHealthEmitter, GatewayHealthEvent,
   setInstancesEmitter, InstancesUpdatedEvent,
@@ -22,11 +23,22 @@ export function setupGatewayMonitorHandler(io: Server) {
       const payload = verifyJwt<AuthPayload>(token);
 
       if (config.tokenBindingEnabled && payload.ipUaHash) {
+        const socketUserAgent = getSocketUserAgent(socket);
         const currentHash = computeBindingHash(
           getSocketClientIp(socket),
-          (socket.handshake.headers['user-agent'] as string) ?? '',
+          socketUserAgent,
         );
         if (currentHash !== payload.ipUaHash) {
+          void auditService.log({
+            userId: payload.userId,
+            action: 'TOKEN_HIJACK_ATTEMPT',
+            ipAddress: getSocketClientIp(socket),
+            details: {
+              namespace: '/gateway-monitor',
+              userAgent: socketUserAgent,
+              reason: 'Socket.IO token binding mismatch on /gateway-monitor',
+            },
+          });
           return next(new Error('Token binding mismatch'));
         }
       }
