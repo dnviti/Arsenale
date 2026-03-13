@@ -1,10 +1,5 @@
-import { useEffect, useRef, useState, useMemo, useCallback } from 'react';
+import { useEffect, useRef, useState, useCallback } from 'react';
 import { Box, CircularProgress, Typography, Alert } from '@mui/material';
-import {
-  FolderOpen as FolderOpenIcon,
-  Fullscreen as FullscreenIcon,
-  FullscreenExit as FullscreenExitIcon,
-} from '@mui/icons-material';
 import * as Guacamole from '@glokon/guacamole-common-js';
 import { io } from 'socket.io-client';
 import api from '../../api/client';
@@ -12,11 +7,12 @@ import { useAuthStore } from '../../store/authStore';
 import type { CredentialOverride } from '../../store/tabsStore';
 import type { ResolvedDlpPolicy } from '../../api/connections.api';
 import FileBrowser from './FileBrowser';
-import FloatingToolbar, { ToolbarAction } from '../shared/FloatingToolbar';
+import DockedToolbar from '../shared/DockedToolbar';
 import ReconnectOverlay from '../shared/ReconnectOverlay';
 import { extractApiError } from '../../utils/apiError';
 import { useAutoReconnect } from '../../hooks/useAutoReconnect';
 import { useKeyboardCapture } from '../../hooks/useKeyboardCapture';
+import { useGuacToolbarActions } from '../../hooks/useGuacToolbarActions';
 import { isGuacPermanentError } from '../../utils/reconnectClassifier';
 
 interface RdpViewerProps {
@@ -27,7 +23,7 @@ interface RdpViewerProps {
   credentials?: CredentialOverride;
 }
 
-export default function RdpViewer({ connectionId, tabId: _tabId, isActive = true, enableDrive = false, credentials }: RdpViewerProps) {
+export default function RdpViewer({ connectionId, tabId, isActive = true, enableDrive = false, credentials }: RdpViewerProps) {
   const displayRef = useRef<HTMLDivElement>(null);
   const clientRef = useRef<Guacamole.Client | null>(null);
   const activeRef = useRef(isActive);
@@ -241,6 +237,7 @@ export default function RdpViewer({ connectionId, tabId: _tabId, isActive = true
       let data = '';
       reader.ontext = (text: string) => { data += text; };
       reader.onend = () => {
+        onRemoteClipboard(data);
         if (dlpPolicyRef.current?.disableCopy) return;
         if (data && navigator.clipboard?.writeText) {
           navigator.clipboard.writeText(data).catch((err) => {
@@ -287,7 +284,7 @@ export default function RdpViewer({ connectionId, tabId: _tabId, isActive = true
   // Firefox 125+ shows a native "Paste" popup every time navigator.clipboard.readText()
   // is called, so we skip automatic clipboard sync on Firefox to avoid it.
   // See: https://github.com/Ylianst/MeshCentral/issues/6571
-  const isFirefox = useMemo(() => /firefox/i.test(navigator.userAgent), []);
+  const isFirefox = /firefox/i.test(navigator.userAgent);
   const syncClipboardToRemote = useCallback(() => {
     if (isFirefox) return;
     if (dlpPolicyRef.current?.disablePaste) return;
@@ -316,28 +313,18 @@ export default function RdpViewer({ connectionId, tabId: _tabId, isActive = true
     suppressBrowserKeys: true,
   });
 
-  // Build toolbar actions list — extensible for future tools
-  const driveHiddenByDlp = dlpPolicy?.disableDownload && dlpPolicy?.disableUpload;
-  const toolbarActions = useMemo<ToolbarAction[]>(() => {
-    const actions: ToolbarAction[] = [];
-    if (enableDrive && !driveHiddenByDlp) {
-      actions.push({
-        id: 'shared-drive',
-        icon: <FolderOpenIcon fontSize="small" />,
-        tooltip: 'Shared Drive',
-        onClick: () => setFileBrowserOpen((prev) => !prev),
-        active: fileBrowserOpen,
-      });
-    }
-    actions.push({
-      id: 'fullscreen',
-      icon: isFullscreen ? <FullscreenExitIcon fontSize="small" /> : <FullscreenIcon fontSize="small" />,
-      tooltip: isFullscreen ? 'Exit Fullscreen' : 'Fullscreen',
-      onClick: toggleFullscreen,
-      active: isFullscreen,
-    });
-    return actions;
-  }, [enableDrive, driveHiddenByDlp, fileBrowserOpen, isFullscreen, toggleFullscreen]);
+  // Build toolbar actions via shared hook
+  const { actions: toolbarActions, onRemoteClipboard } = useGuacToolbarActions({
+    protocol: 'RDP',
+    clientRef,
+    tabId,
+    dlpPolicy,
+    isFullscreen,
+    toggleFullscreen,
+    enableDrive,
+    fileBrowserOpen,
+    onToggleDrive: () => setFileBrowserOpen((prev) => !prev),
+  });
 
   // Listen for admin-initiated session termination via the /notifications namespace.
   useEffect(() => {
@@ -466,7 +453,7 @@ export default function RdpViewer({ connectionId, tabId: _tabId, isActive = true
         />
       )}
       {status === 'connected' && (
-        <FloatingToolbar actions={toolbarActions} containerRef={containerRef} />
+        <DockedToolbar actions={toolbarActions} containerRef={containerRef} />
       )}
       <Box sx={{ display: 'flex', flex: 1, overflow: 'hidden' }}>
         <Box
@@ -480,7 +467,7 @@ export default function RdpViewer({ connectionId, tabId: _tabId, isActive = true
             '& > div': { width: '100% !important', height: '100% !important' },
           }}
         />
-        {enableDrive && !driveHiddenByDlp && (
+        {enableDrive && !(dlpPolicy?.disableDownload && dlpPolicy?.disableUpload) && (
           <FileBrowser
             open={fileBrowserOpen}
             onClose={() => setFileBrowserOpen(false)}

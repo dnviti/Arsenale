@@ -1,5 +1,4 @@
 import { useEffect, useRef, useState, useMemo, useCallback } from 'react';
-import { useFullscreen } from '../../hooks/useFullscreen';
 import { Box, CircularProgress, Typography, Alert } from '@mui/material';
 import {
   FolderOpen as FolderOpenIcon,
@@ -17,7 +16,7 @@ import type { CredentialOverride } from '../../store/tabsStore';
 import type { SshTerminalConfig } from '../../constants/terminalThemes';
 import { mergeTerminalConfig, toXtermOptions, resolveThemeForMode, THEME_PRESETS } from '../../constants/terminalThemes';
 import { useThemeStore } from '../../store/themeStore';
-import FloatingToolbar, { ToolbarAction } from '../shared/FloatingToolbar';
+import DockedToolbar, { ToolbarAction } from '../shared/DockedToolbar';
 import SessionContextMenu from '../shared/SessionContextMenu';
 import ReconnectOverlay from '../shared/ReconnectOverlay';
 import SftpBrowser from '../SSH/SftpBrowser';
@@ -35,7 +34,7 @@ interface SshTerminalProps {
   sshTerminalConfig?: Partial<SshTerminalConfig> | null;
 }
 
-export default function SshTerminal({ connectionId, tabId: _tabId, isActive = true, credentials, sshTerminalConfig }: SshTerminalProps) {
+export default function SshTerminal({ connectionId, tabId, isActive = true, credentials, sshTerminalConfig }: SshTerminalProps) {
   const termRef = useRef<HTMLDivElement>(null);
   const containerRef = useRef<HTMLDivElement>(null);
   const terminalRef = useRef<Terminal | null>(null);
@@ -300,8 +299,6 @@ export default function SshTerminal({ connectionId, tabId: _tabId, isActive = tr
     connectSession,
   );
 
-  const [isFullscreen, toggleFullscreen] = useFullscreen(containerRef);
-
   // Context menu action handlers
   const handleCopy = useCallback(() => {
     if (dlpPolicyRef.current?.disableCopy) return;
@@ -493,7 +490,7 @@ export default function SshTerminal({ connectionId, tabId: _tabId, isActive = tr
         />
       )}
       {status === 'connected' && reconnectState === 'idle' && (
-        <FloatingToolbar actions={toolbarActions} containerRef={containerRef} />
+        <DockedToolbar actions={toolbarActions} containerRef={containerRef} />
       )}
       <SessionContextMenu
         anchorPosition={contextMenu}
