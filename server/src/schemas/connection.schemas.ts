@@ -22,10 +22,37 @@ export const createConnectionSchema = z.object({
   vncSettings: vncSettingsSchema.optional(),
   dlpPolicy: dlpPolicySchema.nullable().optional(),
   defaultCredentialMode: z.enum(['saved', 'domain', 'prompt']).nullable().optional(),
-}).refine(
-  (data) => data.credentialSecretId || data.externalVaultProviderId || (data.username !== undefined && data.password !== undefined),
-  { message: 'Either credentialSecretId, externalVaultProviderId, or both username and password must be provided' }
-);
+}).superRefine((data, ctx) => {
+  // Must provide exactly one credential source
+  const sources = [
+    !!data.credentialSecretId,
+    !!data.externalVaultProviderId,
+    data.username !== undefined || data.password !== undefined,
+  ].filter(Boolean).length;
+
+  if (sources === 0) {
+    ctx.addIssue({
+      code: z.ZodIssueCode.custom,
+      message: 'Either credentialSecretId, externalVaultProviderId, or both username and password must be provided',
+    });
+  }
+
+  if (sources > 1) {
+    ctx.addIssue({
+      code: z.ZodIssueCode.custom,
+      message: 'Only one credential source may be specified: credentialSecretId, externalVaultProviderId, or inline username/password',
+    });
+  }
+
+  // externalVaultPath is required when externalVaultProviderId is set
+  if (data.externalVaultProviderId && (!data.externalVaultPath || data.externalVaultPath.length === 0)) {
+    ctx.addIssue({
+      code: z.ZodIssueCode.custom,
+      message: 'externalVaultPath is required when externalVaultProviderId is provided',
+      path: ['externalVaultPath'],
+    });
+  }
+});
 
 export type CreateConnectionInput = z.infer<typeof createConnectionSchema>;
 

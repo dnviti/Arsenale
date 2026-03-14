@@ -1,9 +1,13 @@
+import * as https from 'node:https';
+import * as http from 'node:http';
 import prisma from '../lib/prisma';
 import { encryptWithServerKey, decryptWithServerKey } from './crypto.service';
 import { AppError } from '../middleware/error.middleware';
 import * as auditService from './audit.service';
 import { logger } from '../utils/logger';
 import type { ResolvedCredentials } from '../types';
+
+const HCV_FETCH_TIMEOUT_MS = 10_000; // 10 seconds
 
 const log = logger.child('external-vault');
 
@@ -63,6 +67,12 @@ setInterval(() => {
 
 // ---------- HashiCorp Vault REST client ----------
 
+/**
+ * Low-level HTTP/HTTPS request helper for HashiCorp Vault.
+ * Uses Node's built-in http/https modules so that a custom CA certificate can
+ * be wired into an https.Agent for per-request TLS verification, and a
+ * configurable timeout can be enforced to prevent indefinite hangs.
+ */
 async function hcvFetch(
   baseUrl: string,
   path: string,
@@ -72,6 +82,7 @@ async function hcvFetch(
     body?: Record<string, unknown>;
     namespace?: string;
     caCertificate?: string;
+    timeoutMs?: number;
   } = {},
 ): Promise<Record<string, unknown>> {
   const url = `${baseUrl.replace(/\/+$/, '')}${path}`;
@@ -79,21 +90,61 @@ async function hcvFetch(
   if (options.token) headers['X-Vault-Token'] = options.token;
   if (options.namespace) headers['X-Vault-Namespace'] = options.namespace;
 
-  const resp = await fetch(url, {
-    method: options.method ?? 'GET',
-    headers,
-    body: options.body ? JSON.stringify(options.body) : undefined,
+  const bodyStr = options.body ? JSON.stringify(options.body) : undefined;
+  if (bodyStr) headers['Content-Length'] = String(Buffer.byteLength(bodyStr));
+
+  const parsedUrl = new URL(url);
+  const isHttps = parsedUrl.protocol === 'https:';
+  const timeoutMs = options.timeoutMs ?? HCV_FETCH_TIMEOUT_MS;
+
+  // Build an https.Agent with a custom CA when provided
+  const agent = isHttps && options.caCertificate
+    ? new https.Agent({ ca: options.caCertificate })
+    : undefined;
+
+  return new Promise<Record<string, unknown>>((resolve, reject) => {
+    const reqOptions: https.RequestOptions | http.RequestOptions = {
+      hostname: parsedUrl.hostname,
+      port: parsedUrl.port || (isHttps ? 443 : 80),
+      path: parsedUrl.pathname + (parsedUrl.search || ''),
+      method: options.method ?? 'GET',
+      headers,
+      agent,
+      timeout: timeoutMs,
+    };
+
+    const mod = isHttps ? https : http;
+    const req = mod.request(reqOptions, (res: http.IncomingMessage) => {
+      let body = '';
+      res.on('data', (chunk: Buffer) => { body += chunk.toString(); });
+      res.on('end', () => {
+        if (!res.statusCode || res.statusCode >= 400) {
+          reject(new AppError(
+            `HashiCorp Vault API error (${res.statusCode ?? 0}): ${body.slice(0, 200)}`,
+            502,
+          ));
+          return;
+        }
+        try {
+          resolve(JSON.parse(body) as Record<string, unknown>);
+        } catch {
+          reject(new AppError('HashiCorp Vault returned invalid JSON response', 502));
+        }
+      });
+    });
+
+    req.on('error', (err: Error) => {
+      reject(new AppError(`HashiCorp Vault connection error: ${err.message}`, 502));
+    });
+
+    req.on('timeout', () => {
+      req.destroy();
+      reject(new AppError(`HashiCorp Vault request timed out after ${timeoutMs}ms`, 504));
+    });
+
+    if (bodyStr) req.write(bodyStr);
+    req.end();
   });
-
-  if (!resp.ok) {
-    const text = await resp.text().catch(() => '');
-    throw new AppError(
-      `HashiCorp Vault API error (${resp.status}): ${text.slice(0, 200)}`,
-      502,
-    );
-  }
-
-  return resp.json() as Promise<Record<string, unknown>>;
 }
 
 // ---------- Authentication ----------
@@ -108,19 +159,44 @@ async function resolveClientToken(provider: {
   authPayloadTag: string;
   caCertificate: string | null;
 }): Promise<string> {
-  // For TOKEN auth, the payload IS the token
+  // Decrypt and parse payload, surfacing clear errors on invalid data
   const payloadJson = decryptWithServerKey({
     ciphertext: provider.encryptedAuthPayload,
     iv: provider.authPayloadIV,
     tag: provider.authPayloadTag,
   });
-  const payload = JSON.parse(payloadJson);
 
-  if (provider.authMethod === 'TOKEN') {
-    return payload.token as string;
+  let payload: Record<string, unknown>;
+  try {
+    payload = JSON.parse(payloadJson) as Record<string, unknown>;
+  } catch {
+    throw new AppError(
+      'External vault auth payload is corrupted or not valid JSON. Please reconfigure the provider.',
+      500,
+    );
   }
 
-  // AppRole: check cache first
+  if (provider.authMethod === 'TOKEN') {
+    if (!payload.token || typeof payload.token !== 'string') {
+      throw new AppError(
+        'External vault TOKEN auth payload is missing a valid "token" field. Please reconfigure the provider.',
+        500,
+      );
+    }
+    return payload.token;
+  }
+
+  // AppRole: validate required fields
+  const missingRole = !payload.roleId || typeof payload.roleId !== 'string';
+  const missingSecret = !payload.secretId || typeof payload.secretId !== 'string';
+  if (missingRole || missingSecret) {
+    throw new AppError(
+      'External vault APPROLE auth payload is missing "roleId" or "secretId" fields. Please reconfigure the provider.',
+      500,
+    );
+  }
+
+  // Check cache first
   const cached = tokenCache.get(provider.id);
   if (cached && cached.expiresAt > Date.now()) {
     return cached.clientToken;
@@ -308,6 +384,16 @@ export async function updateProvider(
   });
   if (!existing) throw new AppError('Vault provider not found', 404);
 
+  // Prevent changing authMethod without providing new credentials
+  if (input.authMethod !== undefined &&
+      input.authMethod !== existing.authMethod &&
+      !input.authPayload) {
+    throw new AppError(
+      'authPayload is required when changing the auth method to ensure credentials are compatible',
+      400,
+    );
+  }
+
   const data: Record<string, unknown> = {};
   if (input.name !== undefined) data.name = input.name;
   if (input.serverUrl !== undefined) data.serverUrl = input.serverUrl;
@@ -431,11 +517,12 @@ export async function testConnection(
 // ---------- Credential resolution (called from connection.service) ----------
 
 export async function resolveExternalVaultCredentials(
+  tenantId: string,
   providerId: string,
   secretPath: string,
 ): Promise<ResolvedCredentials> {
   const provider = await prisma.externalVaultProvider.findFirst({
-    where: { id: providerId },
+    where: { id: providerId, tenantId },
   });
   if (!provider) {
     throw new AppError('External vault provider not found or has been deleted', 404);
