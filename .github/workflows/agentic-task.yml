@@ -137,8 +137,50 @@ jobs:
         env:
           ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          AGENTIC_AUTO_PR: ${{ vars.AGENTIC_AUTO_PR || 'true' }}
         run: |
-          cat > /tmp/agent-prompt.md << 'PROMPT_EOF'
+          # Build PR section conditionally
+          if [ "$AGENTIC_AUTO_PR" = "true" ] || [ "$AGENTIC_AUTO_PR" = "1" ]; then
+            PR_SECTION='
+          15. Check for existing PR (avoid duplicates):
+              ```bash
+              gh pr list --head task/<task-code-lowercase> --state open --json number,url
+              ```
+              If a PR already exists, skip creation.
+
+          16. Create the Pull Request:
+              ```bash
+              gh pr create \
+                --base <RELEASE_BRANCH> \
+                --head task/<task-code-lowercase> \
+                --title "[<TASK-CODE>] — <Task Title>" \
+                --body "## Task <TASK-CODE> — <Task Title>
+
+              ### Summary
+              <brief list of what was created/modified>
+
+              ### Verify Command Result
+              <PASS or FAIL with details>
+
+              ### Related Issue
+              Refs #<ISSUE_NUM> (<TASK-CODE>)
+
+              ---
+              *Implemented autonomously by Agentic Fleet (Opus 4.6)*"
+              ```
+
+          17. Generate a testing guide based on the implementation and post it
+              as a PR comment:
+              ```bash
+              gh pr comment <PR_NUMBER> --body "## Testing Guide
+              <concrete steps to manually verify the implementation>"
+              ```'
+          else
+            PR_SECTION='
+          15. Skip PR creation — auto_pr is disabled. The branch has been pushed; a human will create the PR manually.'
+          fi
+
+          cat > /tmp/agent-prompt.md << PROMPT_EOF
           You are a fully autonomous task implementation agent. You operate
           headlessly — make ALL decisions yourself with no user interaction.
           Never use AskUserQuestion. Never wait for confirmation. Act decisively.
@@ -230,39 +272,7 @@ jobs:
               git push -u origin task/<task-code-lowercase>
               ```
 
-          15. Check for existing PR (avoid duplicates):
-              ```bash
-              gh pr list --head task/<task-code-lowercase> --state open --json number,url
-              ```
-              If a PR already exists, skip creation.
-
-          16. Create the Pull Request:
-              ```bash
-              gh pr create \
-                --base <RELEASE_BRANCH> \
-                --head task/<task-code-lowercase> \
-                --title "[<TASK-CODE>] — <Task Title>" \
-                --body "## Task <TASK-CODE> — <Task Title>
-
-              ### Summary
-              <brief list of what was created/modified>
-
-              ### Verify Command Result
-              <PASS or FAIL with details>
-
-              ### Related Issue
-              Refs #<ISSUE_NUM> (<TASK-CODE>)
-
-              ---
-              *Implemented autonomously by Agentic Fleet (Opus 4.6)*"
-              ```
-
-          17. Generate a testing guide based on the implementation and post it
-              as a PR comment:
-              ```bash
-              gh pr comment <PR_NUMBER> --body "## Testing Guide
-              <concrete steps to manually verify the implementation>"
-              ```
+          $PR_SECTION
 
           ## Critical Rules
           - NEVER use AskUserQuestion — you are fully autonomous
