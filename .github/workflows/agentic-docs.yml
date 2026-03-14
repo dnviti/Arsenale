@@ -13,9 +13,14 @@ name: "Agentic Fleet — Docs"
 on:
   push:
     branches: [develop]
-    paths-ignore:
-      - "docs/**"
-      - "*.md"
+    paths:
+      - "server/src/**"
+      - "server/prisma/**"
+      - "client/src/**"
+      - "clients/browser-extensions/src/**"
+      - "package.json"
+      - "server/package.json"
+      - "client/package.json"
   workflow_dispatch:
 
 permissions:
