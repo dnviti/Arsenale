@@ -335,6 +335,22 @@ model Gateway {
 
   inactivityTimeoutSeconds Int @default(3600)
 
+  tunnelEnabled           Boolean   @default(false)
+  encryptedTunnelToken    String?
+  tunnelTokenIV           String?
+  tunnelTokenTag          String?
+  tunnelTokenHash         String?   @unique
+  tunnelConnectedAt       DateTime?
+  tunnelLastHeartbeat     DateTime?
+  tunnelClientVersion     String?
+  tunnelClientIp          String?
+  tunnelCaCert            String?   @db.Text
+  encryptedCaKey          String?   @db.Text
+  caKeyIV                 String?
+  caKeyTag                String?
+  tunnelClientCert        String?   @db.Text
+  tunnelClientCertExp     DateTime?
+
   monitoringEnabled   Boolean             @default(true)
   monitorIntervalMs   Int                 @default(5000)
   lastHealthStatus    GatewayHealthStatus @default(UNKNOWN)
@@ -598,6 +614,10 @@ enum AuditAction {
   TEAM_MEMBERSHIP_EXPIRY_UPDATE
   TENANT_DLP_POLICY_UPDATE
   TOKEN_HIJACK_ATTEMPT
+  TUNNEL_CONNECT
+  TUNNEL_DISCONNECT
+  TUNNEL_TOKEN_GENERATE
+  TUNNEL_TOKEN_REVOKE
 }
 
 model AuditLog {
@@ -891,6 +911,9 @@ model ManagedGatewayInstance {
   consecutiveFailures  Int               @default(0)
   createdAt            DateTime          @default(now())
   updatedAt            DateTime          @updatedAt
+
+  tunnelProxyHost  String?
+  tunnelProxyPort  Int?
 
   gateway          Gateway               @relation(fields: [gatewayId], references: [id], onDelete: Cascade)
   sessions         ActiveSession[]

@@ -4,6 +4,7 @@ import * as gatewayService from '../services/gateway.service';
 import * as sshKeyService from '../services/sshkey.service';
 import * as managedGatewayService from '../services/managedGateway.service';
 import * as autoscalerService from '../services/autoscaler.service';
+import * as tunnelService from '../services/tunnel.service';
 import * as gatewayTemplateService from '../services/gatewayTemplate.service';
 import * as auditService from '../services/audit.service';
 import { AppError } from '../middleware/error.middleware';
@@ -448,6 +449,50 @@ export async function updateScalingConfig(req: AuthRequest, res: Response) {
   emitScalingForGateway(gatewayId).catch(() => {});
 
   res.json(updated);
+}
+
+// ---------------------------------------------------------------------------
+// Tunnel Token Management
+// ---------------------------------------------------------------------------
+
+export async function generateTunnelToken(req: AuthRequest, res: Response) {
+  assertTenantAuthenticated(req);
+  const gatewayId = req.params.id as string;
+  const result = await tunnelService.generateTunnelToken(
+    gatewayId,
+    req.user.tenantId,
+    req.user.userId,
+  );
+  res.status(201).json(result);
+}
+
+export async function revokeTunnelToken(req: AuthRequest, res: Response) {
+  assertTenantAuthenticated(req);
+  const gatewayId = req.params.id as string;
+  await tunnelService.revokeTunnelToken(
+    gatewayId,
+    req.user.tenantId,
+    req.user.userId,
+  );
+  res.json({ revoked: true });
+}
+
+export async function getTunnelStatus(req: AuthRequest, res: Response) {
+  assertTenantAuthenticated(req);
+  const gatewayId = req.params.id as string;
+
+  const gateway = await prisma.gateway.findFirst({
+    where: { id: gatewayId, tenantId: req.user.tenantId },
+    select: { id: true, tunnelEnabled: true, tunnelClientCertExp: true },
+  });
+  if (!gateway) throw new AppError('Gateway not found', 404);
+
+  const liveStatus = tunnelService.getTunnelStatus(gatewayId);
+  res.json({
+    tunnelEnabled: gateway.tunnelEnabled,
+    clientCertExpiry: gateway.tunnelClientCertExp,
+    ...liveStatus,
+  });
 }
 
 // ---------------------------------------------------------------------------

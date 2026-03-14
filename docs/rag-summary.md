@@ -92,6 +92,8 @@ Gateway health monitoring continuously checks gateway availability with configur
 
 Gateway templates provide reusable configurations for quick deployment of new gateways with pre-configured auto-scaling, monitoring, and load balancing settings.
 
+Zero-trust tunneling enables gateways in environments where no inbound ports can be exposed. When tunnel mode is enabled on a gateway, the server generates a 256-bit token and per-gateway Ed25519 mTLS certificates. A tunnel agent on the gateway establishes an outbound-only WebSocket connection to the server's `/api/tunnel/connect` endpoint using token-based authentication. The server maintains a TunnelBroker registry of connected agents and multiplexes TCP streams over binary-framed WebSocket channels. Each multiplexed stream is exposed as a `net.Duplex`-compatible interface, enabling transparent integration with SSH2 and guacamole-lite without modifying existing session logic. A local TCP proxy can be created for GUACD connections, allowing RDP and VNC traffic to flow through the tunnel. Tunnel tokens can be generated and revoked through the gateway API, with all operations audit-logged.
+
 ## User Experience
 
 The interface uses Material Design with support for both dark and light themes. The tabbed workspace preserves active sessions when navigating between connections or opening settings and management dialogs. All UI layout preferences (panel states, sidebar sections, filter selections, view modes) are automatically persisted and restored across browser sessions.

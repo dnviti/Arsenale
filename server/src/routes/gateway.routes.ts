@@ -45,6 +45,11 @@ router.get('/:id/instances', requireTenantRole('OPERATOR'), validateUuidParam(),
 router.post('/:id/instances/:instanceId/restart', requireTenantRole('OPERATOR'), validateUuidParam(), asyncHandler(gatewayController.restartInstance));
 router.get('/:id/instances/:instanceId/logs', requireTenantRole('OPERATOR'), validateUuidParam(), asyncHandler(gatewayController.getInstanceLogs));
 
+// Tunnel token management
+router.post('/:id/tunnel-token', requireTenantRole('OPERATOR'), validateUuidParam(), asyncHandler(gatewayController.generateTunnelToken));
+router.delete('/:id/tunnel-token', requireTenantRole('OPERATOR'), validateUuidParam(), asyncHandler(gatewayController.revokeTunnelToken));
+router.get('/:id/tunnel-status', validateUuidParam(), asyncHandler(gatewayController.getTunnelStatus));
+
 // Auto-scaling configuration
 router.get('/:id/scaling', requireTenantRole('OPERATOR'), validateUuidParam(), asyncHandler(gatewayController.getScalingStatus));
 router.put('/:id/scaling', requireTenantRole('OPERATOR'), validateUuidParam(), validate(scalingConfigSchema), asyncHandler(gatewayController.updateScalingConfig));

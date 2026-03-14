@@ -58,6 +58,7 @@
     "ssh2": "^1.17.0",
     "twilio": "^5.12.2",
     "uuid": "^13.0.0",
+    "ws": "^8.19.0",
     "zod": "^4.3.6"
   },
   "devDependencies": {
@@ -77,6 +78,7 @@
     "@types/passport-microsoft": "^2.1.1",
     "@types/ssh2": "^1.15.5",
     "@types/uuid": "^10.0.0",
+    "@types/ws": "^8.18.1",
     "tsx": "^4.21.0",
     "typescript": "^5.9.3"
   }

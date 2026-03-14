@@ -78,6 +78,12 @@ const publicSelect = {
   scaleDownCooldownSeconds: true,
   lastScaleAction: true,
   templateId: true,
+  tunnelEnabled: true,
+  tunnelConnectedAt: true,
+  tunnelLastHeartbeat: true,
+  tunnelClientVersion: true,
+  tunnelClientIp: true,
+  tunnelClientCertExp: true,
 } as const;
 
 export async function getDefaultGateway(tenantId: string, type: GatewayType) {
