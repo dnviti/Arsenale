@@ -10,6 +10,8 @@ export const createConnectionSchema = z.object({
   password: z.string().optional(),
   domain: z.string().optional(),
   credentialSecretId: z.string().uuid().optional(),
+  externalVaultProviderId: z.string().uuid().nullable().optional(),
+  externalVaultPath: z.string().max(500).nullable().optional(),
   description: z.string().optional(),
   folderId: z.string().uuid().optional(),
   teamId: z.string().uuid().optional(),
@@ -21,8 +23,8 @@ export const createConnectionSchema = z.object({
   dlpPolicy: dlpPolicySchema.nullable().optional(),
   defaultCredentialMode: z.enum(['saved', 'domain', 'prompt']).nullable().optional(),
 }).refine(
-  (data) => data.credentialSecretId || (data.username !== undefined && data.password !== undefined),
-  { message: 'Either credentialSecretId or both username and password must be provided' }
+  (data) => data.credentialSecretId || data.externalVaultProviderId || (data.username !== undefined && data.password !== undefined),
+  { message: 'Either credentialSecretId, externalVaultProviderId, or both username and password must be provided' }
 );
 
 export type CreateConnectionInput = z.infer<typeof createConnectionSchema>;
@@ -36,6 +38,8 @@ export const updateConnectionSchema = z.object({
   password: z.string().optional(),
   domain: z.string().optional(),
   credentialSecretId: z.string().uuid().nullable().optional(),
+  externalVaultProviderId: z.string().uuid().nullable().optional(),
+  externalVaultPath: z.string().max(500).nullable().optional(),
   description: z.string().nullable().optional(),
   folderId: z.string().uuid().nullable().optional(),
   enableDrive: z.boolean().optional(),
