@@ -64,6 +64,21 @@ export async function createConnection(userId: string, input: CreateConnectionIn
     throw new AppError('Either credentialSecretId, externalVaultProviderId, or both username and password must be provided', 400);
   }
 
+  // Validate: externalVaultPath is required when externalVaultProviderId is set
+  if (input.externalVaultProviderId && !input.externalVaultPath) {
+    throw new AppError('externalVaultPath is required when externalVaultProviderId is provided', 400);
+  }
+
+  // Validate: only one credential source
+  const credSourceCount = [
+    !!input.credentialSecretId,
+    !!input.externalVaultProviderId,
+    input.username !== undefined || input.password !== undefined,
+  ].filter(Boolean).length;
+  if (credSourceCount > 1) {
+    throw new AppError('Only one credential source may be specified: credentialSecretId, externalVaultProviderId, or inline username/password', 400);
+  }
+
   // If credentialSecretId: validate access and type compatibility
   if (input.credentialSecretId) {
     const secretAccess = await permissionService.canViewSecret(userId, input.credentialSecretId, tenantId);
@@ -497,6 +512,8 @@ export async function listConnections(userId: string, tenantId?: string | null) 
         gatewayId: true,
         credentialSecretId: true,
         credentialSecret: { select: { name: true, type: true } },
+        externalVaultProviderId: true,
+        externalVaultPath: true,
         description: true,
         isFavorite: true,
         enableDrive: true,
@@ -618,7 +635,11 @@ export async function getConnectionCredentials(
 
   // External vault provider: resolve credentials from HashiCorp Vault
   if (connection.externalVaultProviderId && connection.externalVaultPath) {
+    if (!tenantId) {
+      throw new AppError('Tenant context is required to resolve external vault credentials', 400);
+    }
     return resolveExternalVaultCredentials(
+      tenantId,
       connection.externalVaultProviderId,
       connection.externalVaultPath,
     );

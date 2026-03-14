@@ -35,6 +35,7 @@ export default function VaultProvidersSection({ tenantId }: VaultProvidersSectio
   const [formName, setFormName] = useState('');
   const [formUrl, setFormUrl] = useState('');
   const [formAuth, setFormAuth] = useState<'TOKEN' | 'APPROLE'>('TOKEN');
+  const [originalAuth, setOriginalAuth] = useState<'TOKEN' | 'APPROLE'>('TOKEN');
   const [formNamespace, setFormNamespace] = useState('');
   const [formMount, setFormMount] = useState('secret');
   const [formToken, setFormToken] = useState('');
@@ -66,6 +67,7 @@ export default function VaultProvidersSection({ tenantId }: VaultProvidersSectio
     setFormName('');
     setFormUrl('');
     setFormAuth('TOKEN');
+    setOriginalAuth('TOKEN');
     setFormNamespace('');
     setFormMount('secret');
     setFormToken('');
@@ -82,6 +84,7 @@ export default function VaultProvidersSection({ tenantId }: VaultProvidersSectio
     setFormName(p.name);
     setFormUrl(p.serverUrl);
     setFormAuth(p.authMethod);
+    setOriginalAuth(p.authMethod);
     setFormNamespace(p.namespace ?? '');
     setFormMount(p.mountPath);
     setFormToken('');
@@ -99,12 +102,25 @@ export default function VaultProvidersSection({ tenantId }: VaultProvidersSectio
       return;
     }
 
+    const authMethodChanged = editingProvider && formAuth !== originalAuth;
+    const requiresNewCredentials = !editingProvider || !!authMethodChanged;
+
     let authPayload: string;
     if (formAuth === 'TOKEN') {
-      if (!formToken && !editingProvider) { setFormError('Token is required'); return; }
+      if (!formToken && requiresNewCredentials) {
+        setFormError(authMethodChanged
+          ? 'A new Vault Token is required when changing the auth method'
+          : 'Token is required');
+        return;
+      }
       authPayload = JSON.stringify({ token: formToken });
     } else {
-      if ((!formRoleId || !formSecretId) && !editingProvider) { setFormError('Role ID and Secret ID are required'); return; }
+      if ((!formRoleId || !formSecretId) && requiresNewCredentials) {
+        setFormError(authMethodChanged
+          ? 'Role ID and Secret ID are required when changing the auth method'
+          : 'Role ID and Secret ID are required');
+        return;
+      }
       authPayload = JSON.stringify({ roleId: formRoleId, secretId: formSecretId });
     }
 
@@ -120,7 +136,7 @@ export default function VaultProvidersSection({ tenantId }: VaultProvidersSectio
           cacheTtlSeconds: parseInt(formCacheTtl, 10) || 300,
           ...(formCaCert ? { caCertificate: formCaCert } : {}),
         };
-        // Only send authPayload if credentials were re-entered
+        // Send authPayload when credentials were re-entered or when auth method changed
         if (formAuth === 'TOKEN' && formToken) input.authPayload = authPayload;
         if (formAuth === 'APPROLE' && formRoleId && formSecretId) input.authPayload = authPayload;
         await updateVaultProvider(editingProvider.id, input);
@@ -183,6 +199,12 @@ export default function VaultProvidersSection({ tenantId }: VaultProvidersSectio
       setTestLoading(false);
     }
   };
+
+  // Computed dialog helpers to avoid duplicated conditional expressions
+  const credAuthMethodChanged = editingProvider && formAuth !== originalAuth;
+  const credFieldRequired = !editingProvider || !!credAuthMethodChanged;
+  const credPlaceholder = editingProvider && !credAuthMethodChanged ? 'Leave blank to keep unchanged' : undefined;
+  const credHelperText = credAuthMethodChanged ? 'New credentials required when changing auth method' : undefined;
 
   return (
     <Box>
@@ -275,8 +297,9 @@ export default function VaultProvidersSection({ tenantId }: VaultProvidersSectio
                 onChange={(e) => setFormToken(e.target.value)}
                 fullWidth
                 type="password"
-                required={!editingProvider}
-                placeholder={editingProvider ? 'Leave blank to keep unchanged' : undefined}
+                required={credFieldRequired}
+                placeholder={credPlaceholder}
+                helperText={credHelperText}
               />
             ) : (
               <>
@@ -285,8 +308,9 @@ export default function VaultProvidersSection({ tenantId }: VaultProvidersSectio
                   value={formRoleId}
                   onChange={(e) => setFormRoleId(e.target.value)}
                   fullWidth
-                  required={!editingProvider}
-                  placeholder={editingProvider ? 'Leave blank to keep unchanged' : undefined}
+                  required={credFieldRequired}
+                  placeholder={credPlaceholder}
+                  helperText={credHelperText}
                 />
                 <TextField
                   label="Secret ID"
@@ -294,8 +318,8 @@ export default function VaultProvidersSection({ tenantId }: VaultProvidersSectio
                   onChange={(e) => setFormSecretId(e.target.value)}
                   fullWidth
                   type="password"
-                  required={!editingProvider}
-                  placeholder={editingProvider ? 'Leave blank to keep unchanged' : undefined}
+                  required={credFieldRequired}
+                  placeholder={credPlaceholder}
                 />
               </>
             )}
