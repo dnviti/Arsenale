@@ -15,6 +15,7 @@ export type UpdateTeamInput = z.infer<typeof updateTeamSchema>;
 export const addMemberSchema = z.object({
   userId: z.string().uuid(),
   role: z.enum(['TEAM_ADMIN', 'TEAM_EDITOR', 'TEAM_VIEWER']),
+  expiresAt: z.string().datetime().optional().nullable(),
 });
 export type AddMemberInput = z.infer<typeof addMemberSchema>;
 
@@ -22,3 +23,8 @@ export const updateMemberRoleSchema = z.object({
   role: z.enum(['TEAM_ADMIN', 'TEAM_EDITOR', 'TEAM_VIEWER']),
 });
 export type UpdateMemberRoleInput = z.infer<typeof updateMemberRoleSchema>;
+
+export const updateMemberExpirySchema = z.object({
+  expiresAt: z.string().datetime().nullable(),
+});
+export type UpdateMemberExpiryInput = z.infer<typeof updateMemberExpirySchema>;

@@ -13,6 +13,7 @@ import {
   Download as DownloadIcon,
   ViewList as ListIcon,
   Map as MapIcon,
+  Warning as WarningIcon,
 } from '@mui/icons-material';
 import {
   getTenantAuditLogs, getTenantAuditGateways, getTenantAuditCountries,
@@ -83,6 +84,7 @@ export default function TenantAuditLogSection({ onViewUserProfile, onGeoIpClick 
   const [gateways, setGateways] = useState<AuditGateway[]>([]);
   const [countries, setCountries] = useState<string[]>([]);
   const [geoCountry, setGeoCountry] = useState('');
+  const [flaggedOnly, setFlaggedOnly] = useState(false);
 
   useEffect(() => {
     if (users.length === 0) fetchUsers();
@@ -115,6 +117,7 @@ export default function TenantAuditLogSection({ onViewUserProfile, onGeoIpClick 
       if (geoCountry) params.geoCountry = geoCountry;
       if (startDate) params.startDate = startDate;
       if (endDate) params.endDate = endDate;
+      if (flaggedOnly) params.flaggedOnly = true;
 
       const result = await getTenantAuditLogs(params);
       setLogs(result.data);
@@ -124,7 +127,7 @@ export default function TenantAuditLogSection({ onViewUserProfile, onGeoIpClick 
     } finally {
       setLoading(false);
     }
-  }, [page, rowsPerPage, tenantAuditLogAction, tenantAuditLogSearch, tenantAuditLogTargetType, tenantAuditLogGatewayId, tenantAuditLogUserId, ipAddress, geoCountry, startDate, endDate, tenantAuditLogSortBy, tenantAuditLogSortOrder]);
+  }, [page, rowsPerPage, tenantAuditLogAction, tenantAuditLogSearch, tenantAuditLogTargetType, tenantAuditLogGatewayId, tenantAuditLogUserId, ipAddress, geoCountry, startDate, endDate, tenantAuditLogSortBy, tenantAuditLogSortOrder, flaggedOnly]);
 
   useEffect(() => {
     fetchLogs();
@@ -144,7 +147,7 @@ export default function TenantAuditLogSection({ onViewUserProfile, onGeoIpClick 
 
   const selectedUser = users.find((u) => u.id === tenantAuditLogUserId) ?? null;
 
-  const hasActiveFilters = tenantAuditLogAction || tenantAuditLogSearch || tenantAuditLogTargetType || tenantAuditLogGatewayId || tenantAuditLogUserId || ipAddress || geoCountry || startDate || endDate;
+  const hasActiveFilters = tenantAuditLogAction || tenantAuditLogSearch || tenantAuditLogTargetType || tenantAuditLogGatewayId || tenantAuditLogUserId || ipAddress || geoCountry || startDate || endDate || flaggedOnly;
 
   return (
     <Card>
@@ -299,6 +302,17 @@ export default function TenantAuditLogSection({ onViewUserProfile, onGeoIpClick 
             onChange={(e) => { setEndDate(e.target.value); setPage(0); }}
             slotProps={{ inputLabel: { shrink: true } }}
           />
+          <Tooltip title="Show only flagged entries (e.g. impossible travel)">
+            <Chip
+              icon={<WarningIcon fontSize="small" />}
+              label="Flagged"
+              size="small"
+              color={flaggedOnly ? 'warning' : 'default'}
+              variant={flaggedOnly ? 'filled' : 'outlined'}
+              onClick={() => { setFlaggedOnly(!flaggedOnly); setPage(0); }}
+              sx={{ cursor: 'pointer' }}
+            />
+          </Tooltip>
         </Stack>
 
         {error && <Alert severity="error" sx={{ mb: 2 }}>{error}</Alert>}
@@ -385,11 +399,18 @@ export default function TenantAuditLogSection({ onViewUserProfile, onGeoIpClick 
                           {log.userName ?? log.userEmail ?? '\u2014'}
                         </TableCell>
                         <TableCell>
-                          <Chip
-                            label={ACTION_LABELS[log.action] || log.action}
-                            color={getActionColor(log.action)}
-                            size="small"
-                          />
+                          <Box sx={{ display: 'inline-flex', alignItems: 'center', gap: 0.5 }}>
+                            <Chip
+                              label={ACTION_LABELS[log.action] || log.action}
+                              color={getActionColor(log.action)}
+                              size="small"
+                            />
+                            {log.flags?.includes('IMPOSSIBLE_TRAVEL') && (
+                              <Tooltip title="Impossible travel detected">
+                                <WarningIcon color="warning" fontSize="small" />
+                              </Tooltip>
+                            )}
+                          </Box>
                         </TableCell>
                         <TableCell>
                           {log.targetType

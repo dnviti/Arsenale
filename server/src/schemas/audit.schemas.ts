@@ -18,6 +18,7 @@ export const auditQuerySchema = z.object({
   geoCountry: z.string().max(100).optional(),
   sortBy: z.enum(VALID_SORT_FIELDS).default('createdAt'),
   sortOrder: z.enum(VALID_SORT_ORDERS).default('desc'),
+  flaggedOnly: z.coerce.boolean().default(false),
 });
 export type AuditQueryInput = z.infer<typeof auditQuerySchema>;
 

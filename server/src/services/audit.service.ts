@@ -1,6 +1,7 @@
 import prisma, { AuditAction, Prisma } from '../lib/prisma';
 import { logger } from '../utils/logger';
 import * as geoipService from './geoip.service';
+import * as impossibleTravelService from './impossibleTravel.service';
 
 export { AuditAction };
 
@@ -22,6 +23,8 @@ export function log(input: AuditLogInput): void {
   const ip = (Array.isArray(input.ipAddress) ? input.ipAddress[0] : input.ipAddress) ?? null;
   const geo = geoipService.lookup(ip);
 
+  const geoCoords = geo ? [geo.lat, geo.lng] : [];
+
   prisma.auditLog
     .create({
       data: {
@@ -34,8 +37,13 @@ export function log(input: AuditLogInput): void {
         gatewayId: input.gatewayId ?? null,
         geoCountry: geo?.country ?? null,
         geoCity: geo?.city || null,
-        geoCoords: geo ? [geo.lat, geo.lng] : [],
+        geoCoords,
       },
+    })
+    .then((entry) => {
+      if (input.userId) {
+        impossibleTravelService.check(entry.id, input.userId, input.action, geoCoords, entry.createdAt);
+      }
     })
     .catch((err) => {
       logger.error('Failed to write audit log:', err);
@@ -57,6 +65,7 @@ export interface TenantAuditLogQuery {
   geoCountry?: string;
   sortBy?: 'createdAt' | 'action';
   sortOrder?: 'asc' | 'desc';
+  flaggedOnly?: boolean;
 }
 
 export interface TenantAuditLogEntry extends AuditLogEntry {
@@ -87,6 +96,7 @@ export interface AuditLogQuery {
   geoCountry?: string;
   sortBy?: 'createdAt' | 'action';
   sortOrder?: 'asc' | 'desc';
+  flaggedOnly?: boolean;
 }
 
 export interface AuditLogEntry {
@@ -100,6 +110,7 @@ export interface AuditLogEntry {
   geoCountry: string | null;
   geoCity: string | null;
   geoCoords: number[];
+  flags: string[];
   createdAt: Date;
 }
 
@@ -147,6 +158,7 @@ export async function getAuditLogs(query: AuditLogQuery): Promise<PaginatedAudit
         geoCountry: true,
         geoCity: true,
         geoCoords: true,
+        flags: true,
         createdAt: true,
       },
     }),
@@ -193,8 +205,10 @@ export function buildCommonWhereClause(opts: {
   gatewayId?: string;
   geoCountry?: string;
   search?: string;
+  flaggedOnly?: boolean;
 }): Prisma.AuditLogWhereInput {
   const where: Prisma.AuditLogWhereInput = {};
+  if (opts.flaggedOnly) where.flags = { isEmpty: false };
   if (opts.action) where.action = opts.action;
   if (opts.startDate || opts.endDate) {
     where.createdAt = {
@@ -255,6 +269,7 @@ export async function getTenantAuditLogs(query: TenantAuditLogQuery): Promise<Pa
         geoCountry: true,
         geoCity: true,
         geoCoords: true,
+        flags: true,
         createdAt: true,
         user: { select: { username: true, email: true } },
       },
@@ -273,6 +288,7 @@ export async function getTenantAuditLogs(query: TenantAuditLogQuery): Promise<Pa
     geoCountry: r.geoCountry,
     geoCity: r.geoCity,
     geoCoords: r.geoCoords,
+    flags: r.flags,
     createdAt: r.createdAt,
     userId: r.userId,
     userName: r.user?.username ?? null,
@@ -297,6 +313,7 @@ export interface ConnectionAuditLogQuery {
   geoCountry?: string;
   sortBy?: 'createdAt' | 'action';
   sortOrder?: 'asc' | 'desc';
+  flaggedOnly?: boolean;
 }
 
 export async function getConnectionAuditLogs(query: ConnectionAuditLogQuery): Promise<PaginatedTenantAuditLogs> {
@@ -332,6 +349,7 @@ export async function getConnectionAuditLogs(query: ConnectionAuditLogQuery): Pr
         geoCountry: true,
         geoCity: true,
         geoCoords: true,
+        flags: true,
         createdAt: true,
         user: { select: { username: true, email: true } },
       },
@@ -350,6 +368,7 @@ export async function getConnectionAuditLogs(query: ConnectionAuditLogQuery): Pr
     geoCountry: r.geoCountry,
     geoCity: r.geoCity,
     geoCoords: r.geoCoords,
+    flags: r.flags,
     createdAt: r.createdAt,
     userId: r.userId,
     userName: r.user?.username ?? null,

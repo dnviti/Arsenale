@@ -7,7 +7,8 @@ import prisma from '../lib/prisma';
 import { setRefreshTokenCookie, setCsrfCookie } from '../utils/cookie';
 import { logger } from '../utils/logger';
 import { getClientIp } from '../utils/ip';
-import type { CreateTenantInput, UpdateTenantInput, InviteUserInput, UpdateRoleInput, CreateUserInput, ToggleUserEnabledInput, AdminChangeEmailInput, AdminChangePasswordInput } from '../schemas/tenant.schemas';
+import { getRequestBinding } from '../utils/tokenBinding';
+import type { CreateTenantInput, UpdateTenantInput, InviteUserInput, UpdateRoleInput, CreateUserInput, ToggleUserEnabledInput, AdminChangeEmailInput, AdminChangePasswordInput, UpdateMembershipExpiryInput } from '../schemas/tenant.schemas';
 
 export async function createTenant(req: AuthRequest, res: Response) {
   assertAuthenticated(req);
@@ -19,7 +20,7 @@ export async function createTenant(req: AuthRequest, res: Response) {
     where: { id: req.user.userId },
     select: { id: true, email: true, username: true, avatarData: true },
   });
-  const tokens = await authService.issueTokens(updatedUser);
+  const tokens = await authService.issueTokens(updatedUser, undefined, getRequestBinding(req));
 
   auditService.log({
     userId: req.user.userId, action: 'TENANT_CREATE',
@@ -53,6 +54,16 @@ export async function updateTenant(req: AuthRequest, res: Response) {
       userId: req.user.userId, action: 'TENANT_MFA_POLICY_UPDATE',
       targetType: 'Tenant', targetId: tenantId,
       details: { mfaRequired: data.mfaRequired },
+      ipAddress: getClientIp(req),
+    });
+  }
+  const dlpFields = ['dlpDisableCopy', 'dlpDisablePaste', 'dlpDisableDownload', 'dlpDisableUpload'] as const;
+  const dlpChanges = dlpFields.filter((f) => data[f] !== undefined);
+  if (dlpChanges.length > 0) {
+    auditService.log({
+      userId: req.user.userId, action: 'TENANT_DLP_POLICY_UPDATE',
+      targetType: 'Tenant', targetId: tenantId,
+      details: Object.fromEntries(dlpChanges.map((f) => [f, data[f]])),
       ipAddress: getClientIp(req),
     });
   }
@@ -95,13 +106,13 @@ export async function getUserProfile(req: AuthRequest, res: Response) {
 
 export async function inviteUser(req: AuthRequest, res: Response) {
   assertAuthenticated(req);
-  const { email, role } = req.body as InviteUserInput;
+  const { email, role, expiresAt } = req.body as InviteUserInput;
   const tenantId = req.params.id as string;
-  const result = await tenantService.inviteUser(tenantId, email, role);
+  const result = await tenantService.inviteUser(tenantId, email, role, expiresAt ? new Date(expiresAt) : undefined);
   auditService.log({
     userId: req.user.userId, action: 'TENANT_INVITE_USER',
     targetType: 'Tenant', targetId: tenantId,
-    details: { invitedEmail: email, role },
+    details: { invitedEmail: email, role, expiresAt: expiresAt ?? null },
     ipAddress: getClientIp(req),
   });
   res.status(201).json(result);
@@ -148,7 +159,7 @@ export async function createUser(req: AuthRequest, res: Response) {
   const tenantId = req.params.id as string;
   const result = await tenantService.createUser(
     tenantId,
-    { email: data.email, username: data.username, password: data.password, role: data.role },
+    { email: data.email, username: data.username, password: data.password, role: data.role, expiresAt: data.expiresAt ?? undefined },
     req.user.userId,
   );
 
@@ -216,5 +227,24 @@ export async function adminChangeUserPassword(req: AuthRequest, res: Response) {
   const result = await tenantService.adminChangeUserPassword(
     tenantId, req.user.userId, targetUserId, newPassword, verificationId,
   );
+  res.json(result);
+}
+
+export async function updateMembershipExpiry(req: AuthRequest, res: Response) {
+  assertAuthenticated(req);
+  const { expiresAt } = req.body as UpdateMembershipExpiryInput;
+  const tenantId = req.params.id as string;
+  const targetUserId = req.params.userId as string;
+  const result = await tenantService.updateMembershipExpiry(
+    tenantId, targetUserId, expiresAt ? new Date(expiresAt) : null,
+  );
+  auditService.log({
+    userId: req.user.userId,
+    action: 'TENANT_MEMBERSHIP_EXPIRY_UPDATE',
+    targetType: 'TenantMember',
+    targetId: targetUserId,
+    details: { tenantId, expiresAt: expiresAt ?? null },
+    ipAddress: getClientIp(req),
+  });
   res.json(result);
 }

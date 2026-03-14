@@ -1,4 +1,5 @@
 import api from './client';
+import type { TenantRole } from '../utils/roles';
 
 export interface TenantData {
   id: string;
@@ -8,6 +9,10 @@ export interface TenantData {
   vaultAutoLockMaxMinutes: number | null;
   userCount: number;
   defaultSessionTimeoutSeconds: number;
+  dlpDisableCopy: boolean;
+  dlpDisablePaste: boolean;
+  dlpDisableDownload: boolean;
+  dlpDisableUpload: boolean;
   teamCount: number;
   createdAt: string;
   updatedAt: string;
@@ -23,6 +28,8 @@ export interface TenantUser {
   smsMfaEnabled: boolean;
   enabled: boolean;
   createdAt: string;
+  expiresAt: string | null;
+  expired: boolean;
 }
 
 export interface TenantMembership {
@@ -38,8 +45,9 @@ export interface CreateUserData {
   email: string;
   username?: string;
   password: string;
-  role: 'ADMIN' | 'MEMBER';
+  role: TenantRole;
   sendWelcomeEmail?: boolean;
+  expiresAt?: string;
 }
 
 export interface CreateUserResult {
@@ -82,7 +90,7 @@ export async function getTenantMfaStats(tenantId: string): Promise<{ total: numb
   return data;
 }
 
-export async function updateTenant(id: string, payload: { name?: string; defaultSessionTimeoutSeconds?: number; mfaRequired?: boolean; vaultAutoLockMaxMinutes?: number | null }): Promise<TenantData> {
+export async function updateTenant(id: string, payload: { name?: string; defaultSessionTimeoutSeconds?: number; mfaRequired?: boolean; vaultAutoLockMaxMinutes?: number | null; dlpDisableCopy?: boolean; dlpDisablePaste?: boolean; dlpDisableDownload?: boolean; dlpDisableUpload?: boolean }): Promise<TenantData> {
   const { data } = await api.put(`/tenants/${id}`, payload);
   return data;
 }
@@ -121,16 +129,17 @@ export async function listTenantUsers(tenantId: string): Promise<TenantUser[]> {
 export async function inviteUser(
   tenantId: string,
   email: string,
-  role: 'ADMIN' | 'MEMBER',
+  role: TenantRole,
+  expiresAt?: string,
 ): Promise<InviteResult> {
-  const { data } = await api.post(`/tenants/${tenantId}/invite`, { email, role });
+  const { data } = await api.post(`/tenants/${tenantId}/invite`, { email, role, ...(expiresAt && { expiresAt }) });
   return data;
 }
 
 export async function updateUserRole(
   tenantId: string,
   userId: string,
-  role: 'OWNER' | 'ADMIN' | 'MEMBER',
+  role: TenantRole,
 ): Promise<TenantUser> {
   const { data } = await api.put(`/tenants/${tenantId}/users/${userId}`, { role });
   return data;
@@ -193,4 +202,12 @@ export async function adminChangeUserPassword(
 ): Promise<{ recoveryKey: string }> {
   const { data } = await api.put(`/tenants/${tenantId}/users/${userId}/password`, { newPassword, verificationId });
   return data;
+}
+
+export async function updateMembershipExpiry(
+  tenantId: string,
+  userId: string,
+  expiresAt: string | null,
+): Promise<void> {
+  await api.patch(`/tenants/${tenantId}/users/${userId}/expiry`, { expiresAt });
 }

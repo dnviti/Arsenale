@@ -11,6 +11,7 @@ import {
   Business as BusinessIcon,
   Groups as GroupsIcon,
   Router as RouterIcon,
+  Sync as SyncIcon,
   AdminPanelSettings as AdminPanelSettingsIcon,
 } from '@mui/icons-material';
 import { useAuthStore } from '../../store/authStore';
@@ -31,7 +32,10 @@ import GatewaySection from '../Settings/GatewaySection';
 import EmailProviderSection from '../Settings/EmailProviderSection';
 import SelfSignupSection from '../Settings/SelfSignupSection';
 import TenantAuditLogSection from '../Settings/TenantAuditLogSection';
+import LdapConfigSection from '../Settings/LdapConfigSection';
+import SyncProfileSection from '../Settings/SyncProfileSection';
 import { SlideUp } from '../common/SlideUp';
+import { isAdminOrAbove } from '../../utils/roles';
 
 interface TabDef {
   id: string;
@@ -49,6 +53,7 @@ const BASE_TABS: TabDef[] = [
 const TENANT_TABS: TabDef[] = [
   { id: 'teams', label: 'Teams', icon: <GroupsIcon /> },
   { id: 'gateways', label: 'Gateways', icon: <RouterIcon /> },
+  { id: 'integrations', label: 'Integrations', icon: <SyncIcon /> },
 ];
 
 const ADMIN_TAB: TabDef = {
@@ -69,7 +74,7 @@ export default function SettingsDialog({ open, onClose, initialTab, linkedProvid
   const [hasPassword, setHasPassword] = useState(true);
 
   const hasTenant = Boolean(user?.tenantId);
-  const isAdmin = user?.tenantRole === 'OWNER' || user?.tenantRole === 'ADMIN';
+  const isAdmin = isAdminOrAbove(user?.tenantRole);
 
   const tabs = useMemo(() => {
     const t = [...BASE_TABS];
@@ -199,10 +204,12 @@ export default function SettingsDialog({ open, onClose, initialTab, linkedProvid
           {resolvedTab === 'gateways' && (
             <GatewaySection onNavigateToTab={setActiveTab} />
           )}
+          {resolvedTab === 'integrations' && <SyncProfileSection />}
           {resolvedTab === 'administration' && (
             <Stack spacing={3}>
               <SelfSignupSection />
               <EmailProviderSection />
+              <LdapConfigSection />
               <TenantAuditLogSection onViewUserProfile={onViewUserProfile} onGeoIpClick={onGeoIpClick} />
             </Stack>
           )}

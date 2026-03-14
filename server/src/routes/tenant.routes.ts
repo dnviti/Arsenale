@@ -5,6 +5,7 @@ import { validate, validateUuidParam } from '../middleware/validate.middleware';
 import {
   createTenantSchema, updateTenantSchema, inviteUserSchema, updateRoleSchema,
   createUserSchema, toggleUserEnabledSchema, adminChangeEmailSchema, adminChangePasswordSchema,
+  updateMembershipExpirySchema,
 } from '../schemas/tenant.schemas';
 import * as tenantController from '../controllers/tenant.controller';
 import { asyncHandler } from '../middleware/asyncHandler';
@@ -38,6 +39,7 @@ router.put('/:id/users/:userId', validateUuidParam(), requireTenant, requireOwnT
 router.delete('/:id/users/:userId', validateUuidParam(), requireTenant, requireOwnTenant, requireTenantRole('ADMIN'), validateUuidParam('userId'), asyncHandler(tenantController.removeUser));
 router.post('/:id/users', validateUuidParam(), requireTenant, requireOwnTenant, requireTenantRole('ADMIN'), validate(createUserSchema), asyncHandler(tenantController.createUser));
 router.patch('/:id/users/:userId/enabled', validateUuidParam(), requireTenant, requireOwnTenant, requireTenantRole('ADMIN'), validateUuidParam('userId'), validate(toggleUserEnabledSchema), asyncHandler(tenantController.toggleUserEnabled));
+router.patch('/:id/users/:userId/expiry', validateUuidParam(), requireTenant, requireOwnTenant, requireTenantRole('ADMIN'), validateUuidParam('userId'), validate(updateMembershipExpirySchema), asyncHandler(tenantController.updateMembershipExpiry));
 
 // Admin identity-verified operations on users
 router.put('/:id/users/:userId/email', validateUuidParam(), requireTenant, requireOwnTenant, requireTenantRole('ADMIN'), validateUuidParam('userId'), validate(adminChangeEmailSchema), asyncHandler(tenantController.adminChangeUserEmail));

@@ -4,7 +4,7 @@ import {
   Grid, Dialog, DialogTitle, DialogContent, DialogContentText, DialogActions,
   Alert, CircularProgress, Select, MenuItem, FormControl, InputLabel,
   Table, TableBody, TableCell, TableContainer, TableHead, TableRow,
-  Divider, Typography, IconButton,
+  Divider, Typography, IconButton, TextField,
 } from '@mui/material';
 import {
   Add as AddIcon, Delete as DeleteIcon, Groups as GroupsIcon,
@@ -41,6 +41,7 @@ export default function TeamSection({ onNavigateToTab }: TeamSectionProps) {
   const addMember = useTeamStore((s) => s.addMember);
   const updateMemberRole = useTeamStore((s) => s.updateMemberRole);
   const removeMember = useTeamStore((s) => s.removeMember);
+  const updateMemberExpiry = useTeamStore((s) => s.updateMemberExpiry);
 
   const [teamDialogOpen, setTeamDialogOpen] = useState(false);
   const [editingTeam, setEditingTeam] = useState<TeamData | null>(null);
@@ -50,6 +51,12 @@ export default function TeamSection({ onNavigateToTab }: TeamSectionProps) {
   const [error, setError] = useState('');
   const [addMemberRole, setAddMemberRole] = useState<'TEAM_ADMIN' | 'TEAM_EDITOR' | 'TEAM_VIEWER'>('TEAM_VIEWER');
   const [addingMember, setAddingMember] = useState(false);
+
+  // Team member expiry dialog
+  const [teamExpiryOpen, setTeamExpiryOpen] = useState(false);
+  const [teamExpiryTarget, setTeamExpiryTarget] = useState<{ teamId: string; userId: string; name: string; expiresAt: string | null } | null>(null);
+  const [teamExpiryValue, setTeamExpiryValue] = useState('');
+  const [savingTeamExpiry, setSavingTeamExpiry] = useState(false);
 
   const hasTenant = Boolean(user?.tenantId);
 
@@ -275,6 +282,7 @@ export default function TeamSection({ onNavigateToTab }: TeamSectionProps) {
                           <TableRow>
                             <TableCell>User</TableCell>
                             <TableCell>Role</TableCell>
+                            <TableCell>Expires</TableCell>
                             {isTeamAdmin && <TableCell align="right">Actions</TableCell>}
                           </TableRow>
                         </TableHead>
@@ -313,6 +321,38 @@ export default function TeamSection({ onNavigateToTab }: TeamSectionProps) {
                                   </Select>
                                 ) : (
                                   <Chip label={roleLabel(m.role)} size="small" variant="outlined" />
+                                )}
+                              </TableCell>
+                              <TableCell>
+                                {m.expiresAt ? (
+                                  <Chip
+                                    label={m.expired ? 'Expired' : new Date(m.expiresAt).toLocaleDateString()}
+                                    color={m.expired ? 'error' : 'default'}
+                                    size="small"
+                                    variant="outlined"
+                                    {...(isTeamAdmin && m.userId !== user?.id ? {
+                                      onClick: () => {
+                                        setTeamExpiryTarget({ teamId: selectedTeam.id, userId: m.userId, name: m.username || m.email, expiresAt: m.expiresAt });
+                                        setTeamExpiryValue(m.expiresAt ? new Date(m.expiresAt).toISOString().slice(0, 16) : '');
+                                        setTeamExpiryOpen(true);
+                                      },
+                                      sx: { cursor: 'pointer' },
+                                    } : {})}
+                                  />
+                                ) : isTeamAdmin && m.userId !== user?.id ? (
+                                  <Chip
+                                    label="Set"
+                                    size="small"
+                                    variant="outlined"
+                                    sx={{ cursor: 'pointer' }}
+                                    onClick={() => {
+                                      setTeamExpiryTarget({ teamId: selectedTeam.id, userId: m.userId, name: m.username || m.email, expiresAt: null });
+                                      setTeamExpiryValue('');
+                                      setTeamExpiryOpen(true);
+                                    }}
+                                  />
+                                ) : (
+                                  <Typography variant="caption" color="text.secondary">—</Typography>
                                 )}
                               </TableCell>
                               {isTeamAdmin && (
@@ -379,6 +419,61 @@ export default function TeamSection({ onNavigateToTab }: TeamSectionProps) {
         <DialogActions>
           <Button onClick={() => setRemoveTarget(null)}>Cancel</Button>
           <Button onClick={handleRemoveMember} color="error" variant="contained">Remove</Button>
+        </DialogActions>
+      </Dialog>
+
+      {/* Team member expiry dialog */}
+      <Dialog open={teamExpiryOpen} onClose={() => setTeamExpiryOpen(false)} maxWidth="xs" fullWidth>
+        <DialogTitle>Member Expiration — {teamExpiryTarget?.name}</DialogTitle>
+        <DialogContent>
+          <Box sx={{ display: 'flex', flexDirection: 'column', gap: 2, mt: 1 }}>
+            <TextField
+              label="Expires At"
+              type="datetime-local"
+              value={teamExpiryValue}
+              onChange={(e) => setTeamExpiryValue(e.target.value)}
+              fullWidth
+              size="small"
+              slotProps={{ inputLabel: { shrink: true } }}
+              helperText="Clear to remove expiration"
+            />
+          </Box>
+        </DialogContent>
+        <DialogActions>
+          {teamExpiryTarget?.expiresAt && (
+            <Button
+              color="warning"
+              disabled={savingTeamExpiry}
+              onClick={async () => {
+                if (!teamExpiryTarget) return;
+                setSavingTeamExpiry(true);
+                try {
+                  await updateMemberExpiry(teamExpiryTarget.teamId, teamExpiryTarget.userId, null);
+                  setTeamExpiryOpen(false);
+                } catch { /* ignore */ }
+                setSavingTeamExpiry(false);
+              }}
+            >
+              Remove Expiration
+            </Button>
+          )}
+          <Box sx={{ flex: 1 }} />
+          <Button onClick={() => setTeamExpiryOpen(false)}>Cancel</Button>
+          <Button
+            variant="contained"
+            disabled={savingTeamExpiry || !teamExpiryValue}
+            onClick={async () => {
+              if (!teamExpiryTarget || !teamExpiryValue) return;
+              setSavingTeamExpiry(true);
+              try {
+                await updateMemberExpiry(teamExpiryTarget.teamId, teamExpiryTarget.userId, new Date(teamExpiryValue).toISOString());
+                setTeamExpiryOpen(false);
+              } catch { /* ignore */ }
+              setSavingTeamExpiry(false);
+            }}
+          >
+            {savingTeamExpiry ? 'Saving...' : 'Save'}
+          </Button>
         </DialogActions>
       </Dialog>
     </>

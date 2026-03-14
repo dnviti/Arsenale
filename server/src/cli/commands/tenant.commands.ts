@@ -5,6 +5,7 @@ import * as tenantService from '../../services/tenant.service';
 import * as auditService from '../../services/audit.service';
 import * as secretService from '../../services/secret.service';
 import { AuditAction } from '../../generated/prisma/client';
+import { TenantRoleType } from '../../types';
 import { resolveUser, resolveTenant } from '../helpers/resolve';
 import { requireConfirm } from '../helpers/confirm';
 import { unlockUserVault } from '../helpers/vault';
@@ -188,13 +189,13 @@ export function registerTenantCommands(program: Command): void {
     .description('Add an existing user to a tenant')
     .argument('<identifier>', 'Tenant UUID or slug')
     .requiredOption('--email <email>', 'User email to add')
-    .option('--role <role>', 'Role (ADMIN|MEMBER)', 'MEMBER')
+    .option('--role <role>', 'Role (ADMIN|OPERATOR|MEMBER|CONSULTANT|AUDITOR|GUEST)', 'MEMBER')
     .option('--format <format>', 'Output format (json|table)', 'table')
     .action(async (identifier: string, opts: { email: string; role: string; format: string }) => {
       const t = await resolveTenant(identifier);
       if (!t) { printError(`Tenant not found: ${identifier}`); process.exitCode = 1; return; }
 
-      const result = await tenantService.inviteUser(t.id, opts.email, opts.role as 'ADMIN' | 'MEMBER');
+      const result = await tenantService.inviteUser(t.id, opts.email, opts.role as TenantRoleType);
 
       auditService.log({
         userId: null,
@@ -245,6 +246,56 @@ export function registerTenantCommands(program: Command): void {
         printJson({ removed: true, email: u.email, tenant: t.name });
       } else {
         printSuccess(`Removed ${u.email} from ${t.name}`);
+      }
+    });
+
+  tenant
+    .command('update')
+    .description('Update tenant configuration')
+    .argument('<identifier>', 'Tenant UUID or slug')
+    .option('--name <name>', 'New tenant name')
+    .option('--mfa-required', 'Require MFA for all members')
+    .option('--no-mfa-required', 'Do not require MFA')
+    .option('--session-timeout <seconds>', 'Default session timeout in seconds')
+    .option('--format <format>', 'Output format (json|table)', 'table')
+    .action(async (identifier: string, opts: { name?: string; mfaRequired?: boolean; sessionTimeout?: string; format: string }) => {
+      const t = await resolveTenant(identifier);
+      if (!t) { printError(`Tenant not found: ${identifier}`); process.exitCode = 1; return; }
+
+      const data: { name?: string; mfaRequired?: boolean; defaultSessionTimeoutSeconds?: number } = {};
+      if (opts.name !== undefined) data.name = opts.name;
+      if (opts.mfaRequired !== undefined) data.mfaRequired = opts.mfaRequired;
+      if (opts.sessionTimeout !== undefined) data.defaultSessionTimeoutSeconds = parseInt(opts.sessionTimeout, 10);
+
+      if (Object.keys(data).length === 0) {
+        printError('No updates specified. Use --name, --mfa-required/--no-mfa-required, or --session-timeout.');
+        process.exitCode = 1;
+        return;
+      }
+
+      try {
+        const result = await tenantService.updateTenant(t.id, data);
+
+        auditService.log({
+          userId: null,
+          action: AuditAction.TENANT_UPDATE,
+          targetType: 'TENANT',
+          targetId: t.id,
+          ipAddress: 'cli',
+          details: { changes: data, source: 'cli' },
+        });
+
+        if (opts.format === 'json') {
+          printJson(result);
+        } else {
+          printSuccess(`Tenant updated: ${result.name} (${result.id})`);
+          if (data.name) console.log(`  Name: ${result.name}`);
+          if (data.mfaRequired !== undefined) console.log(`  MFA required: ${result.mfaRequired ? 'yes' : 'no'}`);
+          if (data.defaultSessionTimeoutSeconds !== undefined) console.log(`  Session timeout: ${result.defaultSessionTimeoutSeconds}s`);
+        }
+      } catch (err) {
+        printError(err instanceof Error ? err.message : String(err));
+        process.exitCode = 1;
       }
     });
 

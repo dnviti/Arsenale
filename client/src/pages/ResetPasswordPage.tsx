@@ -10,8 +10,10 @@ import {
   completePasswordResetApi,
 } from '../api/passwordReset.api';
 import { extractApiError } from '../utils/apiError';
+import PasswordStrengthMeter from '../components/common/PasswordStrengthMeter';
+import RecoveryKeyConfirmDialog from '../components/common/RecoveryKeyConfirmDialog';
 
-type Step = 'validating' | 'sms' | 'form' | 'success' | 'error';
+type Step = 'validating' | 'sms' | 'form' | 'recovery-key' | 'success' | 'error';
 
 export default function ResetPasswordPage() {
   const [searchParams] = useSearchParams();
@@ -96,8 +98,8 @@ export default function ResetPasswordPage() {
       setError('Passwords do not match.');
       return;
     }
-    if (newPassword.length < 8) {
-      setError('Password must be at least 8 characters.');
+    if (newPassword.length < 10) {
+      setError('Password must be at least 10 characters.');
       return;
     }
 
@@ -111,7 +113,11 @@ export default function ResetPasswordPage() {
       });
       setVaultPreserved(result.vaultPreserved);
       setNewRecoveryKey(result.newRecoveryKey || '');
-      setStep('success');
+      if (result.newRecoveryKey) {
+        setStep('recovery-key');
+      } else {
+        setStep('success');
+      }
     } catch (err: unknown) {
       setError(extractApiError(err, 'Password reset failed. Please try again.'));
     } finally {
@@ -227,8 +233,9 @@ export default function ResetPasswordPage() {
                 margin="normal"
                 required
                 autoFocus
-                helperText="Min 8 characters"
+                helperText="Min 10 characters"
               />
+              <PasswordStrengthMeter password={newPassword} />
               <TextField
                 fullWidth
                 label="Confirm New Password"
@@ -293,35 +300,17 @@ export default function ResetPasswordPage() {
                   Your vault has been reset. Previously saved connection passwords and secrets have been cleared.
                 </Alert>
               )}
-              {newRecoveryKey && (
-                <Alert severity="warning" sx={{ mb: 2 }}>
-                  <Typography variant="subtitle2" gutterBottom>
-                    Save your new vault recovery key:
-                  </Typography>
-                  <Typography
-                    variant="body2"
-                    sx={{
-                      fontFamily: 'monospace',
-                      wordBreak: 'break-all',
-                      bgcolor: 'action.hover',
-                      p: 1,
-                      borderRadius: 1,
-                      userSelect: 'all',
-                    }}
-                  >
-                    {newRecoveryKey}
-                  </Typography>
-                  <Typography variant="caption" sx={{ display: 'block', mt: 1 }}>
-                    Store this key in a safe place. You will need it to recover your vault
-                    if you forget your password again. This key is shown only once.
-                  </Typography>
-                </Alert>
-              )}
               <Typography variant="body2" align="center">
                 <Link component={RouterLink} to="/login?passwordReset=true">Go to Sign In</Link>
               </Typography>
             </>
           )}
+
+          <RecoveryKeyConfirmDialog
+            open={step === 'recovery-key'}
+            recoveryKey={newRecoveryKey}
+            onConfirmed={() => { setNewRecoveryKey(''); setStep('success'); }}
+          />
         </CardContent>
       </Card>
     </Box>

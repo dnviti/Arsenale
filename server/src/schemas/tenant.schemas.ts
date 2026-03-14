@@ -11,17 +11,22 @@ export const updateTenantSchema = z.object({
   defaultSessionTimeoutSeconds: z.number().int().min(60).max(86400).optional(),
   mfaRequired: z.boolean().optional(),
   vaultAutoLockMaxMinutes: z.number().int().min(0).nullable().optional(),
+  dlpDisableCopy: z.boolean().optional(),
+  dlpDisablePaste: z.boolean().optional(),
+  dlpDisableDownload: z.boolean().optional(),
+  dlpDisableUpload: z.boolean().optional(),
 });
 export type UpdateTenantInput = z.infer<typeof updateTenantSchema>;
 
 export const inviteUserSchema = z.object({
   email: z.string().email(),
-  role: z.enum(['ADMIN', 'MEMBER']),
+  role: z.enum(['ADMIN', 'OPERATOR', 'MEMBER', 'CONSULTANT', 'AUDITOR', 'GUEST']),
+  expiresAt: z.string().datetime().optional().nullable(),
 });
 export type InviteUserInput = z.infer<typeof inviteUserSchema>;
 
 export const updateRoleSchema = z.object({
-  role: z.enum(['OWNER', 'ADMIN', 'MEMBER']),
+  role: z.enum(['OWNER', 'ADMIN', 'OPERATOR', 'MEMBER', 'CONSULTANT', 'AUDITOR', 'GUEST']),
 });
 export type UpdateRoleInput = z.infer<typeof updateRoleSchema>;
 
@@ -29,8 +34,9 @@ export const createUserSchema = z.object({
   email: z.string().email(),
   username: z.string().min(1).max(100).optional(),
   password: passwordSchema,
-  role: z.enum(['ADMIN', 'MEMBER']),
+  role: z.enum(['ADMIN', 'OPERATOR', 'MEMBER', 'CONSULTANT', 'AUDITOR', 'GUEST']),
   sendWelcomeEmail: z.boolean().optional().default(false),
+  expiresAt: z.string().datetime().optional().nullable(),
 });
 export type CreateUserInput = z.infer<typeof createUserSchema>;
 
@@ -50,3 +56,8 @@ export const adminChangePasswordSchema = z.object({
   verificationId: z.string().uuid(),
 });
 export type AdminChangePasswordInput = z.infer<typeof adminChangePasswordSchema>;
+
+export const updateMembershipExpirySchema = z.object({
+  expiresAt: z.string().datetime().nullable(),
+});
+export type UpdateMembershipExpiryInput = z.infer<typeof updateMembershipExpirySchema>;

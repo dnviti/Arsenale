@@ -8,7 +8,8 @@ import { initializePassport } from './config/passport';
 import { setupSocketIO } from './socket';
 import { logger, toGuacamoleLogLevel } from './utils/logger';
 import prisma from './lib/prisma';
-import { startKeyRotationJob, stopAllJobs } from './services/scheduler.service';
+import { startKeyRotationJob, startLdapSyncJob, startMembershipExpiryJob, stopAllJobs } from './services/scheduler.service';
+import { startAllSyncJobs, stopAllSyncJobs } from './services/syncScheduler.service';
 import { startAllMonitors, stopAllMonitors } from './services/gatewayMonitor.service';
 import { cleanupExpiredShares } from './services/externalShare.service';
 import { cleanupExpiredTokens } from './services/auth.service';
@@ -96,8 +97,13 @@ async function main() {
   // Initialize session cleanup with Socket.IO reference
   initSessionCleanup(io);
 
-  // Start scheduled jobs (SSH key rotation cron)
+  // Start scheduled jobs
   startKeyRotationJob();
+  startLdapSyncJob();
+  startMembershipExpiryJob();
+  startAllSyncJobs().catch((err) => {
+    logger.error('Failed to start sync jobs:', err);
+  });
 
   // Start gateway health monitors
   startAllMonitors();
@@ -341,6 +347,7 @@ async function main() {
     logger.info('Shutting down...');
     stopAllMonitors();
     stopAllJobs();
+    stopAllSyncJobs();
 
     // Close all active sessions gracefully
     try {

@@ -2,20 +2,85 @@
 name: git-publish
 description: Push develop and open an auto-merging PR into main.
 disable-model-invocation: true
-allowed-tools: Bash
 ---
 
 # Publish develop to main
 
 You are a Git operator for the Arsenale project. Your job is to push `develop` and open a pull request into `main` with auto-merge enabled.
 
-The `main` branch is protected by a ruleset that requires PRs and the `verify` status check to pass before merging. Direct pushes are blocked.
+The `main` branch is protected by a ruleset that requires PRs and the `verify` status check to pass before merging. Direct pushes are blocked — this skill handles that workflow automatically.
 
 ## Arguments
 
 The user invoked with: **$ARGUMENTS**
 
+## Platform Commands
+
+Use `python3 .claude/scripts/task_manager.py platform-cmd <operation> [key=value ...]` to generate the correct CLI command for the detected platform (GitHub/GitLab).
+
+Supported operations: `list-issues`, `search-issues`, `view-issue`, `edit-issue`, `close-issue`, `comment-issue`, `create-issue`, `create-pr`, `list-pr`, `merge-pr`, `create-release`, `edit-release`.
+
+Example: `python3 .claude/scripts/task_manager.py platform-cmd create-issue title="[CODE] Title" body="Description" labels="task,status:todo"`
+
 ## Instructions
+
+### Step 0: Check for untested tasks
+
+Before pushing to the release branch, verify that no `status:to-test` tasks exist that could introduce untested code.
+
+```bash
+python3 .claude/scripts/task_manager.py platform-config
+```
+
+Store the JSON result. Use `enabled`, `repo`, and `cli` fields in subsequent commands.
+
+**If `enabled` is `true`:**
+```bash
+TOTEST_TASKS=$(gh issue list --repo "$TRACKER_REPO" --label "task,status:to-test" --state open --json number,title --jq '.[] | "#\(.number) \(.title)"' 2>/dev/null)
+# GitLab: glab issue list -R "$TRACKER_REPO" -l "task,status:to-test" --state opened --output json | jq '.[] | "#\(.iid) \(.title)"'
+```
+
+If any to-test tasks are found, warn the user:
+
+> "**Warning:** The following tasks are still awaiting testing:
+> - [list of to-test tasks]
+>
+> Publishing may push untested features to the release branch. Consider running `/test-engineer` to complete testing first."
+
+Use `AskUserQuestion` with options:
+- **"Continue publishing anyway"** — proceed to Step 1
+- **"Abort and test first"** — stop here
+
+STOP HERE after calling `AskUserQuestion`. Do NOT proceed until the user responds.
+
+**If `TRACKER_ENABLED` is `false` or config missing:** Skip this check.
+
+### Step 0.5: Check release plan completeness (advisory)
+
+Check if a release plan exists for the next version:
+```bash
+python3 .claude/scripts/release_manager.py release-plan-next
+```
+
+If `found` is `true`, check the status of all planned tasks. For each task code in the release's `tasks` array, check if it is in `status:done`:
+
+**In platform-only or dual sync mode:**
+```bash
+gh issue list --repo "$TRACKER_REPO" --search "[TASK-CODE] in:title" --label "task" --json labels,state --jq '.[0]'
+# GitLab: glab issue list -R "$TRACKER_REPO" --search "[TASK-CODE]" -l task --output json | jq '.[0]'
+```
+
+If any tasks are incomplete (not `status:done`), warn the user:
+
+> "**Advisory:** The planned release **v{VERSION}** (theme: '{THEME}') has {N} tasks still incomplete:
+> - [TASK-CODE] — status: {STATUS}
+> - ...
+>
+> Publishing now may result in a partial release."
+
+This is advisory only — proceed to Step 1 regardless of the user's response. Do NOT block publishing.
+
+If `found` is `false` or `releases.json` does not exist, skip this check silently.
 
 ### Step 1: Commit if needed
 
@@ -48,16 +113,19 @@ Check whether an open PR from `develop` into `main` already exists:
 
 ```bash
 gh pr list --base main --head develop --state open --json number,url --jq '.[0]'
+# GitLab: glab mr list --target-branch main --source-branch develop --state opened --output json | jq '.[0]'
 ```
 
 - If a PR already exists, reuse it. Store its URL for Step 4.
-- If no PR exists, create one. **If GitHub Issues integration is enabled**, enrich the PR body with issue references:
+- If no PR exists, create one. **If issues tracker integration is enabled**, enrich the PR/MR body with issue references:
 
 ```bash
-GH_ENABLED="$(jq -r '.enabled // false' .claude/github-issues.json 2>/dev/null)"
+TRACKER_CFG=".claude/issues-tracker.json"; [ ! -f "$TRACKER_CFG" ] && TRACKER_CFG=".claude/github-issues.json"
+PLATFORM="$(jq -r '.platform // "github"' "$TRACKER_CFG" 2>/dev/null)"
+TRACKER_ENABLED="$(jq -r '.enabled // false' "$TRACKER_CFG" 2>/dev/null)"
 ```
 
-**If `GH_ENABLED` is `true`:**
+**If `TRACKER_ENABLED` is `true`:**
 
 1. Collect task codes from commits between main and develop:
    ```bash
@@ -66,9 +134,10 @@ GH_ENABLED="$(jq -r '.enabled // false' .claude/github-issues.json 2>/dev/null)"
 
 2. For each task code, find the corresponding GitHub issue number:
    ```bash
-   GH_REPO="$(jq -r '.repo' .claude/github-issues.json)"
+   TRACKER_REPO="$(jq -r '.repo' "$TRACKER_CFG")"
    # For each code in TASK_CODES:
-   ISSUE_NUM=$(gh issue list --repo "$GH_REPO" --search "[$CODE] in:title" --label task --json number --jq '.[0].number' 2>/dev/null)
+   ISSUE_NUM=$(gh issue list --repo "$TRACKER_REPO" --search "[$CODE] in:title" --label task --json number --jq '.[0].number' 2>/dev/null)
+   # GitLab: glab issue list -R "$TRACKER_REPO" --search "[$CODE]" -l task --output json | jq '.[0].iid'
    ```
 
 3. Build the PR body with issue references (use `Refs` not `Closes` — issues are already closed by `/task-pick`):
@@ -84,19 +153,21 @@ GH_ENABLED="$(jq -r '.enabled // false' .claude/github-issues.json 2>/dev/null)"
    *Generated by Claude Code via `/git-publish`*
    ```
 
-4. Create the PR with the enriched body:
+4. Create the PR/MR with the enriched body:
    ```bash
    gh pr create --base main --head develop \
      --title "${ARGUMENTS:-Release update}" \
      --body "$PR_BODY"
+   # GitLab: glab mr create --target-branch main --source-branch develop --title "${ARGUMENTS:-Release update}" --description "$PR_BODY"
    ```
 
-**If `GH_ENABLED` is `false` or the file is missing**, use the simple body:
+**If `TRACKER_ENABLED` is `false` or the file is missing**, use the simple body:
 
 ```bash
 gh pr create --base main --head develop \
   --title "${ARGUMENTS:-Release update}" \
   --body "Merge develop into main"
+# GitLab: glab mr create --target-branch main --source-branch develop --title "${ARGUMENTS:-Release update}" --description "Merge develop into main"
 ```
 
 Store the returned URL for Step 4.
@@ -105,12 +176,14 @@ Store the returned URL for Step 4.
 
 ```bash
 gh pr merge <PR_URL> --auto --merge
+# GitLab: glab mr merge <MR_IID> --auto-merge --when-pipeline-succeeds
 ```
 
 If this fails with an error about auto-merge not being enabled on the repository, inform the user:
 
 > "Auto-merge is not enabled for this repository.
-> Enable it at **Settings → General → Allow auto-merge**, or merge manually once the `verify` check passes."
+> Enable it at **Settings → General → Allow auto-merge**, or merge manually once the `verify` check passes.
+> For GitLab, ensure **Merge when pipeline succeeds** is enabled in **Settings → Merge Requests**."
 
 ### Step 5: Report
 
@@ -119,4 +192,6 @@ Confirm success:
 > "Published successfully:
 > - `develop` pushed to origin
 > - Pull Request: <PR_URL>
-> - Auto-merge enabled — will merge once the `verify` check passes"
+> - Auto-merge enabled — will merge once the `verify` check passes
+>
+> The Release and Docker Build workflows will trigger automatically upon merge to `main`."

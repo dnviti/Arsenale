@@ -17,6 +17,16 @@ if [ -z "$PROJECT_ROOT" ]; then
   done
 fi
 
+# ---------------------------------------------------------------------------
+# GitHub-only mode detection: exit silently when local files are not used
+# ---------------------------------------------------------------------------
+GH_CONFIG="${PROJECT_ROOT:-.}/.claude/github-issues.json"
+GH_ENABLED="$(jq -r '.enabled // false' "$GH_CONFIG" 2>/dev/null)"
+GH_SYNC="$(jq -r '.sync // false' "$GH_CONFIG" 2>/dev/null)"
+if [ "$GH_ENABLED" = "true" ] && [ "$GH_SYNC" != "true" ]; then
+  exit 0
+fi
+
 TODO_FILE="$PROJECT_ROOT/to-do.txt"
 PROGRESS_FILE="$PROJECT_ROOT/progressing.txt"
 DONE_FILE="$PROJECT_ROOT/done.txt"

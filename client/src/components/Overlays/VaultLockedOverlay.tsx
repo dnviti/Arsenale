@@ -1,7 +1,7 @@
 import { useState, useEffect, useCallback } from 'react';
 import {
-  Box, Typography, TextField, Button, Alert, Paper,
-  CircularProgress, Divider, Link,
+  Box, Typography, TextField, Button, Alert,
+  CircularProgress, Divider, Link, Dialog,
 } from '@mui/material';
 import {
   Lock as LockIcon,
@@ -149,18 +149,15 @@ export default function VaultLockedOverlay() {
   const otherMethods = availableMethods.filter((m) => m !== activeMethod);
 
   return (
-    <Box
-      sx={{
-        position: 'fixed',
-        top: 0, left: 0, right: 0, bottom: 0,
-        zIndex: 1400,
-        display: 'flex',
-        alignItems: 'center',
-        justifyContent: 'center',
-        bgcolor: 'rgba(0, 0, 0, 0.5)',
+    <Dialog
+      open
+      disableEscapeKeyDown
+      sx={{ zIndex: 1400 }}
+      slotProps={{
+        backdrop: { sx: { bgcolor: 'rgba(0, 0, 0, 0.5)' } },
+        paper: { elevation: 8, sx: { p: 4, maxWidth: 400, width: '100%', textAlign: 'center' } },
       }}
     >
-      <Paper elevation={8} sx={{ p: 4, maxWidth: 400, width: '100%', textAlign: 'center' }}>
         <LockIcon sx={{ fontSize: 48, color: 'warning.main', mb: 2 }} />
         <Typography variant="h6" gutterBottom>
           Vault Locked
@@ -320,7 +317,6 @@ export default function VaultLockedOverlay() {
         >
           Logout
         </Button>
-      </Paper>
-    </Box>
+    </Dialog>
   );
 }

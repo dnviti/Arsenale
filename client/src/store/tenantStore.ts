@@ -7,10 +7,12 @@ import {
   updateUserRole as updateUserRoleApi, removeUser as removeUserApi,
   createTenantUser, toggleUserEnabled as toggleUserEnabledApi,
   getMyTenants, switchTenant as switchTenantApi,
+  updateMembershipExpiry as updateMembershipExpiryApi,
 } from '../api/tenant.api';
 import { useAuthStore } from './authStore';
 import { useTabsStore } from './tabsStore';
 import { useConnectionsStore } from './connectionsStore';
+import type { TenantRole } from '../utils/roles';
 
 interface TenantState {
   tenant: TenantData | null;
@@ -26,11 +28,12 @@ interface TenantState {
   updateTenant: (data: { name?: string; defaultSessionTimeoutSeconds?: number; mfaRequired?: boolean; vaultAutoLockMaxMinutes?: number | null }) => Promise<void>;
   deleteTenant: () => Promise<void>;
   fetchUsers: () => Promise<void>;
-  inviteUser: (email: string, role: 'ADMIN' | 'MEMBER') => Promise<void>;
-  updateUserRole: (userId: string, role: 'OWNER' | 'ADMIN' | 'MEMBER') => Promise<void>;
+  inviteUser: (email: string, role: TenantRole, expiresAt?: string) => Promise<void>;
+  updateUserRole: (userId: string, role: TenantRole) => Promise<void>;
   removeUser: (userId: string) => Promise<void>;
   createUser: (data: CreateUserData) => Promise<CreateUserResult>;
   toggleUserEnabled: (userId: string, enabled: boolean) => Promise<void>;
+  updateMembershipExpiry: (userId: string, expiresAt: string | null) => Promise<void>;
   reset: () => void;
 }
 
@@ -110,10 +113,10 @@ export const useTenantStore = create<TenantState>((set, get) => ({
     }
   },
 
-  inviteUser: async (email, role) => {
+  inviteUser: async (email, role, expiresAt?) => {
     const { tenant } = get();
     if (!tenant) return;
-    await inviteUserApi(tenant.id, email, role);
+    await inviteUserApi(tenant.id, email, role, expiresAt);
     await get().fetchUsers();
   },
 
@@ -143,6 +146,13 @@ export const useTenantStore = create<TenantState>((set, get) => ({
     const { tenant } = get();
     if (!tenant) return;
     await toggleUserEnabledApi(tenant.id, userId, enabled);
+    await get().fetchUsers();
+  },
+
+  updateMembershipExpiry: async (userId, expiresAt) => {
+    const { tenant } = get();
+    if (!tenant) return;
+    await updateMembershipExpiryApi(tenant.id, userId, expiresAt);
     await get().fetchUsers();
   },
 

@@ -14,6 +14,7 @@ import { useAuthStore } from '../store/authStore';
 import { useVaultStore } from '../store/vaultStore';
 import { useUiPreferencesStore } from '../store/uiPreferencesStore';
 import OAuthButtons from '../components/OAuthButtons';
+import { getOAuthProviders } from '../api/oauth.api';
 import { extractApiError } from '../utils/apiError';
 
 type Step = 'credentials' | 'mfa-choice' | 'totp' | 'sms' | 'webauthn' | 'mfa-setup' | 'tenant-select';
@@ -21,6 +22,8 @@ type Step = 'credentials' | 'mfa-choice' | 'totp' | 'sms' | 'webauthn' | 'mfa-se
 export default function LoginPage() {
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
+  const [ldapEnabled, setLdapEnabled] = useState(false);
+  const [ldapProviderName, setLdapProviderName] = useState('LDAP');
   const [error, setError] = useState('');
   const [success, setSuccess] = useState('');
   const [loading, setLoading] = useState(false);
@@ -42,6 +45,17 @@ export default function LoginPage() {
   const [searchParams, setSearchParams] = useSearchParams();
   const setAuth = useAuthStore((s) => s.setAuth);
   const setVaultUnlocked = useVaultStore((s) => s.setUnlocked);
+
+  useEffect(() => {
+    getOAuthProviders()
+      .then((p) => {
+        if (p.ldap) {
+          setLdapEnabled(true);
+          setLdapProviderName(p.ldapProviderName || 'LDAP');
+        }
+      })
+      .catch(() => {});
+  }, []);
 
   useEffect(() => {
     if (searchParams.get('verified') === 'true') {
@@ -406,6 +420,11 @@ export default function LoginPage() {
               >
                 {loading ? 'Signing in...' : 'Sign In'}
               </Button>
+              {ldapEnabled && (
+                <Typography variant="caption" color="text.secondary" align="center" display="block" sx={{ mb: 0.5 }}>
+                  {ldapProviderName} directory login is available. Use your directory credentials above.
+                </Typography>
+              )}
               <Typography variant="body2" align="center">
                 Don't have an account?{' '}
                 <Link component={RouterLink} to="/register">Sign up</Link>

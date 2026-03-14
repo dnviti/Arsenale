@@ -15,8 +15,7 @@ import InviteDialog from '../Dialogs/InviteDialog';
 import CreateUserDialog from '../Dialogs/CreateUserDialog';
 import IdentityVerification from '../common/IdentityVerification';
 import { extractApiError } from '../../utils/apiError';
-
-const TENANT_ROLES = ['OWNER', 'ADMIN', 'MEMBER'] as const;
+import { ALL_ROLES, ROLE_LABELS, isAdminOrAbove, type TenantRole } from '../../utils/roles';
 
 interface TenantSectionProps {
   onNavigateToTab?: (tabId: string) => void;
@@ -37,6 +36,7 @@ export default function TenantSection({ onNavigateToTab, onViewUserProfile }: Te
   const updateUserRole = useTenantStore((s) => s.updateUserRole);
   const removeUser = useTenantStore((s) => s.removeUser);
   const toggleUserEnabled = useTenantStore((s) => s.toggleUserEnabled);
+  const updateMembershipExpiry = useTenantStore((s) => s.updateMembershipExpiry);
 
   const [editName, setEditName] = useState('');
   const [nameError, setNameError] = useState('');
@@ -61,6 +61,12 @@ export default function TenantSection({ onNavigateToTab, onViewUserProfile }: Te
   const [vaultAutoLockMax, setVaultAutoLockMax] = useState<string>('none');
   const [savingVaultLock, setSavingVaultLock] = useState(false);
   const [vaultLockError, setVaultLockError] = useState('');
+  const [dlpDisableCopy, setDlpDisableCopy] = useState(false);
+  const [dlpDisablePaste, setDlpDisablePaste] = useState(false);
+  const [dlpDisableDownload, setDlpDisableDownload] = useState(false);
+  const [dlpDisableUpload, setDlpDisableUpload] = useState(false);
+  const [savingDlp, setSavingDlp] = useState(false);
+  const [dlpError, setDlpError] = useState('');
   const [createUserOpen, setCreateUserOpen] = useState(false);
   const [togglingUser, setTogglingUser] = useState<string | null>(null);
 
@@ -92,8 +98,14 @@ export default function TenantSection({ onNavigateToTab, onViewUserProfile }: Te
   const [changePwdError, setChangePwdError] = useState('');
   const [recoveryKey, setRecoveryKey] = useState('');
 
+  // Membership expiry dialog
+  const [expiryDialogOpen, setExpiryDialogOpen] = useState(false);
+  const [expiryTarget, setExpiryTarget] = useState<{ id: string; name: string; expiresAt: string | null } | null>(null);
+  const [expiryValue, setExpiryValue] = useState('');
+  const [savingExpiry, setSavingExpiry] = useState(false);
+
   const tenantRole = user?.tenantRole;
-  const isAdmin = tenantRole === 'OWNER' || tenantRole === 'ADMIN';
+  const isAdmin = isAdminOrAbove(tenantRole);
   const isOwner = tenantRole === 'OWNER';
 
   useEffect(() => {
@@ -106,6 +118,10 @@ export default function TenantSection({ onNavigateToTab, onViewUserProfile }: Te
       setSessionTimeout(String(Math.floor(tenant.defaultSessionTimeoutSeconds / 60)));
       setMfaRequired(tenant.mfaRequired);
       setVaultAutoLockMax(tenant.vaultAutoLockMaxMinutes == null ? 'none' : String(tenant.vaultAutoLockMaxMinutes));
+      setDlpDisableCopy(tenant.dlpDisableCopy);
+      setDlpDisablePaste(tenant.dlpDisablePaste);
+      setDlpDisableDownload(tenant.dlpDisableDownload);
+      setDlpDisableUpload(tenant.dlpDisableUpload);
       fetchUsers();
     }
   }, [tenant, fetchUsers]);
@@ -212,7 +228,7 @@ export default function TenantSection({ onNavigateToTab, onViewUserProfile }: Te
   const handleRoleChange = async (userId: string, newRole: string) => {
     setError('');
     try {
-      await updateUserRole(userId, newRole as 'OWNER' | 'ADMIN' | 'MEMBER');
+      await updateUserRole(userId, newRole as TenantRole);
     } catch (err: unknown) {
       setError(extractApiError(err, 'Failed to update role'));
     }
@@ -500,6 +516,44 @@ export default function TenantSection({ onNavigateToTab, onViewUserProfile }: Te
                   When set, members cannot configure a vault auto-lock timeout exceeding this value or disable auto-lock.
                 </Typography>
               </Box>
+
+              <Box sx={{ mt: 2, pt: 2, borderTop: 1, borderColor: 'divider' }}>
+                <Typography variant="subtitle2" gutterBottom>Data Loss Prevention (DLP)</Typography>
+                <Typography variant="caption" color="text.secondary" display="block" sx={{ mb: 1 }}>
+                  Organization-wide restrictions for RDP and VNC sessions. Per-connection overrides can only be more restrictive.
+                </Typography>
+                {dlpError && <Alert severity="error" sx={{ mb: 1 }} onClose={() => setDlpError('')}>{dlpError}</Alert>}
+                {([
+                  { key: 'dlpDisableCopy' as const, label: 'Disable clipboard copy (remote to local)', value: dlpDisableCopy, setter: setDlpDisableCopy },
+                  { key: 'dlpDisablePaste' as const, label: 'Disable clipboard paste (local to remote)', value: dlpDisablePaste, setter: setDlpDisablePaste },
+                  { key: 'dlpDisableDownload' as const, label: 'Disable file download from shared drive', value: dlpDisableDownload, setter: setDlpDisableDownload },
+                  { key: 'dlpDisableUpload' as const, label: 'Disable file upload to shared drive', value: dlpDisableUpload, setter: setDlpDisableUpload },
+                ] as const).map(({ key, label, value, setter }) => (
+                  <FormControlLabel
+                    key={key}
+                    control={
+                      <Switch
+                        checked={value}
+                        disabled={savingDlp}
+                        onChange={async (_, checked) => {
+                          setDlpError('');
+                          setSavingDlp(true);
+                          try {
+                            await updateTenant({ [key]: checked });
+                            setter(checked);
+                          } catch (err: unknown) {
+                            setDlpError(extractApiError(err, 'Failed to update DLP policy'));
+                          } finally {
+                            setSavingDlp(false);
+                          }
+                        }}
+                      />
+                    }
+                    label={label}
+                    sx={{ display: 'block' }}
+                  />
+                ))}
+              </Box>
             </Box>
           )}
 
@@ -556,6 +610,7 @@ export default function TenantSection({ onNavigateToTab, onViewUserProfile }: Te
                     <TableCell>User</TableCell>
                     <TableCell>Role</TableCell>
                     <TableCell>MFA</TableCell>
+                    {isAdmin && <TableCell>Expires</TableCell>}
                     {isAdmin && <TableCell>Status</TableCell>}
                     {isAdmin && <TableCell align="right">Actions</TableCell>}
                   </TableRow>
@@ -592,8 +647,8 @@ export default function TenantSection({ onNavigateToTab, onViewUserProfile }: Te
                             onChange={(e) => handleRoleChange(u.id, e.target.value)}
                             sx={{ minWidth: 110 }}
                           >
-                            {TENANT_ROLES.map((r) => (
-                              <MenuItem key={r} value={r}>{r}</MenuItem>
+                            {ALL_ROLES.map((r) => (
+                              <MenuItem key={r} value={r}>{ROLE_LABELS[r]}</MenuItem>
                             ))}
                           </Select>
                         ) : (
@@ -607,6 +662,20 @@ export default function TenantSection({ onNavigateToTab, onViewUserProfile }: Te
                           <Chip label="None" size="small" />
                         )}
                       </TableCell>
+                      {isAdmin && (
+                        <TableCell>
+                          {u.expiresAt ? (
+                            <Chip
+                              label={u.expired ? 'Expired' : new Date(u.expiresAt).toLocaleDateString()}
+                              color={u.expired ? 'error' : 'default'}
+                              size="small"
+                              variant="outlined"
+                            />
+                          ) : (
+                            <Typography variant="caption" color="text.secondary">—</Typography>
+                          )}
+                        </TableCell>
+                      )}
                       {isAdmin && (
                         <TableCell>
                           {u.id === user?.id ? (
@@ -706,10 +775,76 @@ export default function TenantSection({ onNavigateToTab, onViewUserProfile }: Te
       >
         <MenuItem onClick={openChangeEmail}>Change Email</MenuItem>
         <MenuItem onClick={openChangePwd}>Change Password</MenuItem>
+        <MenuItem onClick={() => {
+          if (menuTargetUser) {
+            const u = users.find((usr) => usr.id === menuTargetUser.id);
+            setExpiryTarget({ id: menuTargetUser.id, name: menuTargetUser.name, expiresAt: u?.expiresAt ?? null });
+            setExpiryValue(u?.expiresAt ? new Date(u.expiresAt).toISOString().slice(0, 16) : '');
+            setExpiryDialogOpen(true);
+            closeAdminMenu();
+          }
+        }}>
+          {users.find((usr) => usr.id === menuTargetUser?.id)?.expiresAt ? 'Change Expiration' : 'Set Expiration'}
+        </MenuItem>
         <MenuItem onClick={() => { if (menuTargetUser) { setRemoveTarget({ id: menuTargetUser.id, name: menuTargetUser.name }); closeAdminMenu(); } }} sx={{ color: 'error.main' }}>
           Remove
         </MenuItem>
       </Menu>
+
+      {/* Membership expiry dialog */}
+      <Dialog open={expiryDialogOpen} onClose={() => setExpiryDialogOpen(false)} maxWidth="xs" fullWidth>
+        <DialogTitle>Membership Expiration — {expiryTarget?.name}</DialogTitle>
+        <DialogContent>
+          <Box sx={{ display: 'flex', flexDirection: 'column', gap: 2, mt: 1 }}>
+            <TextField
+              label="Expires At"
+              type="datetime-local"
+              value={expiryValue}
+              onChange={(e) => setExpiryValue(e.target.value)}
+              fullWidth
+              size="small"
+              slotProps={{ inputLabel: { shrink: true } }}
+              helperText="Clear to remove expiration"
+            />
+          </Box>
+        </DialogContent>
+        <DialogActions>
+          {expiryTarget?.expiresAt && (
+            <Button
+              color="warning"
+              disabled={savingExpiry}
+              onClick={async () => {
+                if (!expiryTarget) return;
+                setSavingExpiry(true);
+                try {
+                  await updateMembershipExpiry(expiryTarget.id, null);
+                  setExpiryDialogOpen(false);
+                } catch { /* ignore */ }
+                setSavingExpiry(false);
+              }}
+            >
+              Remove Expiration
+            </Button>
+          )}
+          <Box sx={{ flex: 1 }} />
+          <Button onClick={() => setExpiryDialogOpen(false)}>Cancel</Button>
+          <Button
+            variant="contained"
+            disabled={savingExpiry || !expiryValue}
+            onClick={async () => {
+              if (!expiryTarget || !expiryValue) return;
+              setSavingExpiry(true);
+              try {
+                await updateMembershipExpiry(expiryTarget.id, new Date(expiryValue).toISOString());
+                setExpiryDialogOpen(false);
+              } catch { /* ignore */ }
+              setSavingExpiry(false);
+            }}
+          >
+            {savingExpiry ? 'Saving...' : 'Save'}
+          </Button>
+        </DialogActions>
+      </Dialog>
 
       {/* Admin change email dialog */}
       <Dialog open={changeEmailOpen} onClose={() => setChangeEmailOpen(false)} maxWidth="sm" fullWidth>

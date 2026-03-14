@@ -186,6 +186,8 @@ export async function listMembers(teamId: string) {
     avatarData: m.user.avatarData,
     role: m.role,
     joinedAt: m.joinedAt,
+    expiresAt: m.expiresAt?.toISOString() ?? null,
+    expired: m.expiresAt ? m.expiresAt <= new Date() : false,
   }));
 }
 
@@ -193,7 +195,8 @@ export async function addMember(
   teamId: string,
   targetUserId: string,
   role: 'TEAM_ADMIN' | 'TEAM_EDITOR' | 'TEAM_VIEWER',
-  addedByUserId: string
+  addedByUserId: string,
+  expiresAt?: Date,
 ) {
   // Load team to check tenant
   const team = await prisma.team.findUnique({
@@ -257,6 +260,7 @@ export async function addMember(
       encryptedTeamVaultKey: encKey.ciphertext,
       teamVaultKeyIV: encKey.iv,
       teamVaultKeyTag: encKey.tag,
+      ...(expiresAt && { expiresAt }),
     },
   });
 
@@ -326,6 +330,23 @@ export async function updateMemberRole(
   });
 
   return { userId: targetUserId, role: updated.role };
+}
+
+export async function updateMemberExpiry(
+  teamId: string,
+  targetUserId: string,
+  expiresAt: Date | null,
+) {
+  const membership = await prisma.teamMember.findUnique({
+    where: { teamId_userId: { teamId, userId: targetUserId } },
+  });
+  if (!membership) {
+    throw new AppError('Member not found', 404);
+  }
+  return prisma.teamMember.update({
+    where: { teamId_userId: { teamId, userId: targetUserId } },
+    data: { expiresAt },
+  });
 }
 
 export async function resolveTeamKey(teamId: string, userId: string): Promise<Buffer> {

@@ -8,10 +8,13 @@ import {
   decryptMasterKey,
   getMasterKey,
   lockVault,
+  generateRecoveryKey,
+  encryptMasterKeyWithRecovery,
 } from './crypto.service';
 import { AppError } from '../middleware/error.middleware';
 import { getEmailStatus, sendEmailChangeCode } from './email';
 import * as identityVerification from './identityVerification.service';
+import { assertPasswordNotBreached } from './password.service';
 
 const BCRYPT_ROUNDS = 12;
 const EMAIL_CHANGE_TTL_MS = 15 * 60 * 1000; // 15 minutes
@@ -260,10 +263,16 @@ export async function changePassword(
     oldDerivedKey.fill(0);
   }
 
+  // Check password against known data breaches (HIBP k-Anonymity)
+  await assertPasswordNotBreached(newPassword);
+
   const newPasswordHash = await bcrypt.hash(newPassword, BCRYPT_ROUNDS);
   const newVaultSalt = generateSalt();
   const newDerivedKey = await deriveKeyFromPassword(newPassword, newVaultSalt);
   const newEncryptedVault = encryptMasterKey(masterKey, newDerivedKey);
+
+  const newRecoveryKey = generateRecoveryKey();
+  const recoveryEncrypted = await encryptMasterKeyWithRecovery(masterKey, newRecoveryKey);
 
   await prisma.user.update({
     where: { id: userId },
@@ -273,6 +282,10 @@ export async function changePassword(
       encryptedVaultKey: newEncryptedVault.ciphertext,
       vaultKeyIV: newEncryptedVault.iv,
       vaultKeyTag: newEncryptedVault.tag,
+      encryptedVaultRecoveryKey: recoveryEncrypted.encrypted.ciphertext,
+      vaultRecoveryKeyIV: recoveryEncrypted.encrypted.iv,
+      vaultRecoveryKeyTag: recoveryEncrypted.encrypted.tag,
+      vaultRecoveryKeySalt: recoveryEncrypted.salt,
     },
   });
 
@@ -282,7 +295,7 @@ export async function changePassword(
   lockVault(userId);
   await prisma.refreshToken.deleteMany({ where: { userId } });
 
-  return { success: true };
+  return { success: true, recoveryKey: newRecoveryKey };
 }
 
 export async function updateSshDefaults(userId: string, sshDefaults: Prisma.InputJsonValue) {

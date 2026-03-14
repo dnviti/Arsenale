@@ -3,7 +3,7 @@ import { AuthRequest, assertAuthenticated, assertTenantAuthenticated } from '../
 import * as teamService from '../services/team.service';
 import * as auditService from '../services/audit.service';
 import { getClientIp } from '../utils/ip';
-import type { CreateTeamInput, UpdateTeamInput, AddMemberInput, UpdateMemberRoleInput } from '../schemas/team.schemas';
+import type { CreateTeamInput, UpdateTeamInput, AddMemberInput, UpdateMemberRoleInput, UpdateMemberExpiryInput } from '../schemas/team.schemas';
 
 export async function createTeam(req: AuthRequest, res: Response) {
   assertTenantAuthenticated(req);
@@ -68,13 +68,13 @@ export async function listMembers(req: AuthRequest, res: Response) {
 
 export async function addMember(req: AuthRequest, res: Response) {
   assertAuthenticated(req);
-  const { userId, role } = req.body as AddMemberInput;
+  const { userId, role, expiresAt } = req.body as AddMemberInput;
   const teamId = req.params.id as string;
-  const result = await teamService.addMember(teamId, userId, role, req.user.userId);
+  const result = await teamService.addMember(teamId, userId, role, req.user.userId, expiresAt ? new Date(expiresAt) : undefined);
   auditService.log({
     userId: req.user.userId, action: 'TEAM_ADD_MEMBER',
     targetType: 'TeamMember', targetId: userId,
-    details: { teamId, role },
+    details: { teamId, role, expiresAt: expiresAt ?? null },
     ipAddress: getClientIp(req),
   });
   res.status(201).json(result);
@@ -104,6 +104,23 @@ export async function removeMember(req: AuthRequest, res: Response) {
     userId: req.user.userId, action: 'TEAM_REMOVE_MEMBER',
     targetType: 'TeamMember', targetId: targetUserId,
     details: { teamId },
+    ipAddress: getClientIp(req),
+  });
+  res.json(result);
+}
+
+export async function updateMemberExpiry(req: AuthRequest, res: Response) {
+  assertAuthenticated(req);
+  const { expiresAt } = req.body as UpdateMemberExpiryInput;
+  const teamId = req.params.id as string;
+  const targetUserId = req.params.userId as string;
+  const result = await teamService.updateMemberExpiry(teamId, targetUserId, expiresAt ? new Date(expiresAt) : null);
+  auditService.log({
+    userId: req.user.userId,
+    action: 'TEAM_MEMBERSHIP_EXPIRY_UPDATE',
+    targetType: 'TeamMember',
+    targetId: targetUserId,
+    details: { teamId, expiresAt: expiresAt ?? null },
     ipAddress: getClientIp(req),
   });
   res.json(result);

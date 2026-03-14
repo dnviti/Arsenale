@@ -1,35 +1,61 @@
 ---
 name: task-pick
-description: Pick up the next task for implementation. Prioritizes verifying and closing in-progress tasks before picking new ones.
+description: Pick up the next todo task for implementation.
 disable-model-invocation: true
-allowed-tools: Bash, Read, Grep, Glob, Edit, Write, TaskOutput
 argument-hint: "[TASK-CODE]"
 ---
 
 # Pick Up a Task
 
-You are a task manager for the Arsenale project. Your job is to:
-1. **First**: verify and close any in-progress tasks that have already been implemented
-2. **Then**: pick up a new task only when all in-progress tasks are resolved
+You are a task manager for the Arsenale project. Your job is to pick up the next todo task for implementation.
 
-Tasks are split across three files by status:
-- `to-do.txt` — Pending tasks `[ ]`
-- `progressing.txt` — In-progress tasks `[~]`
-- `done.txt` — Completed tasks `[x]`
+## Mode Detection
+
+!`python3 .claude/scripts/task_manager.py platform-config`
+
+Use the `mode` field to determine behavior: `platform-only`, `dual-sync`, or `local-only`. The JSON includes `platform`, `enabled`, `sync`, `repo`, `cli` (gh/glab), and `labels`.
+
+## Platform Commands
+
+Use `python3 .claude/scripts/task_manager.py platform-cmd <operation> [key=value ...]` to generate the correct CLI command for the detected platform (GitHub/GitLab).
+
+Supported operations: `list-issues`, `search-issues`, `view-issue`, `edit-issue`, `close-issue`, `comment-issue`, `create-issue`, `create-pr`, `list-pr`, `merge-pr`, `create-release`, `edit-release`.
+
+Example: `python3 .claude/scripts/task_manager.py platform-cmd create-issue title="[CODE] Title" body="Description" labels="task,status:todo"`
 
 ## Current Task State
 
-### In-progress tasks (from progressing.txt):
-!`grep '^\[~\]' progressing.txt 2>/dev/null | tr -d '\r'`
+### Platform-only mode:
 
-### Pending tasks (from to-do.txt):
-!`grep '^\[ \]' to-do.txt | tr -d '\r'`
+```bash
+# Pending tasks (by priority)
+gh issue list --repo "$TRACKER_REPO" --label "task,status:todo,priority:high" --state open --json number,title --jq '.[] | "\(.title)"' 2>/dev/null
+# GitLab: glab issue list -R "$TRACKER_REPO" -l "task,status:todo,priority:high" --state opened --output json | jq '.[].title'
+gh issue list --repo "$TRACKER_REPO" --label "task,status:todo,priority:medium" --state open --json number,title --jq '.[] | "\(.title)"' 2>/dev/null
+# GitLab: glab issue list -R "$TRACKER_REPO" -l "task,status:todo,priority:medium" --state opened --output json | jq '.[].title'
+gh issue list --repo "$TRACKER_REPO" --label "task,status:todo,priority:low" --state open --json number,title --jq '.[] | "\(.title)"' 2>/dev/null
+# GitLab: glab issue list -R "$TRACKER_REPO" -l "task,status:todo,priority:low" --state opened --output json | jq '.[].title'
+# Completed tasks
+gh issue list --repo "$TRACKER_REPO" --label "task,status:done" --state closed --limit 20 --json number,title --jq '.[] | "\(.title)"' 2>/dev/null
+# GitLab: glab issue list -R "$TRACKER_REPO" -l "task,status:done" --state closed --output json | jq '.[].title'
+```
 
-### Completed tasks (from done.txt):
-!`grep '^\[x\]' done.txt 2>/dev/null | tr -d '\r'`
+### Local/Dual mode:
 
-### Recommended implementation order:
-!`grep -A 50 'ORDINE DI IMPLEMENTAZIONE CONSIGLIATO' to-do.txt 2>/dev/null | tr -d '\r'`
+#### Pending tasks:
+```bash
+python3 .claude/scripts/task_manager.py list --status todo --format summary
+```
+
+#### Completed tasks:
+```bash
+python3 .claude/scripts/task_manager.py list --status done --format summary
+```
+
+#### Recommended implementation order:
+```bash
+python3 .claude/scripts/task_manager.py sections --file to-do.txt
+```
 
 ## Instructions
 
@@ -37,246 +63,113 @@ The user wants to pick up a task. The argument provided is: **$ARGUMENTS**
 
 ---
 
-### Step 0: Verify and Close In-Progress Tasks (PRIORITY)
-
-Before picking any new task, you MUST process in-progress tasks from `progressing.txt`.
-
-**If a specific task code was provided as argument** AND that task is already `[~]` in `progressing.txt`: jump directly to Step 0b for that task only, then stop (do not process other in-progress tasks).
-
-**If no argument was provided** OR the argument is not found in `progressing.txt`: process ALL in-progress tasks sequentially as described below.
-
-**0a. Read the in-progress task list:**
-Read `progressing.txt` and identify all tasks marked `[~]`. If there are none, skip to Step 1.
-
-**0b. For each in-progress task (in order), switch to the task branch and verify implementation:**
-
-First, check if a task branch exists for this task:
-
-```bash
-git branch --list "task/<task-code-lowercase>"
-```
-
-- **If the branch exists:** Switch to it: `git checkout task/<task-code-lowercase>`
-- **If it does not exist** (legacy task started before branch-per-task): Continue on the current branch.
-
-Then read the full task block from `progressing.txt` (everything between its `------` separator lines).
-
-Extract two key sections:
-- **FILE COINVOLTI** — the list of files to CREARE (create) and MODIFICARE (modify)
-- **DETTAGLI TECNICI** — the technical implementation details
-
-Perform these verification checks:
-
-1. **File existence checks:**
-   - For each file marked **CREARE**: Use `Glob` to check if the file exists at the specified path. If not found at the exact path, search for the filename in nearby directories (implementations may use slightly different paths, e.g., `files.routes.ts` instead of `filetransfer.routes.ts`).
-   - For each file marked **MODIFICARE**: Verify the file exists.
-
-2. **Implementation content checks:**
-   - For files marked **CREARE**: Read the file and verify it contains meaningful implementation (not empty or stub-only). Check for key exports, components, or functions described in DETTAGLI TECNICI.
-   - For files marked **MODIFICARE**: Use `Grep` to verify the key changes described in DETTAGLI TECNICI are present. Look for new imports, function names, route paths, component names, API endpoints, store fields, and UI elements described in the task.
-   - Cross-check against DETTAGLI TECNICI: for each numbered technical requirement, verify at least one code artifact proves it was implemented.
-
-3. **Build a verification report:**
-   ```
-   VERIFICATION: [TASK-CODE] — [Task Title]
-   ✓ [file path] — [what was found]
-   ✗ [file path] — MISSING: [what was expected]
-
-   Technical checks:
-   ✓ [requirement] — verified in [file]
-   ✗ [requirement] — NOT FOUND
-   ```
-
-**0c. Decision based on verification result:**
-
-- **ALL checks pass (task fully implemented):**
-  1. **Prisma Migration (if needed):** Check whether `server/prisma/schema.prisma` has uncommitted changes:
-     ```bash
-     git diff --name-only HEAD -- server/prisma/schema.prisma
-     ```
-     - **If the schema was modified:** Create a migration using the task code as the migration name (lowercase, hyphenated):
-       ```bash
-       npm run db:migrate -w server -- --name <task-code-lowercase>
-       ```
-       For example, for task `GATE-078` run `--name gate-078`. Wait for the migration to complete and verify the new migration directory was created under `server/prisma/migrations/`.
-     - **If the schema was NOT modified:** Skip this step.
-  2. **SAST/Quality Gate (MANDATORY):** Before closing the task, run `npm run verify` (typecheck + lint + sast + build). If this script does not exist yet (SAST-031 not implemented), run `npm run build` as a minimum gate. If the verify/build fails:
-     - Fix ALL errors and warnings reported
-     - Re-run `npm run verify` (or `npm run build`) until it passes with zero errors
-     - Only proceed to step 2 when the quality gate passes
-  3. **Smoke-Test (MANDATORY):** After the quality gate passes, verify the app starts without runtime errors:
-
-     **2a. Start the application:**
-     Run `npm run predev && npm run db:push && npm run dev` using the Bash tool with `run_in_background: true`.
-
-     **2b. Wait for startup and check ports:**
-     Wait 8 seconds (`sleep 8`), then verify ports 3000 and 3001 are listening:
-     ```bash
-     netstat -ano 2>/dev/null | grep -E ":(3000|3001)\s" | grep LISTENING
-     ```
-
-     **2c. Check for startup errors:**
-     Read the background process output using `TaskOutput`. Scan for these error patterns:
-     - `EADDRINUSE` — port conflict
-     - `Cannot find module` — missing dependency
-     - `ECONNREFUSED` — database connection failed
-     - `Error`, `TypeError`, `SyntaxError` — code bugs
-     - `prisma` — schema or migration errors
-
-     **Note on false positives:** Ignore occurrences of "error" that appear in variable names, file paths, log format strings, or middleware names (e.g., `errorHandler`, `error.middleware.ts`). Only flag actual runtime errors.
-
-     **2d. Decision:**
-     - **If startup errors are found:** Fix all errors, then re-run `npm run verify` and repeat the smoke-test from 2a (max 2 retries total). If still failing after retries, present the errors to the user and stop.
-     - **If no errors (or only false positives):** Proceed to 2e.
-
-     **2e. Stop the application (MANDATORY — no processes must remain):**
-     Kill all processes on dev ports:
-     ```bash
-     for port in 3000 3001 3002; do
-       pids=$(netstat -ano 2>/dev/null | grep -E ":${port}\s" | grep LISTENING | awk '{print $5}' | sort -u | tr -d '\r')
-       for pid in $pids; do
-         if [ -n "$pid" ] && [ "$pid" != "0" ]; then
-           taskkill /PID "$pid" /F /T 2>/dev/null || true
-         fi
-       done
-     done
-     ```
-     Then verify all ports are free:
-     ```bash
-     sleep 2
-     remaining=$(netstat -ano 2>/dev/null | grep -E ":(3000|3001|3002)\s" | grep LISTENING)
-     if [ -n "$remaining" ]; then
-       echo "WARNING: Ports still in use, retrying..."
-       echo "$remaining" | awk '{print $5}' | sort -u | tr -d '\r' | while read pid; do
-         [ -n "$pid" ] && [ "$pid" != "0" ] && taskkill /PID "$pid" /F /T 2>/dev/null || true
-       done
-       sleep 2
-     fi
-     ```
-     Run a final check to confirm no processes remain on ports 3000, 3001, 3002. If any remain after 2 retries, inform the user.
-
-  4. Present the verification report to the user (including Prisma migration, SAST/quality gate result, and smoke-test result)
-  5. **Run the Step 6 completion flow** (Testing Guide → Confirm → Close → Commit) for this task
-  6. **Continue to the next `[~]` task** in progressing.txt — repeat Step 0b
-
-- **Some checks fail (task partially implemented or not implemented):**
-  1. Present the verification report showing what is implemented and what is missing
-  2. **Do NOT close the task** — leave it as `[~]` in progressing.txt
-  3. Read all existing files related to the task to understand current state
-  4. Proceed to Step 4 (Explore codebase) and Step 5 (Present briefing) for this task, focusing the briefing on **what remains to be done**
-  5. **Stop processing further in-progress tasks** — the user should finish this one first
-
-**0d. When all in-progress tasks have been verified and closed:**
-Inform the user how many tasks were closed, then continue to Step 1 to pick a new task.
-
----
-
 ### Step 1: Determine which task to pick
 
-This step is only reached when there are NO in-progress tasks remaining in `progressing.txt`.
+**In platform-only mode:**
+- **If a task code was provided** (e.g., `AUTH-001`): Search for it: `gh issue list --repo "$TRACKER_REPO" --search "[TASK-CODE] in:title" --label "task,status:todo" --state open --json number,title`
+  <!-- GitLab: glab issue list -R "$TRACKER_REPO" --search "[TASK-CODE]" -l "task,status:todo" --state opened --output json -->
+  - If not found in todo, check if already done: `gh issue list --repo "$TRACKER_REPO" --search "[TASK-CODE] in:title" --label "task,status:done" --state closed --json number,title`
+    <!-- GitLab: glab issue list -R "$TRACKER_REPO" --search "[TASK-CODE]" -l "task,status:done" --state closed --output json -->
+  - If done, inform the user and suggest the next available task.
+- **If no argument was provided**: Select the next task by priority label ordering: `priority:high` first, then `priority:medium`, then `priority:low`. Within same priority, pick the lowest-numbered task. Check dependencies by reading the task body — dependency task codes should have `status:done` label.
 
-- **If a task code was provided** (e.g., `CRED-006`): Use that specific task. Verify it exists in `to-do.txt` and is in `[ ]` (todo) status. If found in `done.txt` as `[x]` (completed), inform the user and suggest the next available task.
-
+**In local/dual mode:**
+- **If a task code was provided**: Use that specific task. Verify it exists in `to-do.txt` and is in `[ ]` (todo) status. If found in `done.txt` as `[x]` (completed), inform the user and suggest the next available task.
 - **If no argument was provided**: Select the next task from the recommended implementation order that is still `[ ]` (todo) in `to-do.txt`. Skip tasks found in `done.txt` (completed) or `progressing.txt` (in-progress). Also verify that the task's dependencies are satisfied (dependency tasks should be in `done.txt` as `[x]`). If a task has unsatisfied dependencies, skip it and pick the next one.
 
-### Step 2: Move task to progressing.txt
+### Step 2: Mark task as in-progress
 
-1. Read the full task block from `to-do.txt` — everything between its `------` separator lines (including the separators and all content).
-2. Remove that entire block from `to-do.txt`.
-3. Append the block to `progressing.txt` in the appropriate section (SEZIONE A or SEZIONE B).
-4. In the appended block, change `[ ]` to `[~]` in the header line.
-5. If the task appears in the recommended order section of `to-do.txt`, update its status annotation to `[IN CORSO]`.
+**In platform-only mode:**
 
-**Important:** The task block must be moved completely — do not leave a copy in to-do.txt.
-
-### Step 2.1: Sync GitHub Issue to In-Progress
-
-Check if GitHub Issues integration is enabled:
-
+Update the GitHub Issue labels:
 ```bash
-GH_ENABLED="$(jq -r '.enabled // false' .claude/github-issues.json 2>/dev/null)"
+ISSUE_NUM=$(gh issue list --repo "$TRACKER_REPO" --search "[TASK-CODE] in:title" --label "task,status:todo" --state open --json number --jq '.[0].number')
+# GitLab: glab issue list -R "$TRACKER_REPO" --search "[TASK-CODE]" -l task --state opened --output json | jq '.[0].iid'
+gh issue edit "$ISSUE_NUM" --repo "$TRACKER_REPO" --remove-label "status:todo" --add-label "status:in-progress"
+# GitLab: glab issue update "$ISSUE_NUM" -R "$TRACKER_REPO" --unlabel "status:todo" --label "status:in-progress"
+gh issue comment "$ISSUE_NUM" --repo "$TRACKER_REPO" --body "Task picked up. Branch: \`task/<task-code-lowercase>\`"
+# GitLab: glab issue note "$ISSUE_NUM" -R "$TRACKER_REPO" -m "Task picked up. Branch: \`task/<task-code-lowercase>\`"
 ```
 
-**If `GH_ENABLED` is `true`:**
+**In dual sync mode:**
 
-1. Read the repo from config: `GH_REPO="$(jq -r '.repo' .claude/github-issues.json)"`
-2. Find the issue by task code:
+1. Run the move command:
    ```bash
-   ISSUE_NUM=$(gh issue list --repo "$GH_REPO" --search "[TASK-CODE] in:title" --label task --json number --jq '.[0].number' 2>/dev/null)
+   python3 .claude/scripts/task_manager.py move TASK-CODE --to progressing
    ```
-3. If found, update labels and add a comment:
-   ```bash
-   gh issue edit "$ISSUE_NUM" --repo "$GH_REPO" --remove-label "status:todo" --add-label "status:in-progress" 2>/dev/null || true
-   gh issue comment "$ISSUE_NUM" --repo "$GH_REPO" --body "Task picked up. Branch: \`task/<task-code-lowercase>\`" 2>/dev/null || true
-   ```
-4. If the `gh` command fails, warn but continue — the local state is authoritative.
+   This automatically removes the block from `to-do.txt`, inserts it into `progressing.txt`, and updates the status symbol from `[ ]` to `[~]`. Verify the JSON output shows `"success": true`.
+2. If the task appears in the recommended order section of `to-do.txt`, update its status annotation to `[IN PROGRESS]`.
+3. Sync to GitHub (update labels as above).
 
-**If `GH_ENABLED` is `false` or the file is missing:** Skip this step.
+**In local only mode:**
+
+Same as dual sync steps 1-2, skip GitHub sync.
 
 ### Step 2.5: Create a task branch
 
 Create a dedicated git branch for this task, branching from `develop`.
 
 **2.5a. Check the working tree:**
-
 ```bash
 git status --porcelain
 ```
+If dirty, inform the user and stop.
 
-If there are uncommitted changes, inform the user:
-> "There are uncommitted changes in the working tree. Please commit or stash them before proceeding."
-
-Stop and do not proceed until the working tree is clean.
-
-**2.5b. Switch to develop and pull latest:**
-
+**2.5b. Switch to the release branch and pull latest:**
 ```bash
 git checkout develop
 git pull origin develop
 ```
 
 **2.5c. Create the task branch:**
-
-Derive the branch name from the task code: lowercase, hyphenated, with the prefix `task/`.
-
-First check if the branch already exists (e.g., re-picking a task):
-
 ```bash
 git branch --list "task/<task-code-lowercase>"
 ```
-
-- **If the branch exists:** Switch to it: `git checkout task/<task-code-lowercase>`
-- **If it does not exist:** Create it: `git checkout -b task/<task-code-lowercase>`
-
-For example, for task `CRED-006`, the branch is `task/cred-006`.
-
-Inform the user:
-> "Created branch `task/<code>` from `develop`."
+- If exists: `git checkout task/<task-code-lowercase>`
+- If not: `git checkout -b task/<task-code-lowercase>`
 
 ### Step 3: Read the full task details
 
-Read the complete task block from `progressing.txt` for the selected task — everything between its `------` separator lines: priority, dependencies, description, technical details, and files involved.
+**In platform-only mode:**
+- `gh issue view $ISSUE_NUM --repo "$TRACKER_REPO" --json body --jq '.body'`
+  <!-- GitLab: glab issue view $ISSUE_NUM -R "$TRACKER_REPO" --output json | jq '.description' -->
+- Parse the structured body: DESCRIPTION, TECHNICAL DETAILS, Files involved (CREATE / MODIFY) sections.
+
+**In local/dual mode:**
+
+Get the full parsed task data:
+```bash
+python3 .claude/scripts/task_manager.py parse TASK-CODE
+```
+This returns all fields as structured JSON: priority, dependencies, description, technical_details, files_create, files_modify.
 
 ### Step 4: Explore the codebase
 
-For each file listed in the "FILE COINVOLTI" (files involved) section:
+For each file listed in the "Files involved" section:
 - If the file exists, read it to understand the current state
-- If marked "CREARE" (to create), check the target directory and look at similar files for patterns to follow
+- If marked "CREATE", check the target directory and look at similar files for patterns to follow
 - Identify relevant interfaces, types, and patterns
+
+**Architecture references:**
+- Server: Express + TypeScript, layered as Routes -> Controllers -> Services -> Prisma ORM
+- Client: React 19 + Vite + MUI v6, with Zustand stores
+- Real-time: Socket.IO for SSH terminals, Guacamole WebSocket for RDP
+- Database: PostgreSQL via Prisma
 
 ### Step 5: Present the implementation briefing
 
 Present a clear English-language briefing:
 
 1. **Task Selected**: Code, title, and priority
-2. **Status Update**: Confirm the task was moved to progressing.txt and marked as in-progress
-3. **Scope Summary**: What needs to be done (in English)
+2. **Status Update**: Confirm the task was marked as in-progress
+3. **Scope Summary**: What needs to be done
 4. **Technical Approach**: Implementation steps based on task details and codebase exploration
 5. **Files to Create/Modify**: Every file with what needs to happen in each
-6. **Dependencies**: Status of all dependencies (check done.txt for completed deps)
+6. **Dependencies**: Status of all dependencies
 7. **Risks**: Any concerns found during exploration
-8. **Prisma Migration**: If the task involves changes to `server/prisma/schema.prisma`, note that a migration will be created automatically during task closure (before the quality gate)
-9. **Quality Gate**: Remind that `npm run verify` (or `npm run build` if SAST-031 not yet done) must pass before the task can be closed
+8. **Prisma Migration**: Note if schema changes are involved — migrations run automatically on server start via `prisma migrate deploy`
+9. **Release Assignment**: Check `releases.json` via `python3 .claude/scripts/release_manager.py release-plan-list` — if the task code appears in any release's `tasks` array, display: "This task is planned for release **vX.Y.Z** (theme: 'THEME')." If not in any release, display: "This task is not assigned to any release." In platform-only mode, alternatively check for a `release:*` label on the issue.
+10. **Quality Gate**: Remind that `npm run verify` must pass before the task can be closed
 
 After presenting the briefing, ask the user: "Ready to start implementation, or would you like to adjust the approach?"
 
@@ -288,14 +181,14 @@ After a task has been **fully implemented and the quality gate (`npm run verify`
 
 **6a. Present a Testing Guide:**
 
-Before asking the user to confirm, generate and present a **manual testing guide** specific to the task that was just implemented. Derive the guide from the task's DETTAGLI TECNICI and FILE COINVOLTI sections.
+Before asking the user to confirm, generate and present a **manual testing guide** specific to the task that was just implemented. Derive the guide from the task's TECHNICAL DETAILS and Files involved sections.
 
 Present it in this format:
 
 > ### Testing Guide for [TASK-CODE] — [Task Title]
 >
 > **Prerequisites:**
-> - [What needs to be running — e.g., `npm run dev`, Docker containers, specific env vars]
+> - [What needs to be running — e.g., `npm run predev` for Docker containers, `npm run dev` for server on :3001 + client on :3000]
 >
 > **Steps to test:**
 > 1. [Concrete action the user can perform in the browser or terminal]
@@ -305,9 +198,23 @@ Present it in this format:
 > 3. [Continue as needed...]
 >
 > **Edge cases to check:**
-> - [2–3 edge cases worth verifying — e.g., empty states, error handling, permissions, invalid input]
+> - [2-3 edge cases worth verifying — e.g., empty states, error handling, permissions, invalid input]
 
-The guide must be actionable and specific — use real URLs (e.g., `http://localhost:3000/...`), real UI element names, and real API endpoints from the implementation. Do not use generic placeholders.
+The guide must be actionable and specific — use real URLs, real UI element names, and real API endpoints from the implementation. Do not use generic placeholders.
+
+**6a.5. Mark task as to-test:**
+
+Before asking the user to confirm, add the `status:to-test` label to signal the task is awaiting test verification. Keep the `status:in-progress` label in place — `to-test` is an additive marker.
+
+**In platform-only or dual sync mode:**
+```bash
+ISSUE_NUM=$(gh issue list --repo "$TRACKER_REPO" --search "[TASK-CODE] in:title" --label task --state open --json number --jq '.[0].number')
+# GitLab: glab issue list -R "$TRACKER_REPO" --search "[TASK-CODE]" -l task --state opened --output json | jq '.[0].iid'
+gh issue edit "$ISSUE_NUM" --repo "$TRACKER_REPO" --add-label "status:to-test"
+# GitLab: glab issue update "$ISSUE_NUM" -R "$TRACKER_REPO" --label "status:to-test"
+```
+
+**In local only mode:** No label change needed — the to-test state is implicit within this flow.
 
 **6b. Ask for user confirmation:**
 
@@ -318,47 +225,66 @@ Present a summary of what was done and ask the user to confirm:
 > **Summary of work done:**
 > - [brief list of what was created/modified]
 >
+> The task has been marked as **status:to-test**. Please review the testing guide above.
+>
 > Can you confirm this task is done?"
 
 Use `AskUserQuestion` with options:
-- **"Yes, task is done"** — proceed to 6c
-- **"Not yet, needs more work"** — stop the completion flow; the task stays as `[~]` in `progressing.txt`
+- **"Yes, task is done (tests passed)"** — proceed to 6b.5 then 6c (full flow including merge option)
+- **"Not yet, needs more work"** — proceed to 6b.5 then stop the completion flow; the task stays in-progress
+- **"Skip testing, conclude task"** — proceed to 6b.5 then 6c (mark done, but branch will NOT be merged to release)
 
-**6c. Move task to done.txt (automatic on confirmation):**
+**6b.5. Remove to-test label:**
 
-Once the user confirms the work is done:
+After the user responds to 6b, always remove the `status:to-test` label regardless of which option was chosen:
 
-1. Read the full task block from `progressing.txt` (everything between its `------` separator lines, inclusive)
-2. Remove the entire task block from `progressing.txt`
-3. Append the task block to `done.txt` at the end of the appropriate section (SEZIONE A, B, C, or D — matching where it was in `progressing.txt`)
-4. In the appended block: change `[~]` to `[x]` in the header line
-5. Add a `COMPLETATO:` line after the priority/dependencies lines with a brief English summary of what was implemented
-6. If the task appears in the recommended order section of `to-do.txt`, update its status annotation to `[COMPLETATO]`
-7. Inform the user: "Task [TASK-CODE] has been moved to done.txt."
-
-**6c.1. Sync GitHub Issue to Done:**
-
-Check if GitHub Issues integration is enabled:
-
+**In platform-only or dual sync mode:**
 ```bash
-GH_ENABLED="$(jq -r '.enabled // false' .claude/github-issues.json 2>/dev/null)"
+gh issue edit "$ISSUE_NUM" --repo "$TRACKER_REPO" --remove-label "status:to-test"
+# GitLab: glab issue update "$ISSUE_NUM" -R "$TRACKER_REPO" --unlabel "status:to-test"
 ```
 
-**If `GH_ENABLED` is `true`:**
+**In local only mode:** No action needed.
 
-1. Read the repo: `GH_REPO="$(jq -r '.repo' .claude/github-issues.json)"`
-2. Find the issue:
-   ```bash
-   ISSUE_NUM=$(gh issue list --repo "$GH_REPO" --search "[TASK-CODE] in:title" --label task --state open --json number --jq '.[0].number' 2>/dev/null)
-   ```
-3. If found, update labels and close:
-   ```bash
-   gh issue edit "$ISSUE_NUM" --repo "$GH_REPO" --remove-label "status:in-progress" --add-label "status:done" 2>/dev/null || true
-   gh issue close "$ISSUE_NUM" --repo "$GH_REPO" --comment "Task completed and verified. Quality gate passed." 2>/dev/null || true
-   ```
-4. If `gh` fails, warn but continue.
+**6c. Mark task as done:**
 
-**If `GH_ENABLED` is `false` or the file is missing:** Skip this step.
+Once the user confirms the work is done (either "Yes, task is done (tests passed)" or "Skip testing, conclude task"):
+
+**In platform-only mode:**
+```bash
+ISSUE_NUM=$(gh issue list --repo "$TRACKER_REPO" --search "[TASK-CODE] in:title" --label task --state open --json number --jq '.[0].number')
+# GitLab: glab issue list -R "$TRACKER_REPO" --search "[TASK-CODE]" -l task --state opened --output json | jq '.[0].iid'
+gh issue edit "$ISSUE_NUM" --repo "$TRACKER_REPO" --remove-label "status:in-progress" --add-label "status:done"
+# GitLab: glab issue update "$ISSUE_NUM" -R "$TRACKER_REPO" --unlabel "status:in-progress" --label "status:done"
+```
+
+If the user chose **"Yes, task is done (tests passed)"**:
+```bash
+gh issue close "$ISSUE_NUM" --repo "$TRACKER_REPO" --comment "Task completed and verified. Quality gate passed."
+# GitLab: glab issue close "$ISSUE_NUM" -R "$TRACKER_REPO"
+# GitLab: glab issue note "$ISSUE_NUM" -R "$TRACKER_REPO" -m "Task completed and verified. Quality gate passed."
+```
+
+If the user chose **"Skip testing, conclude task"**:
+```bash
+gh issue close "$ISSUE_NUM" --repo "$TRACKER_REPO" --comment "Task completed. Quality gate passed. Manual testing was skipped by user. Branch not merged to release."
+# GitLab: glab issue close "$ISSUE_NUM" -R "$TRACKER_REPO"
+# GitLab: glab issue note "$ISSUE_NUM" -R "$TRACKER_REPO" -m "Task completed. Quality gate passed. Manual testing was skipped by user. Branch not merged to release."
+```
+
+**In dual sync mode:**
+1. Run the move command with a completion summary:
+   ```bash
+   python3 .claude/scripts/task_manager.py move TASK-CODE --to done --completed-summary "Brief summary of what was implemented"
+   ```
+   This automatically removes from `progressing.txt`, inserts into `done.txt`, updates `[~]` to `[x]`, and adds the `COMPLETED:` line.
+2. If the task appears in the recommended order section of `to-do.txt`, update its status annotation to `[COMPLETED]`.
+3. Sync to GitHub (update labels and close issue as above).
+
+**In local only mode:**
+Same as dual sync steps 1-2, skip GitHub sync.
+
+Inform the user: "Task [TASK-CODE] has been closed."
 
 **6d. Ask to commit:**
 
@@ -370,28 +296,88 @@ Use `AskUserQuestion` with options:
 - **"Yes, commit"** — create a commit using the `/commit` skill (or follow the standard git commit workflow). The commit message should reference the task code and briefly describe what was implemented.
 - **"No, skip commit"** — skip the commit; done.
 
-**6e. Ask to merge into develop:**
+**6e. Ask to create a Pull Request into the release branch (TESTS PASSED ONLY):**
 
-After the commit (or skip), ask the user:
+**Important:** This step is ONLY executed when the user chose **"Yes, task is done (tests passed)"** in step 6b. Tasks that skipped testing must NOT be merged into the release branch to prevent untested or broken features from reaching production.
 
-> "Would you like me to merge branch `task/<task-code>` into `develop`?"
+**If testing was confirmed**, use `AskUserQuestion` with options:
+- **"Yes, create PR into develop"** — execute the steps below
+- **"No, stay on task branch"** — skip PR creation
 
-Use `AskUserQuestion` with options:
-- **"Yes, merge into develop"** — execute the merge:
-  ```bash
-  git checkout develop
-  git merge task/<task-code-lowercase> --no-ff -m "Merge task/<task-code-lowercase> into develop"
-  ```
-  Use `--no-ff` to preserve the branch history in the merge commit.
+**If the user chooses to create a PR:**
 
-  After a successful merge, inform the user:
-  > "Branch `task/<task-code>` has been merged into `develop`. You are now on `develop`."
+1. **Push the task branch to remote:**
+   ```bash
+   git push -u origin task/<task-code-lowercase>
+   ```
 
-  If there are merge conflicts, inform the user and stop:
-  > "Merge conflicts detected. Please resolve them manually, then run `git merge --continue`."
+2. **Check for an existing PR/MR** (avoid duplicates):
+   ```bash
+   gh pr list --base develop --head task/<task-code-lowercase> --state open --json number,url --jq '.[0]'
+   # GitLab: glab mr list --target-branch develop --source-branch task/<task-code-lowercase> --state opened --output json | jq '.[0]'
+   ```
+   If a PR already exists, inform the user and provide the existing PR URL. Skip creation.
 
-- **"No, stay on task branch"** — skip the merge. Inform the user:
-  > "Staying on branch `task/<task-code>`. You can merge later with:
-  > `git checkout develop && git merge task/<task-code-lowercase>`"
+3. **Build the PR body:**
 
-**Important:** Always ask — never auto-commit, auto-close, or auto-merge without user confirmation.
+   **If `TRACKER_ENABLED` is `true` (platform-only or dual sync mode):**
+   ```bash
+   ISSUE_NUM=$(gh issue list --repo "$TRACKER_REPO" --search "[TASK-CODE] in:title" --label task --json number --jq '.[0].number' 2>/dev/null)
+   # GitLab: glab issue list -R "$TRACKER_REPO" --search "[TASK-CODE]" -l task --output json | jq '.[0].iid'
+   ```
+
+   PR body template:
+   ```
+   ## Task [TASK-CODE] — [Task Title]
+
+   ### Summary
+   [brief list of what was created/modified — reuse from 6b summary]
+
+   ### Related Issue
+   Refs #<ISSUE_NUM> ([TASK-CODE])
+
+   ---
+   *Generated by Claude Code via `/task-pick`*
+   ```
+
+   **If `TRACKER_ENABLED` is `false` or config missing (local only mode):**
+
+   PR body template (omit the "Related Issue" section):
+   ```
+   ## Task [TASK-CODE] — [Task Title]
+
+   ### Summary
+   [brief list of what was created/modified]
+
+   ---
+   *Generated by Claude Code via `/task-pick`*
+   ```
+
+4. **Create the PR/MR:**
+
+   **GitHub:**
+   ```bash
+   gh pr create --base develop --head task/<task-code-lowercase> \
+     --title "[TASK-CODE] — [Task Title]" \
+     --body "$PR_BODY"
+   ```
+
+   **GitLab:**
+   ```bash
+   glab mr create --target-branch develop --source-branch task/<task-code-lowercase> \
+     --title "[TASK-CODE] — [Task Title]" \
+     --description "$PR_BODY"
+   ```
+
+5. **Report the PR URL to the user:**
+
+   > "Pull Request created: <PR_URL>
+   > Target branch: `develop`
+   > The task branch `task/<task-code-lowercase>` is ready for review and merge."
+
+**If testing was skipped**, do NOT offer the PR. Instead, inform the user:
+
+> "Task [TASK-CODE] was closed without testing confirmation. The task branch `task/<task-code-lowercase>` has **NOT** been submitted as a PR into develop.
+> Run `/test-engineer [TASK-CODE]` to complete testing before creating a PR."
+
+**Important:** Always ask — never auto-commit, auto-close, or auto-create PRs without user confirmation. Never merge directly into `develop` without a PR.

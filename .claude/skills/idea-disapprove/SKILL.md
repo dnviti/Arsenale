@@ -1,24 +1,44 @@
 ---
 name: idea-disapprove
-description: Disapprove an idea by moving it from ideas.txt to idea-disapproved.txt with a rejection reason.
+description: Disapprove an idea by moving it from ideas.txt to idea-disapproved.txt (local mode) or closing the GitHub/GitLab Issue with a rejection reason (Platform-only mode).
 disable-model-invocation: true
-allowed-tools: Bash, Read, Grep, Glob, Edit, Write
 argument-hint: "[IDEA-NNN]"
 ---
 
 # Disapprove an Idea
 
-You are the idea triage assistant for the Arsenale project. Your job is to move rejected ideas from `ideas.txt` to the `idea-disapproved.txt` archive, recording the reason for disapproval.
+You are the idea triage assistant for this project. Your job is to reject ideas, recording the reason for disapproval.
 
-Always respond and work in English. However, the disapproval reason added to the idea block MUST be in **Italian**.
+Always respond and work in English.
+
+## Mode Detection
+
+!`python3 .claude/scripts/task_manager.py platform-config`
+
+Use the `mode` field to determine behavior: `platform-only`, `dual-sync`, or `local-only`. The JSON includes `platform`, `enabled`, `sync`, `repo`, `cli` (gh/glab), and `labels`.
+
+## Platform Commands
+
+Use `python3 .claude/scripts/task_manager.py platform-cmd <operation> [key=value ...]` to generate the correct CLI command for the detected platform (GitHub/GitLab).
+
+Supported operations: `list-issues`, `search-issues`, `view-issue`, `edit-issue`, `close-issue`, `comment-issue`, `create-issue`, `create-pr`, `list-pr`, `merge-pr`, `create-release`, `edit-release`.
+
+Example: `python3 .claude/scripts/task_manager.py platform-cmd create-issue title="[CODE] Title" body="Description" labels="task,status:todo"`
 
 ## Current State
 
-### Ideas available for disapproval:
-!`grep -E '^IDEA-[0-9]{3}' ideas.txt 2>/dev/null | tr -d '\r'`
+### Platform-only mode — ideas available:
 
-### Already disapproved ideas:
-!`grep -E '^IDEA-[0-9]{3}' idea-disapproved.txt 2>/dev/null | tr -d '\r'`
+```bash
+gh issue list --repo "$TRACKER_REPO" --label "idea" --state open --json number,title --jq '.[] | "#\(.number) \(.title)"' 2>/dev/null
+# GitLab: glab issue list -R "$TRACKER_REPO" -l "idea" --state opened --output json | jq '.[] | "#\(.iid) \(.title)"' 2>/dev/null
+```
+
+### Local/Dual mode — ideas available for disapproval:
+!`python3 .claude/scripts/task_manager.py list-ideas --file ideas --format summary`
+
+### Local/Dual mode — already disapproved ideas:
+!`python3 .claude/scripts/task_manager.py list-ideas --file disapproved --format summary`
 
 ## Arguments
 
@@ -28,14 +48,27 @@ The user wants to disapprove: **$ARGUMENTS**
 
 ### Step 1: Select the Idea
 
-- **If an IDEA-NNN code was provided**: Find that idea in `ideas.txt`. If not found, inform the user and list available ideas.
-- **If no argument was provided**: List all ideas from `ideas.txt` with their codes, titles, and categories. Use `AskUserQuestion` to ask the user which idea to disapprove.
+**In Platform-only mode:**
+- If an IDEA-NNN code was provided: `gh issue list --repo "$TRACKER_REPO" --search "[IDEA-NNN] in:title" --label idea --state open --json number,title,body` (GitLab: `glab issue list -R "$TRACKER_REPO" --search "[IDEA-NNN]" -l idea --state opened --output json`)
+- If no argument: list all open ideas from GitHub and use `AskUserQuestion` to ask which to disapprove.
 
-If `ideas.txt` has no ideas, inform the user: "No ideas available for disapproval."
+**In local/dual mode:**
+- If an IDEA-NNN code was provided: Find that idea in `ideas.txt`. If not found, inform the user and list available ideas.
+- If no argument: List all ideas from `ideas.txt` and use `AskUserQuestion`.
+
+If no ideas are available, inform the user: "No ideas available for disapproval."
 
 ### Step 2: Show the Full Idea
 
-Read the complete idea block from `ideas.txt` (everything between its `------` separator lines). Present it to the user so they can review what they are disapproving.
+**In Platform-only mode:**
+- Read the issue body: `gh issue view $ISSUE_NUM --repo "$TRACKER_REPO" --json title,body` (GitLab: `glab issue view $ISSUE_NUM -R "$TRACKER_REPO" --output json | jq '{title,description}'`)
+
+**In local/dual mode:**
+Get the full parsed idea data:
+```bash
+python3 .claude/scripts/task_manager.py parse IDEA-NNN
+```
+Present the idea fields (title, category, description, motivation) to the user so they can review what they are disapproving.
 
 ### Step 3: Ask for the Disapproval Reason
 
@@ -62,61 +95,45 @@ Options:
 - **"Yes, disapprove it"** — proceed
 - **"Cancel"** — abort
 
-### Step 5: Move the Idea
+### Step 5: Execute the Disapproval
 
-**5a. Read the full idea block** from `ideas.txt` (everything between `------` separators, inclusive).
+**In Platform-only mode:**
 
-**5b. Add the disapproval field** to the block. Insert a `MOTIVO RIFIUTO:` line after the `MOTIVAZIONE:` section:
-
-```
-  MOTIVO RIFIUTO:
-  [Reason in Italian] (YYYY-MM-DD)
-```
-
-Translate the user's reason into Italian:
-- "Already implemented" → "Funzionalita' gia' implementata nel codebase"
-- "Duplicate of existing task" → "Duplicato di un task esistente"
-- "Out of scope" → "Fuori ambito rispetto alla direzione del progetto"
-- "Not feasible" → "Non fattibile per vincoli tecnici"
-- Custom reason → translate to Italian
-
-**5c. Append the modified block to `idea-disapproved.txt`:**
-Use `Edit` to append the block (with `MOTIVO RIFIUTO:` added) at the end of `idea-disapproved.txt`.
-
-**5d. Remove the idea from `ideas.txt`:**
-Use `Edit` to remove the entire original idea block from `ideas.txt`. Clean up any extra blank lines left behind.
-
-**5e. Sync to GitHub Issues:**
-
-Check if GitHub Issues integration is enabled:
-
+Close the GitHub/GitLab Issue with the rejection reason:
 ```bash
-GH_ENABLED="$(jq -r '.enabled // false' .claude/github-issues.json 2>/dev/null)"
+IDEA_ISSUE=$(gh issue list --repo "$TRACKER_REPO" --search "[IDEA-NNN] in:title" --label idea --state open --json number --jq '.[0].number' 2>/dev/null)
+# GitLab: IDEA_ISSUE=$(glab issue list -R "$TRACKER_REPO" --search "[IDEA-NNN]" -l idea --state opened --output json | jq '.[0].iid' 2>/dev/null)
+gh issue close "$IDEA_ISSUE" --repo "$TRACKER_REPO" --reason "not planned" --comment "Idea disapproved. Reason: $REASON" 2>/dev/null || true
+# GitLab: glab issue close "$IDEA_ISSUE" -R "$TRACKER_REPO" 2>/dev/null || true
+# GitLab: glab issue note "$IDEA_ISSUE" -R "$TRACKER_REPO" -m "Idea disapproved. Reason: $REASON" 2>/dev/null || true
 ```
 
-**If `GH_ENABLED` is `true`:**
+**In dual sync mode:**
 
-1. Read the repo: `GH_REPO="$(jq -r '.repo' .claude/github-issues.json)"`
-2. Find the idea issue:
-   ```bash
-   IDEA_ISSUE=$(gh issue list --repo "$GH_REPO" --search "[IDEA-NNN] in:title" --label idea --state open --json number --jq '.[0].number' 2>/dev/null)
+1. The `parse` output from Step 2 contains the `raw` field with the full block text.
+2. **Add the rejection field** to the block. Insert a `REJECTION REASON:` line after the `MOTIVATION:` section:
    ```
-3. If found, close with reason:
-   ```bash
-   gh issue close "$IDEA_ISSUE" --repo "$GH_REPO" --reason "not planned" --comment "Idea disapproved. Reason: $REASON_IN_ENGLISH" 2>/dev/null || true
+     REJECTION REASON:
+     [Reason] (YYYY-MM-DD)
    ```
+3. **Append the modified block to `idea-disapproved.txt`:**
+   Use `Edit` to append the block (with `REJECTION REASON:` added) at the end of `idea-disapproved.txt`.
+4. **Remove the idea from `ideas.txt`:**
+   Run: `python3 .claude/scripts/task_manager.py remove IDEA-NNN --file ideas.txt`
+   This cleanly removes the block and handles whitespace cleanup automatically.
+5. **Close the GitHub/GitLab Issue** (same as Platform-only mode above). If the command fails, warn but do NOT fail — the local operations are already complete.
 
-**If `GH_ENABLED` is `false` or the file is missing:** Skip this step.
+**In local only mode:**
 
-**If `gh` fails:** Warn but do NOT fail — the local move is already complete.
+Same as dual sync steps 1-4, but skip the GitHub/GitLab Issue close.
 
 ### Step 6: Confirm and Report
 
-After successfully moving the idea, report:
+After successfully disapproving the idea, report:
 
-> "Idea **IDEA-NNN — Title** has been disapproved and moved to `idea-disapproved.txt`.
+> "Idea **IDEA-NNN — Title** has been disapproved.
 >
-> - **Reason:** [reason in English]
+> - **Reason:** [reason]
 > - **Date:** YYYY-MM-DD
 >
 > The idea is no longer in the active backlog."
@@ -124,8 +141,8 @@ After successfully moving the idea, report:
 ## Important Rules
 
 1. **NEVER modify task files** (`to-do.txt`, `progressing.txt`, `done.txt`).
-2. **NEVER delete ideas permanently** — always archive to `idea-disapproved.txt`.
-3. **NEVER skip user confirmation** — always confirm before moving.
-4. **Italian content** — the `MOTIVO RIFIUTO:` field and its content must be in Italian.
-5. **Preserve formatting** — maintain the idea block's indentation, dash count (78), and field order when moving.
+2. **NEVER delete ideas permanently** — in local/dual mode, always archive to `idea-disapproved.txt`. In Platform-only mode, the closed issue serves as the archive.
+3. **NEVER skip user confirmation** — always confirm before disapproving.
+4. **English content** — the `REJECTION REASON:` field and its content must be in English.
+5. **Preserve formatting** — maintain the idea block's indentation, dash count (78), and field order when moving (local/dual mode).
 6. **Clean removal** — after removing an idea from `ideas.txt`, ensure no orphaned separator lines or excessive blank lines remain.

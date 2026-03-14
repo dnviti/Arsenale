@@ -29,6 +29,8 @@ import publicShareRoutes from './routes/publicShare.routes';
 import recordingRoutes from './routes/recording.routes';
 import importExportRoutes from './routes/importExport.routes';
 import geoipRoutes from './routes/geoip.routes';
+import ldapRoutes from './routes/ldap.routes';
+import syncRoutes from './routes/sync.routes';
 import healthRoutes from './routes/health.routes';
 import { errorHandler } from './middleware/error.middleware';
 import { requestLogger } from './middleware/requestLogger.middleware';
@@ -87,6 +89,8 @@ app.use('/api/share', publicShareRoutes);
 app.use('/api/recordings', recordingRoutes);
 app.use('/api/connections', importExportRoutes);
 app.use('/api/geoip', geoipRoutes);
+app.use('/api/ldap', ldapRoutes);
+app.use('/api/sync-profiles', syncRoutes);
 
 // Health & readiness probes
 app.use('/api', healthRoutes);

@@ -188,8 +188,12 @@ export const config = {
   guacencServiceUrl: process.env.GUACENC_SERVICE_URL || 'http://guacenc:3003',
   guacencTimeoutMs: parseInt(process.env.GUACENC_TIMEOUT_MS || '120000', 10),
   guacencRecordingPath: process.env.GUACENC_RECORDING_PATH || '/recordings',
+  // Token binding — bind JWT tokens to client IP + User-Agent (MITRE T1563)
+  tokenBindingEnabled: process.env.TOKEN_BINDING_ENABLED !== 'false',
   // IP Geolocation (MaxMind GeoLite2)
   geoipDbPath: process.env.GEOIP_DB_PATH ? path.resolve(process.env.GEOIP_DB_PATH) : '',
+  // Impossible travel detection — maximum plausible speed in km/h (default: 900, faster than commercial aviation)
+  impossibleTravelSpeedKmh: parseInt(process.env.IMPOSSIBLE_TRAVEL_SPEED_KMH || '900', 10),
   // Reverse proxy trust depth for Express.
   // Controls how `req.ip` is resolved from X-Forwarded-For.
   // false = disabled, true = trust all, number = hop count to trust.
@@ -202,6 +206,30 @@ export const config = {
     const num = parseInt(val, 10);
     return Number.isNaN(num) ? val : num;   // string = subnet, number = hop count
   })() as boolean | number | string,
+  ldap: {
+    enabled: process.env.LDAP_ENABLED === 'true',
+    providerName: process.env.LDAP_PROVIDER_NAME || 'LDAP',
+    serverUrl: process.env.LDAP_SERVER_URL || '',
+    baseDn: process.env.LDAP_BASE_DN || '',
+    bindDn: process.env.LDAP_BIND_DN || '',
+    bindPassword: process.env.LDAP_BIND_PASSWORD || '',
+    userSearchFilter: process.env.LDAP_USER_SEARCH_FILTER || '(uid={{username}})',
+    userSearchBase: process.env.LDAP_USER_SEARCH_BASE || '',
+    displayNameAttr: process.env.LDAP_DISPLAY_NAME_ATTR || 'displayName',
+    emailAttr: process.env.LDAP_EMAIL_ATTR || 'mail',
+    uidAttr: process.env.LDAP_UID_ATTR || 'uid',
+    groupBaseDn: process.env.LDAP_GROUP_BASE_DN || '',
+    groupSearchFilter: process.env.LDAP_GROUP_SEARCH_FILTER || '(objectClass=groupOfNames)',
+    groupMemberAttr: process.env.LDAP_GROUP_MEMBER_ATTR || 'member',
+    groupNameAttr: process.env.LDAP_GROUP_NAME_ATTR || 'cn',
+    allowedGroups: (process.env.LDAP_ALLOWED_GROUPS || '').split(',').filter(Boolean),
+    starttls: process.env.LDAP_STARTTLS === 'true',
+    tlsRejectUnauthorized: process.env.LDAP_TLS_REJECT_UNAUTHORIZED !== 'false',
+    syncEnabled: process.env.LDAP_SYNC_ENABLED === 'true',
+    syncCron: process.env.LDAP_SYNC_CRON || '0 */6 * * *',
+    autoProvision: process.env.LDAP_AUTO_PROVISION !== 'false',
+    defaultTenantId: process.env.LDAP_DEFAULT_TENANT_ID || '',
+  },
   webauthn: {
     rpId: process.env.WEBAUTHN_RP_ID || 'localhost',
     rpOrigin: process.env.WEBAUTHN_RP_ORIGIN || 'http://localhost:3000',

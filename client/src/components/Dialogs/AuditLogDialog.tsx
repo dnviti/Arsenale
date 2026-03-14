@@ -13,6 +13,7 @@ import {
   KeyboardArrowUp as CollapseIcon,
   Pause as PauseIcon,
   PlayArrow as PlayIcon,
+  Warning as WarningIcon,
 } from '@mui/icons-material';
 import { getAuditLogs, getAuditGateways, getAuditCountries, AuditLogEntry, AuditAction, AuditLogParams, AuditGateway } from '../../api/audit.api';
 import { useUiPreferencesStore } from '../../store/uiPreferencesStore';
@@ -52,6 +53,7 @@ export default function AuditLogDialog({ open, onClose, onGeoIpClick }: AuditLog
   const [gateways, setGateways] = useState<AuditGateway[]>([]);
   const [countries, setCountries] = useState<string[]>([]);
   const [geoCountry, setGeoCountry] = useState('');
+  const [flaggedOnly, setFlaggedOnly] = useState(false);
 
   // Debounce search input → store
   useEffect(() => {
@@ -80,6 +82,7 @@ export default function AuditLogDialog({ open, onClose, onGeoIpClick }: AuditLog
       if (geoCountry) params.geoCountry = geoCountry;
       if (startDate) params.startDate = startDate;
       if (endDate) params.endDate = endDate;
+      if (flaggedOnly) params.flaggedOnly = true;
 
       const result = await getAuditLogs(params);
       setLogs(result.data);
@@ -89,7 +92,7 @@ export default function AuditLogDialog({ open, onClose, onGeoIpClick }: AuditLog
     } finally {
       setLoading(false);
     }
-  }, [page, rowsPerPage, auditLogAction, auditLogSearch, auditLogTargetType, auditLogGatewayId, ipAddress, geoCountry, startDate, endDate, auditLogSortBy, auditLogSortOrder]);
+  }, [page, rowsPerPage, auditLogAction, auditLogSearch, auditLogTargetType, auditLogGatewayId, ipAddress, geoCountry, startDate, endDate, auditLogSortBy, auditLogSortOrder, flaggedOnly]);
 
   useEffect(() => {
     if (open) {
@@ -130,7 +133,7 @@ export default function AuditLogDialog({ open, onClose, onGeoIpClick }: AuditLog
     setPage(0);
   };
 
-  const hasActiveFilters = auditLogAction || auditLogSearch || auditLogTargetType || auditLogGatewayId || ipAddress || geoCountry || startDate || endDate;
+  const hasActiveFilters = auditLogAction || auditLogSearch || auditLogTargetType || auditLogGatewayId || ipAddress || geoCountry || startDate || endDate || flaggedOnly;
 
   return (
     <Dialog
@@ -295,6 +298,17 @@ export default function AuditLogDialog({ open, onClose, onGeoIpClick }: AuditLog
                 onChange={(e) => { setEndDate(e.target.value); setPage(0); }}
                 slotProps={{ inputLabel: { shrink: true } }}
               />
+              <Tooltip title="Show only flagged entries (e.g. impossible travel)">
+                <Chip
+                  icon={<WarningIcon fontSize="small" />}
+                  label="Flagged"
+                  size="small"
+                  color={flaggedOnly ? 'warning' : 'default'}
+                  variant={flaggedOnly ? 'filled' : 'outlined'}
+                  onClick={() => { setFlaggedOnly(!flaggedOnly); setPage(0); }}
+                  sx={{ cursor: 'pointer' }}
+                />
+              </Tooltip>
             </Stack>
           </CardContent>
         </Card>
@@ -362,11 +376,18 @@ export default function AuditLogDialog({ open, onClose, onGeoIpClick }: AuditLog
                             {new Date(log.createdAt).toLocaleString()}
                           </TableCell>
                           <TableCell>
-                            <Chip
-                              label={ACTION_LABELS[log.action] || log.action}
-                              color={getActionColor(log.action)}
-                              size="small"
-                            />
+                            <Box sx={{ display: 'inline-flex', alignItems: 'center', gap: 0.5 }}>
+                              <Chip
+                                label={ACTION_LABELS[log.action] || log.action}
+                                color={getActionColor(log.action)}
+                                size="small"
+                              />
+                              {log.flags?.includes('IMPOSSIBLE_TRAVEL') && (
+                                <Tooltip title="Impossible travel detected">
+                                  <WarningIcon color="warning" fontSize="small" />
+                                </Tooltip>
+                              )}
+                            </Box>
                           </TableCell>
                           <TableCell>
                             {log.targetType

@@ -7,6 +7,8 @@ import * as gatewayService from './gateway.service';
 import * as auditService from './audit.service';
 
 let rotationTask: ScheduledTask | null = null;
+let ldapSyncTask: ScheduledTask | null = null;
+let membershipExpiryTask: ScheduledTask | null = null;
 
 export function startKeyRotationJob(): void {
   const cronExpr = config.keyRotationCron;
@@ -133,10 +135,170 @@ export async function processKeyRotations(): Promise<void> {
   logger.info('[scheduler] Key rotation check complete.');
 }
 
+export function startLdapSyncJob(): void {
+  if (!config.ldap.syncEnabled || !config.ldap.enabled) return;
+
+  const cronExpr = config.ldap.syncCron;
+  if (!cron.validate(cronExpr)) {
+    logger.error(
+      `[scheduler] Invalid LDAP_SYNC_CRON expression: "${cronExpr}". ` +
+        'LDAP sync job will NOT run.',
+    );
+    return;
+  }
+
+  ldapSyncTask = cron.schedule(
+    cronExpr,
+    () => {
+      import('./ldap.service').then((ldap) =>
+        ldap.syncUsers().catch((err) => {
+          logger.error('[scheduler] Unhandled error in LDAP syncUsers:', err);
+        }),
+      );
+    },
+    { timezone: 'UTC' },
+  );
+
+  logger.info(`[scheduler] LDAP sync job scheduled: "${cronExpr}" (UTC)`);
+}
+
+const MEMBERSHIP_EXPIRY_CRON = '*/5 * * * *';
+
+export function startMembershipExpiryJob(): void {
+  membershipExpiryTask = cron.schedule(
+    MEMBERSHIP_EXPIRY_CRON,
+    () => {
+      processExpiredMemberships().catch((err) => {
+        logger.error('[scheduler] Unhandled error in processExpiredMemberships:', err);
+      });
+    },
+    { timezone: 'UTC' },
+  );
+
+  logger.info(
+    `[scheduler] Membership expiry job scheduled: "${MEMBERSHIP_EXPIRY_CRON}" (UTC)`,
+  );
+}
+
+export async function processExpiredMemberships(): Promise<void> {
+  const now = new Date();
+  logger.info(`[scheduler] Starting membership expiry check at ${now.toISOString()}`);
+
+  // --- Expired TenantMembers (exclude OWNER) ---
+  const expiredTenantMembers = await prisma.tenantMember.findMany({
+    where: {
+      expiresAt: { not: null, lte: now },
+      role: { not: 'OWNER' },
+    },
+    include: {
+      user: { select: { id: true, email: true } },
+      tenant: { select: { id: true, name: true } },
+    },
+  });
+
+  for (const m of expiredTenantMembers) {
+    try {
+      await prisma.$transaction([
+        // Remove from all teams in this tenant
+        prisma.teamMember.deleteMany({
+          where: {
+            userId: m.userId,
+            team: { tenantId: m.tenantId },
+          },
+        }),
+        // Delete the tenant membership
+        prisma.tenantMember.delete({
+          where: { id: m.id },
+        }),
+        // Revoke refresh tokens to force re-auth
+        prisma.refreshToken.deleteMany({
+          where: { userId: m.userId },
+        }),
+      ]);
+
+      auditService.log({
+        userId: m.userId,
+        action: 'TENANT_MEMBERSHIP_EXPIRED',
+        targetType: 'TenantMember',
+        targetId: m.id,
+        details: {
+          tenantId: m.tenantId,
+          tenantName: m.tenant.name,
+          email: m.user.email,
+          expiresAt: m.expiresAt?.toISOString(),
+        },
+      });
+
+      logger.info(
+        `[scheduler] Expired tenant membership: user "${m.user.email}" from tenant "${m.tenant.name}"`,
+      );
+    } catch (err) {
+      logger.error(
+        `[scheduler] Failed to expire tenant membership ${m.id}:`,
+        (err as Error).message,
+      );
+    }
+  }
+
+  // --- Expired TeamMembers ---
+  const expiredTeamMembers = await prisma.teamMember.findMany({
+    where: {
+      expiresAt: { not: null, lte: now },
+    },
+    include: {
+      user: { select: { id: true, email: true } },
+      team: { select: { id: true, name: true } },
+    },
+  });
+
+  for (const m of expiredTeamMembers) {
+    try {
+      await prisma.teamMember.delete({
+        where: { id: m.id },
+      });
+
+      auditService.log({
+        userId: m.userId,
+        action: 'TEAM_MEMBERSHIP_EXPIRED',
+        targetType: 'TeamMember',
+        targetId: m.id,
+        details: {
+          teamId: m.teamId,
+          teamName: m.team.name,
+          email: m.user.email,
+          expiresAt: m.expiresAt?.toISOString(),
+        },
+      });
+
+      logger.info(
+        `[scheduler] Expired team membership: user "${m.user.email}" from team "${m.team.name}"`,
+      );
+    } catch (err) {
+      logger.error(
+        `[scheduler] Failed to expire team membership ${m.id}:`,
+        (err as Error).message,
+      );
+    }
+  }
+
+  const total = expiredTenantMembers.length + expiredTeamMembers.length;
+  if (total > 0) {
+    logger.info(`[scheduler] Membership expiry check complete. Expired: ${total}`);
+  }
+}
+
 export function stopAllJobs(): void {
   if (rotationTask) {
     rotationTask.stop();
     rotationTask = null;
-    logger.info('[scheduler] All scheduled jobs stopped.');
   }
+  if (ldapSyncTask) {
+    ldapSyncTask.stop();
+    ldapSyncTask = null;
+  }
+  if (membershipExpiryTask) {
+    membershipExpiryTask.stop();
+    membershipExpiryTask = null;
+  }
+  logger.info('[scheduler] All scheduled jobs stopped.');
 }

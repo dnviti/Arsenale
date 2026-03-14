@@ -33,6 +33,7 @@ export async function changePassword(req: AuthRequest, res: Response) {
     req.user.userId, oldPassword, newPassword, verificationId,
   );
   auditService.log({ userId: req.user.userId, action: 'PASSWORD_CHANGE', ipAddress: getClientIp(req) });
+  auditService.log({ userId: req.user.userId, action: 'VAULT_RECOVERY_KEY_GENERATED', ipAddress: getClientIp(req) });
   res.json(result);
 }
 

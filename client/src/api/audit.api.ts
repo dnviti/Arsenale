@@ -36,7 +36,8 @@ export type AuditAction =
   | 'SECRET_EXTERNAL_REVOKE'
   | 'SECRET_SHARE_UPDATE'
   | 'GATEWAY_RECONCILE'
-  | 'CONNECTION_FAVORITE';
+  | 'CONNECTION_FAVORITE'
+  | 'IMPOSSIBLE_TRAVEL_DETECTED';
 
 export interface AuditLogEntry {
   id: string;
@@ -49,6 +50,7 @@ export interface AuditLogEntry {
   geoCountry: string | null;
   geoCity: string | null;
   geoCoords: number[];
+  flags: string[];
   createdAt: string;
 }
 
@@ -78,6 +80,7 @@ export interface AuditLogParams {
   geoCountry?: string;
   sortBy?: 'createdAt' | 'action';
   sortOrder?: 'asc' | 'desc';
+  flaggedOnly?: boolean;
 }
 
 export async function getAuditLogs(params: AuditLogParams = {}): Promise<AuditLogResponse> {

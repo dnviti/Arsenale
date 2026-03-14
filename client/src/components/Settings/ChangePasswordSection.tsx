@@ -8,13 +8,15 @@ import {
   type VerificationMethod,
 } from '../../api/user.api';
 import IdentityVerification from '../common/IdentityVerification';
+import PasswordStrengthMeter from '../common/PasswordStrengthMeter';
+import RecoveryKeyConfirmDialog from '../common/RecoveryKeyConfirmDialog';
 import { useAsyncAction } from '../../hooks/useAsyncAction';
 
 interface ChangePasswordSectionProps {
   hasPassword: boolean;
 }
 
-type Phase = 'idle' | 'verifying-identity' | 'entering-password';
+type Phase = 'idle' | 'verifying-identity' | 'entering-password' | 'showing-recovery-key';
 
 export default function ChangePasswordSection({ hasPassword }: ChangePasswordSectionProps) {
   const authLogout = useAuthStore((s) => s.logout);
@@ -25,6 +27,7 @@ export default function ChangePasswordSection({ hasPassword }: ChangePasswordSec
   const [confirmPassword, setConfirmPassword] = useState('');
   const { loading, error, setError, run } = useAsyncAction();
   const [success, setSuccess] = useState('');
+  const [recoveryKey, setRecoveryKey] = useState('');
 
   // Identity verification state
   const [skipVerification, setSkipVerification] = useState(false);
@@ -67,17 +70,15 @@ export default function ChangePasswordSection({ hasPassword }: ChangePasswordSec
     }
 
     const ok = await run(async () => {
-      await changePassword(
+      const result = await changePassword(
         skipVerification ? oldPassword : '',
         newPassword,
         completedVerificationId,
       );
+      setRecoveryKey(result.recoveryKey);
     }, 'Failed to change password');
     if (ok) {
-      setSuccess('Password changed. You will be signed out...');
-      setTimeout(() => {
-        authLogout();
-      }, 2000);
+      setPhase('showing-recovery-key');
     }
   };
 
@@ -135,9 +136,12 @@ export default function ChangePasswordSection({ hasPassword }: ChangePasswordSec
               fullWidth label="New Password" type="password"
               value={newPassword} onChange={(e) => setNewPassword(e.target.value)}
               margin="normal" required
-              helperText="Minimum 8 characters"
+              helperText="Minimum 10 characters"
               autoFocus={!skipVerification}
+              error={Boolean(newPassword) && newPassword.length > 0 && newPassword.length < 10}
+              inputProps={{ minLength: 10 }}
             />
+            <PasswordStrengthMeter password={newPassword} />
             <TextField
               fullWidth label="Confirm New Password" type="password"
               value={confirmPassword} onChange={(e) => setConfirmPassword(e.target.value)}
@@ -155,6 +159,11 @@ export default function ChangePasswordSection({ hasPassword }: ChangePasswordSec
           </Box>
         )}
       </CardContent>
+      <RecoveryKeyConfirmDialog
+        open={phase === 'showing-recovery-key'}
+        recoveryKey={recoveryKey}
+        onConfirmed={() => { setRecoveryKey(''); authLogout(); }}
+      />
     </Card>
   );
 }

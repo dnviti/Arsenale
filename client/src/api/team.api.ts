@@ -17,6 +17,8 @@ export interface TeamMember {
   avatarData: string | null;
   role: string;
   joinedAt: string;
+  expiresAt: string | null;
+  expired: boolean;
 }
 
 export async function createTeam(
@@ -59,8 +61,9 @@ export async function addTeamMember(
   teamId: string,
   userId: string,
   role: 'TEAM_ADMIN' | 'TEAM_EDITOR' | 'TEAM_VIEWER',
+  expiresAt?: string,
 ): Promise<TeamMember> {
-  const { data } = await api.post(`/teams/${teamId}/members`, { userId, role });
+  const { data } = await api.post(`/teams/${teamId}/members`, { userId, role, ...(expiresAt && { expiresAt }) });
   return data;
 }
 
@@ -79,4 +82,12 @@ export async function removeTeamMember(
 ): Promise<{ removed: boolean }> {
   const { data } = await api.delete(`/teams/${teamId}/members/${userId}`);
   return data;
+}
+
+export async function updateTeamMemberExpiry(
+  teamId: string,
+  userId: string,
+  expiresAt: string | null,
+): Promise<void> {
+  await api.patch(`/teams/${teamId}/members/${userId}/expiry`, { expiresAt });
 }

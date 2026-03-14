@@ -10,6 +10,7 @@ import { useTenantStore } from '../../store/tenantStore';
 import { getEmailStatus } from '../../api/admin.api';
 import { useAsyncAction } from '../../hooks/useAsyncAction';
 import type { CreateUserResult } from '../../api/tenant.api';
+import { ASSIGNABLE_ROLES, ROLE_LABELS, type TenantRole } from '../../utils/roles';
 
 interface CreateUserDialogProps {
   open: boolean;
@@ -28,7 +29,8 @@ export default function CreateUserDialog({ open, onClose }: CreateUserDialogProp
   const [username, setUsername] = useState('');
   const [password, setPassword] = useState('');
   const [confirmPassword, setConfirmPassword] = useState('');
-  const [role, setRole] = useState<'ADMIN' | 'MEMBER'>('MEMBER');
+  const [role, setRole] = useState<TenantRole>('MEMBER');
+  const [expiresAt, setExpiresAt] = useState('');
   const [sendWelcomeEmail, setSendWelcomeEmail] = useState(false);
   const [emailConfigured, setEmailConfigured] = useState(false);
   const { loading, error, setError, clearError, run } = useAsyncAction();
@@ -70,6 +72,7 @@ export default function CreateUserDialog({ open, onClose }: CreateUserDialogProp
         password,
         role,
         sendWelcomeEmail: emailConfigured ? sendWelcomeEmail : false,
+        expiresAt: expiresAt ? new Date(expiresAt).toISOString() : undefined,
       });
       setResult(res);
     }, 'Failed to create user');
@@ -81,6 +84,7 @@ export default function CreateUserDialog({ open, onClose }: CreateUserDialogProp
     setPassword('');
     setConfirmPassword('');
     setRole('MEMBER');
+    setExpiresAt('');
     setSendWelcomeEmail(false);
     clearError();
     setResult(null);
@@ -198,12 +202,23 @@ export default function CreateUserDialog({ open, onClose }: CreateUserDialogProp
             <Select
               value={role}
               label="Role"
-              onChange={(e) => setRole(e.target.value as 'ADMIN' | 'MEMBER')}
+              onChange={(e) => setRole(e.target.value as TenantRole)}
             >
-              <MenuItem value="MEMBER">Member</MenuItem>
-              <MenuItem value="ADMIN">Admin</MenuItem>
+              {ASSIGNABLE_ROLES.map((r) => (
+                <MenuItem key={r} value={r}>{ROLE_LABELS[r]}</MenuItem>
+              ))}
             </Select>
           </FormControl>
+          <TextField
+            label="Access Expires At"
+            type="datetime-local"
+            value={expiresAt}
+            onChange={(e) => setExpiresAt(e.target.value)}
+            fullWidth
+            size="small"
+            slotProps={{ inputLabel: { shrink: true } }}
+            helperText="Leave empty for permanent access"
+          />
           {emailConfigured && (
             <FormControlLabel
               control={

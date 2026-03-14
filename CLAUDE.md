@@ -51,6 +51,10 @@ Copy `.env.example` to `.env`. PostgreSQL is used in both development and produc
 
 **Important:** The `.env` file lives at the **monorepo root**, not inside `server/`. Prisma CLI commands (`db:push`, `db:migrate`) run from the `server/` workspace directory, so `server/prisma.config.ts` explicitly resolves the `.env` path to `../.env`. Never add a separate `server/.env` — all env vars are loaded from the root `.env`.
 
+## Documentation Maintenance
+
+`docs/rag-summary.md` must be kept in sync whenever documentation or features change. If any feature is added, modified, or removed, update this file to reflect the current state.
+
 ## Architecture
 
 **Monorepo** with npm workspaces: `server/`, `client/`, and `clients/browser-extensions/`.
@@ -135,9 +139,19 @@ All user-facing UI layout state **must** be persisted via the centralized `uiPre
 - Add new preference keys and their defaults to the store's type and initial state
 - Exclude transient state (dialogs, menus, loading flags) — only persist what the user would expect to survive a page reload
 
-### Task Files
+### Task & Idea Management
 
-Tasks are split across three files by status:
+Tasks and ideas are managed through one of three modes, controlled by `.claude/issues-tracker.json` (preferred) or `.claude/github-issues.json` (legacy fallback):
+
+| `enabled` | `sync` | Mode | Data Source |
+|-----------|--------|------|-------------|
+| `true` | `false` (or absent) | **Platform-only** | GitHub/GitLab Issues only. No local files. |
+| `true` | `true` | **Dual sync** | Local files first, then platform issues. |
+| `false` | — | **Local only** | Local text files only. |
+
+**Platform-only mode (current):** Tasks are GitHub Issues with status labels (`status:todo`, `status:in-progress`, `status:to-test`, `status:done`). Ideas are GitHub Issues with the `idea` label. No local task/idea text files exist. Tasks in `status:in-progress` may also carry `status:to-test`, indicating they are awaiting test verification before release.
+
+**Local/Dual mode (when enabled):** Tasks are split across three files by status:
 
 | File | Status | Symbol |
 |------|--------|--------|
@@ -145,11 +159,7 @@ Tasks are split across three files by status:
 | `progressing.txt` | In-progress tasks | `[~]` |
 | `done.txt` | Completed tasks | `[x]` |
 
-When a task changes status, move it to the corresponding file.
-
-### Idea Files
-
-Ideas are stored separately from tasks and must be explicitly approved before entering the task pipeline:
+Ideas are stored separately:
 
 | File | Purpose |
 |------|---------|
@@ -157,6 +167,27 @@ Ideas are stored separately from tasks and must be explicitly approved before en
 | `idea-disapproved.txt` | Rejected ideas archive |
 
 Use `/idea-create` to add ideas, `/idea-approve` to promote an idea to a task, `/idea-refactor` to update ideas based on codebase changes, and `/idea-disapprove` to reject an idea. Ideas must never be picked up directly by `/task-pick`.
+
+### Release Planning
+
+Tasks can be grouped into planned releases via `releases.json` at the project root. This is the single source of truth for release plans — platform labels (`release:vX.Y.Z`) and milestones are kept in sync as secondary artifacts.
+
+**`releases.json` structure:** An array of release entries, each with `version` (semver, no `v` prefix), `status` (`planned`|`in-progress`|`released`), `theme` (grouping description), `target_date` (optional), `tasks` (array of task codes), and `created_at`/`released_at` timestamps.
+
+**Key skills:**
+- `/release-plan` — Manage release plans: list, create, assign/unassign tasks, suggest groupings, view timeline
+- `/release-plan suggest` — AI-driven grouping of unassigned tasks by prefix affinity, dependency chains, section cohesion, and description similarity
+
+**Integration with existing skills:**
+- `/task-create` and `/idea-approve` — Offer to assign newly created tasks to a planned release
+- `/task-pick` and `/task-continue` — Show release assignment in briefing
+- `/task-status` — Includes release plan overview section
+- `/release` — Uses planned version from `releases.json` instead of auto-detecting from commits; marks release as released after publishing
+- `/git-publish` — Advisory warning if next planned release has incomplete tasks
+
+**Task block `Release:` field:** In local/dual mode, tasks have a `Release:` field after `Dependencies:`. In platform-only mode, the `release:vX.Y.Z` label on the issue serves the same purpose.
+
+**Backward compatibility:** All release planning features are optional. If `releases.json` does not exist, all skills behave identically to their pre-release-planning behavior.
 
 ### File Naming Conventions
 
@@ -170,31 +201,50 @@ Use `/idea-create` to add ideas, `/idea-approve` to promote an idea to a task, `
 | Client API | `*.api.ts` | `connections.api.ts` |
 | Client hooks | `use*.ts` | `useAuth.ts` |
 
-### GitHub Issues Integration
+### Issues Tracker Integration
 
-When `.claude/github-issues.json` exists with `"enabled": true`, all task and idea skills automatically sync with GitHub Issues. Both text files and GitHub Issues are co-authoritative (dual sync).
+**Config file:** `.claude/issues-tracker.json` — controls the operating mode, target platform/repo, and label mappings. Copy `.claude/issues-tracker.example.json` to get started. Legacy fallback: `.claude/github-issues.json`.
 
-**Config file:** `.claude/github-issues.json` — controls whether GitHub sync is active, the target repo, and label mappings. Copy `.claude/github-issues.example.json` to get started.
+**Skill scripts:** Python utilities in `.claude/scripts/` (zero external dependencies, stdlib only):
+- `task_manager.py` — Task/idea parsing, ID generation, platform detection, PostToolUse hook
+- `app_manager.py` — Cross-platform port checking, process management
+- `release_manager.py` — Version detection, commit parsing, changelog generation, release plan management
+- `setup_labels.py` — Cross-platform label creation (GitHub/GitLab)
+
+**Config parameters:**
+- `platform` (string): `"github"` or `"gitlab"` — determines which CLI tool (`gh` or `glab`) is used
+- `enabled` (boolean): Whether platform issues integration is active
+- `sync` (boolean): Whether to maintain dual sync with local text files. When `false` (or absent), the platform is the sole data source.
+- `repo` (string): Target repository (e.g., `dnviti/arsenale`)
+- `labels` (object): Label mappings for source, type, priority, status (including `to-test`), and sections
 
 **Setup:**
-1. Copy `.claude/github-issues.example.json` to `.claude/github-issues.json` and set `"enabled": true`
-2. Run `bash scripts/setup-github-labels.sh` to create all required labels
-3. Ensure `gh` CLI is authenticated (`gh auth status`)
+1. Copy `.claude/issues-tracker.example.json` to `.claude/issues-tracker.json` (or use legacy `.claude/github-issues.json`)
+2. Set `"platform"`, `"enabled": true`, and configure `"sync"` (`false` for platform-only, `true` for dual sync)
+3. Run `python3 .claude/scripts/setup_labels.py` to create all required labels (cross-platform; legacy: `bash scripts/setup-labels.sh`)
+4. Ensure `gh` CLI (GitHub) or `glab` CLI (GitLab) is authenticated
 
-**Behavior when enabled:**
-- `/task-create` creates a GitHub Issue with task labels (`claude-code`, `task`, `priority:*`, `status:todo`, `section:*`)
-- `/task-pick` updates issue status labels (todo → in-progress → done) and closes issue on completion
-- `/idea-create` creates a GitHub Issue with `idea` label
+**Behavior in platform-only mode** (`enabled: true`, `sync: false`):
+- All task/idea data lives exclusively in platform issues — no local text files
+- `/task-create` creates an issue with labels (`claude-code`, `task`, `priority:*`, `status:todo`, `section:*`)
+- `/task-pick` picks `status:todo` tasks, updates labels (todo → in-progress → to-test → done) and closes on completion
+- `/task-pick` selects next task by priority label: `priority:high` > `priority:medium` > `priority:low`
+- `/test-engineer TASK-CODE` runs the testing workflow for `status:to-test` tasks (automated + manual)
+- `/idea-create` creates an issue with `idea` label
 - `/idea-approve` closes idea issue, creates task issue with cross-reference
 - `/idea-disapprove` closes idea issue with reason
 - `/idea-refactor` updates issue body when ideas are revised
-- `/git-publish` links PRs to related issues via `Refs #N`
-- `/release` enriches GitHub Releases with issue cross-references
+- `/git-publish` checks for untested tasks (`status:to-test`) before publishing, links PRs to issues via `Refs #N`
+- `/release` checks for untested tasks before releasing, enriches GitHub Releases with issue cross-references
+- All new content is written in English
 
-**Issue title format:** `[PREFIX-NNN] Task Title` or `[IDEA-NNN] Idea Title` — the bracketed code is used to look up issues via `gh issue list --search`.
-
-**Dual sync rules:**
-- Skills write to text files first, then sync to GitHub
+**Behavior in dual sync mode** (`enabled: true`, `sync: true`):
+- Skills write to local text files first, then sync to GitHub
 - If GitHub sync fails, warn but don't fail the operation
 - Text files win in case of discrepancy
 - `GitHub: #NNN` is stored in each task/idea block for fast lookup
+- Task/idea content is written in Italian (local files) with English communication
+
+**Issue title format:** `[PREFIX-NNN] Task Title` or `[IDEA-NNN] Idea Title` — the bracketed code is used to look up issues via `gh issue list --search`.
+
+**Task branch workflow:** `/task-pick` must always create a dedicated branch (`task/<code>`) from `develop` and, upon completion, open a pull request targeting `develop` via `gh pr create --base develop`. Never merge directly into `develop` without a PR.

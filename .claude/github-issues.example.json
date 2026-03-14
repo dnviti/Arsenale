@@ -1,5 +1,7 @@
 {
+  "_deprecated": "This file is deprecated. Use .claude/issues-tracker.example.json instead, which supports both GitHub and GitLab.",
   "enabled": false,
+  "sync": false,
   "repo": "owner/repo",
   "labels": {
     "source": "claude-code",
@@ -13,6 +15,7 @@
     "status": {
       "todo": "status:todo",
       "in-progress": "status:in-progress",
+      "to-test": "status:to-test",
       "done": "status:done"
     },
     "sections": {

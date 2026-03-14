@@ -28,6 +28,8 @@ import { encrypt, getMasterKey } from './crypto.service';
 import { sendVerificationEmail } from './email';
 import * as auditService from './audit.service';
 import { getSelfSignupEnabled } from './appConfig.service';
+import { computeBindingHash } from '../utils/tokenBinding';
+import { assertPasswordNotBreached } from './password.service';
 
 const BCRYPT_ROUNDS = 12;
 const RESEND_COOLDOWN_MS = 60 * 1000;
@@ -53,6 +55,9 @@ export async function register(email: string, password: string) {
       recoveryKey: '', // Dummy key, they already have an account
     };
   }
+
+  // Check password against known data breaches (HIBP k-Anonymity)
+  await assertPasswordNotBreached(password);
 
   // Hash password for login
   const passwordHash = await bcrypt.hash(password, BCRYPT_ROUNDS);
@@ -116,7 +121,7 @@ export async function issueTokens(user: {
   email: string;
   username: string | null;
   avatarData: string | null;
-}, tokenFamily?: string) {
+}, tokenFamily?: string, binding?: { ip: string; userAgent: string }) {
   // Fetch all tenant memberships for the user
   const allMemberships = await prisma.tenantMember.findMany({
     where: { userId: user.id },
@@ -124,21 +129,32 @@ export async function issueTokens(user: {
     orderBy: { joinedAt: 'asc' },
   });
 
+  // Filter out expired memberships
+  const now = new Date();
+  const validMemberships = allMemberships.filter(
+    (m) => !m.expiresAt || m.expiresAt > now,
+  );
+
   // Resolve active membership, auto-activating if exactly one exists
-  let activeMembership = allMemberships.find((m) => m.isActive);
-  if (!activeMembership && allMemberships.length === 1) {
+  let activeMembership = validMemberships.find((m) => m.isActive);
+  if (!activeMembership && validMemberships.length === 1) {
     await prisma.tenantMember.update({
-      where: { id: allMemberships[0].id },
+      where: { id: validMemberships[0].id },
       data: { isActive: true },
     });
-    activeMembership = { ...allMemberships[0], isActive: true };
+    activeMembership = { ...validMemberships[0], isActive: true };
   }
+
+  const ipUaHash = binding && config.tokenBindingEnabled
+    ? computeBindingHash(binding.ip, binding.userAgent)
+    : undefined;
 
   const payload: AuthPayload = {
     userId: user.id,
     email: user.email,
     ...(activeMembership && { tenantId: activeMembership.tenantId }),
     ...(activeMembership && { tenantRole: activeMembership.role as AuthPayload['tenantRole'] }),
+    ...(ipUaHash && { ipUaHash }),
   };
   const accessToken = jwt.sign(payload, config.jwtSecret, {
     expiresIn: config.jwtExpiresIn as string,
@@ -153,6 +169,7 @@ export async function issueTokens(user: {
       userId: user.id,
       tokenFamily: family,
       expiresAt: new Date(Date.now() + refreshExpiresMs),
+      ...(ipUaHash && { ipUaHash }),
     },
   });
 
@@ -167,7 +184,7 @@ export async function issueTokens(user: {
       tenantId: activeMembership?.tenantId,
       tenantRole: activeMembership?.role,
     },
-    tenantMemberships: allMemberships.map((m) => ({
+    tenantMemberships: validMemberships.map((m) => ({
       tenantId: m.tenant.id,
       name: m.tenant.name,
       slug: m.tenant.slug,
@@ -177,13 +194,16 @@ export async function issueTokens(user: {
   };
 }
 
-export async function switchTenant(userId: string, targetTenantId: string) {
+export async function switchTenant(userId: string, targetTenantId: string, binding?: { ip: string; userAgent: string }) {
   // Verify the user has a membership in the target tenant
   const membership = await prisma.tenantMember.findUnique({
     where: { tenantId_userId: { tenantId: targetTenantId, userId } },
   });
   if (!membership) {
     throw new AppError('You are not a member of this organization', 403);
+  }
+  if (membership.expiresAt && membership.expiresAt <= new Date()) {
+    throw new AppError('Your membership in this organization has expired', 403);
   }
 
   // Transactionally deactivate all memberships and activate the target
@@ -207,10 +227,158 @@ export async function switchTenant(userId: string, targetTenantId: string) {
     select: { id: true, email: true, username: true, avatarData: true },
   });
 
-  return issueTokens(user);
+  return issueTokens(user, undefined, binding);
 }
 
-export async function login(email: string, password: string, ipAddress?: string | string[]) {
+async function tryLdapLogin(
+  email: string,
+  password: string,
+  ipAddress?: string | string[],
+  binding?: { ip: string; userAgent: string },
+) {
+  const ldapService = await import('./ldap.service');
+  const ldapEntry = await ldapService.authenticateUser(email, password);
+  if (!ldapEntry) return null;
+
+  // LDAP auth succeeded — find or create user
+  let user = await prisma.user.findUnique({
+    where: { email: ldapEntry.email.toLowerCase() },
+    select: {
+      id: true, email: true, username: true, avatarData: true, enabled: true,
+      vaultSalt: true, encryptedVaultKey: true, vaultKeyIV: true, vaultKeyTag: true,
+      vaultSetupComplete: true,
+      totpEnabled: true, smsMfaEnabled: true, webauthnEnabled: true,
+      tenantMemberships: {
+        where: { isActive: true },
+        take: 1,
+        include: { tenant: { select: { mfaRequired: true } } },
+      },
+    },
+  });
+
+  if (!user) {
+    if (!config.ldap.autoProvision) return null;
+
+    // Auto-provision new user from LDAP
+    const newUser = await prisma.user.create({
+      data: {
+        email: ldapEntry.email.toLowerCase(),
+        username: ldapEntry.displayName || ldapEntry.uid,
+        vaultSetupComplete: false,
+        emailVerified: true,
+      },
+      select: {
+        id: true, email: true, username: true, avatarData: true, enabled: true,
+        vaultSalt: true, encryptedVaultKey: true, vaultKeyIV: true, vaultKeyTag: true,
+        vaultSetupComplete: true,
+        totpEnabled: true, smsMfaEnabled: true, webauthnEnabled: true,
+        tenantMemberships: {
+          where: { isActive: true },
+          take: 1,
+          include: { tenant: { select: { mfaRequired: true } } },
+        },
+      },
+    });
+
+    // Link LDAP account
+    await prisma.oAuthAccount.create({
+      data: {
+        userId: newUser.id,
+        provider: 'LDAP',
+        providerUserId: ldapEntry.providerUserId,
+        providerEmail: ldapEntry.email.toLowerCase(),
+        samlAttributes: {
+          dn: ldapEntry.dn,
+          uid: ldapEntry.uid,
+          groups: ldapEntry.groups,
+        },
+      },
+    });
+
+    // Auto-assign to default tenant if configured
+    if (config.ldap.defaultTenantId) {
+      await prisma.tenantMember.create({
+        data: {
+          tenantId: config.ldap.defaultTenantId,
+          userId: newUser.id,
+          role: 'MEMBER',
+        },
+      }).catch(() => { /* already a member */ });
+    }
+
+    auditService.log({
+      userId: newUser.id,
+      action: 'LDAP_USER_CREATED',
+      details: { email: ldapEntry.email, uid: ldapEntry.uid },
+      ipAddress,
+    });
+
+    user = newUser;
+  }
+
+  if (!user.enabled) {
+    throw new AppError('Your account has been disabled. Contact your administrator.', 403);
+  }
+
+  // Unlock vault if set up (LDAP users may or may not have vault)
+  if (user.vaultSalt && user.encryptedVaultKey && user.vaultKeyIV && user.vaultKeyTag) {
+    const derivedKey = await deriveKeyFromPassword(password, user.vaultSalt);
+    const mk = decryptMasterKey(
+      { ciphertext: user.encryptedVaultKey, iv: user.vaultKeyIV, tag: user.vaultKeyTag },
+      derivedKey,
+    );
+    storeVaultSession(user.id, mk);
+    storeVaultRecovery(user.id, mk);
+    mk.fill(0);
+    derivedKey.fill(0);
+  }
+
+  auditService.log({ userId: user.id, action: 'LDAP_LOGIN', ipAddress });
+  log.verbose(`LDAP login successful for user ${user.id} (${email})`);
+
+  // MFA checks
+  const mfaMethods: ('totp' | 'sms' | 'webauthn')[] = [];
+  if (user.totpEnabled) mfaMethods.push('totp');
+  if (user.smsMfaEnabled) mfaMethods.push('sms');
+  if (user.webauthnEnabled) mfaMethods.push('webauthn');
+
+  if (mfaMethods.length > 0) {
+    const tempToken = jwt.sign(
+      { userId: user.id, purpose: 'mfa-verify' },
+      config.jwtSecret,
+      { expiresIn: '5m' } as jwt.SignOptions,
+    );
+    return {
+      requiresMFA: true as const,
+      requiresTOTP: mfaMethods.includes('totp') as true,
+      methods: mfaMethods,
+      tempToken,
+    };
+  }
+
+  // Tenant mandatory MFA check
+  const activeTenantMembership = user.tenantMemberships[0];
+  if (activeTenantMembership?.tenant.mfaRequired && !user.totpEnabled && !user.smsMfaEnabled && !user.webauthnEnabled) {
+    const setupToken = jwt.sign(
+      { userId: user.id, purpose: 'mfa-setup' },
+      config.jwtSecret,
+      { expiresIn: '15m' } as jwt.SignOptions,
+    );
+    return { mfaSetupRequired: true as const, tempToken: setupToken };
+  }
+
+  const tokens = await issueTokens(user, undefined, binding);
+  return { requiresMFA: false as const, ...tokens };
+}
+
+export async function login(email: string, password: string, ipAddress?: string | string[], binding?: { ip: string; userAgent: string }) {
+  // Try LDAP first if enabled
+  const ldapService = await import('./ldap.service');
+  if (ldapService.isEnabled()) {
+    const ldapResult = await tryLdapLogin(email, password, ipAddress, binding);
+    if (ldapResult) return ldapResult;
+  }
+
   const user = await prisma.user.findUnique({
     where: { email },
     include: {
@@ -221,6 +389,7 @@ export async function login(email: string, password: string, ipAddress?: string 
       },
     },
   });
+
   if (!user) {
     auditService.log({
       action: 'LOGIN_FAILURE',
@@ -363,11 +532,11 @@ export async function login(email: string, password: string, ipAddress?: string 
 
   // Normal flow: issue real tokens
   log.verbose(`Login successful for user ${user.id} (${email})`);
-  const tokens = await issueTokens(user);
+  const tokens = await issueTokens(user, undefined, binding);
   return { requiresMFA: false as const, ...tokens };
 }
 
-export async function verifyTotp(tempToken: string, code: string) {
+export async function verifyTotp(tempToken: string, code: string, binding?: { ip: string; userAgent: string }) {
   let decoded: { userId: string; purpose: string };
   try {
     decoded = verifyJwt<{ userId: string; purpose: string }>(tempToken);
@@ -411,7 +580,7 @@ export async function verifyTotp(tempToken: string, code: string) {
   }
 
   // Issue real tokens (vault was already unlocked during password step)
-  return issueTokens(user);
+  return issueTokens(user, undefined, binding);
 }
 
 export async function requestLoginSmsCode(tempToken: string) {
@@ -463,7 +632,7 @@ export async function requestWebAuthnOptions(tempToken: string) {
   return generateAuthenticationOpts(user.id);
 }
 
-export async function verifyWebAuthn(tempToken: string, credential: Record<string, unknown>) {
+export async function verifyWebAuthn(tempToken: string, credential: Record<string, unknown>, binding?: { ip: string; userAgent: string }) {
   let decoded: { userId: string; purpose: string };
   try {
     decoded = verifyJwt<{ userId: string; purpose: string }>(tempToken);
@@ -484,10 +653,10 @@ export async function verifyWebAuthn(tempToken: string, credential: Record<strin
   // credential is AuthenticationResponseJSON from the browser — validated by simplewebauthn
   await verifyAuthentication(user.id, credential as unknown as Parameters<typeof verifyAuthentication>[1]);
 
-  return issueTokens(user);
+  return issueTokens(user, undefined, binding);
 }
 
-export async function verifySmsCode(tempToken: string, code: string) {
+export async function verifySmsCode(tempToken: string, code: string, binding?: { ip: string; userAgent: string }) {
   let decoded: { userId: string; purpose: string };
   try {
     decoded = verifyJwt<{ userId: string; purpose: string }>(tempToken);
@@ -510,12 +679,12 @@ export async function verifySmsCode(tempToken: string, code: string) {
     throw new Error('Invalid or expired SMS code');
   }
 
-  return issueTokens(user);
+  return issueTokens(user, undefined, binding);
 }
 
 const ROTATION_GRACE_PERIOD_MS = 10_000; // 10 seconds for concurrent-tab tolerance
 
-export async function refreshAccessToken(refreshToken: string) {
+export async function refreshAccessToken(refreshToken: string, binding?: { ip: string; userAgent: string }) {
   const stored = await prisma.refreshToken.findUnique({
     where: { token: refreshToken },
     include: { user: true },
@@ -523,6 +692,32 @@ export async function refreshAccessToken(refreshToken: string) {
 
   if (!stored) {
     throw new Error('Invalid or expired refresh token');
+  }
+
+  // Token binding verification: reject if IP/UA changed or binding info is missing
+  if (config.tokenBindingEnabled && stored.ipUaHash) {
+    const currentHash = binding ? computeBindingHash(binding.ip, binding.userAgent) : null;
+    if (!currentHash || currentHash !== stored.ipUaHash) {
+      // Revoke entire token family — likely session hijacking
+      await prisma.refreshToken.deleteMany({
+        where: { tokenFamily: stored.tokenFamily },
+      });
+      auditService.log({
+        userId: stored.userId,
+        action: 'TOKEN_HIJACK_ATTEMPT',
+        ipAddress: binding?.ip ?? 'unknown',
+        details: {
+          tokenFamily: stored.tokenFamily,
+          reason: binding
+            ? 'Refresh token presented from different IP/User-Agent'
+            : 'Refresh token presented without binding info',
+        },
+      });
+      log.warn(
+        `Token binding mismatch for user ${stored.userId}, family ${stored.tokenFamily}. All tokens revoked.`,
+      );
+      throw new Error('Invalid or expired refresh token');
+    }
   }
 
   // Reuse detection: token was already rotated
@@ -554,6 +749,7 @@ export async function refreshAccessToken(refreshToken: string) {
             avatarData: stored.user.avatarData,
           },
           stored.tokenFamily,
+          binding,
         );
       }
     }
@@ -608,6 +804,7 @@ export async function refreshAccessToken(refreshToken: string) {
       avatarData: stored.user.avatarData,
     },
     stored.tokenFamily,
+    binding,
   );
 }
 
@@ -714,7 +911,7 @@ export async function setupMfaDuringLogin(tempToken: string) {
   return { secret, otpauthUri };
 }
 
-export async function verifyMfaSetupDuringLogin(tempToken: string, code: string) {
+export async function verifyMfaSetupDuringLogin(tempToken: string, code: string, binding?: { ip: string; userAgent: string }) {
   let decoded: { userId: string; purpose: string };
   try {
     decoded = verifyJwt<{ userId: string; purpose: string }>(tempToken);
@@ -736,7 +933,7 @@ export async function verifyMfaSetupDuringLogin(tempToken: string, code: string)
   });
   if (!user) throw new Error('User not found');
 
-  return issueTokens(user);
+  return issueTokens(user, undefined, binding);
 }
 
 export async function cleanupExpiredTokens() {

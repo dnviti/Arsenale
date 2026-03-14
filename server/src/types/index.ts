@@ -1,10 +1,13 @@
 import { Request } from 'express';
 
+export type TenantRoleType = 'OWNER' | 'ADMIN' | 'OPERATOR' | 'MEMBER' | 'CONSULTANT' | 'AUDITOR' | 'GUEST';
+
 export interface AuthPayload {
   userId: string;
   email: string;
   tenantId?: string;
-  tenantRole?: 'OWNER' | 'ADMIN' | 'MEMBER';
+  tenantRole?: TenantRoleType;
+  ipUaHash?: string;
 }
 
 // Merge AuthPayload into Express.User so passport's global
@@ -36,7 +39,7 @@ export interface AuthenticatedRequest extends Request {
 
 /** AuthRequest where the user is also bound to a tenant. */
 export interface TenantRequest extends Request {
-  user: AuthPayload & { tenantId: string; tenantRole: 'OWNER' | 'ADMIN' | 'MEMBER' };
+  user: AuthPayload & { tenantId: string; tenantRole: TenantRoleType };
   teamMembership?: TeamMembershipInfo;
 }
 
@@ -121,6 +124,20 @@ export interface VncSettings {
   clipboardEncoding?: 'ISO8859-1' | 'UTF-8' | 'UTF-16' | 'CP1252';
   swapRedBlue?: boolean;
   disableAudio?: boolean;
+}
+
+export interface DlpPolicy {
+  disableCopy?: boolean;
+  disablePaste?: boolean;
+  disableDownload?: boolean;
+  disableUpload?: boolean;
+}
+
+export interface ResolvedDlpPolicy {
+  disableCopy: boolean;
+  disablePaste: boolean;
+  disableDownload: boolean;
+  disableUpload: boolean;
 }
 
 // --- Secret Payload Types (discriminated union) ---
