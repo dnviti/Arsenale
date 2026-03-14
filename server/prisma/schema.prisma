@@ -47,6 +47,7 @@ model Tenant {
   vaultSecrets       VaultSecret[]
   tenantVaultMembers TenantVaultMember[]
   syncProfiles       SyncProfile[]
+  keystrokePolicies  KeystrokePolicy[]
 }
 
 model Team {
@@ -598,6 +599,8 @@ enum AuditAction {
   TEAM_MEMBERSHIP_EXPIRY_UPDATE
   TENANT_DLP_POLICY_UPDATE
   TOKEN_HIJACK_ATTEMPT
+  SESSION_TERMINATED_POLICY_VIOLATION
+  KEYSTROKE_POLICY_ALERT
 }
 
 model AuditLog {
@@ -637,6 +640,7 @@ enum NotificationType {
   TENANT_INVITATION
   RECORDING_READY
   IMPOSSIBLE_TRAVEL_DETECTED
+  KEYSTROKE_POLICY_VIOLATION
 }
 
 model Notification {
@@ -988,4 +992,26 @@ model AppConfig {
   key       String   @id
   value     String
   updatedAt DateTime @updatedAt
+}
+
+enum KeystrokePolicyAction {
+  BLOCK_AND_TERMINATE
+  ALERT_ONLY
+}
+
+model KeystrokePolicy {
+  id            String                @id @default(uuid())
+  tenantId      String
+  name          String
+  description   String?
+  action        KeystrokePolicyAction @default(ALERT_ONLY)
+  regexPatterns String[]              @default([])
+  enabled       Boolean               @default(true)
+  createdAt     DateTime              @default(now())
+  updatedAt     DateTime              @updatedAt
+
+  tenant Tenant @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+
+  @@unique([tenantId, name])
+  @@index([tenantId, enabled])
 }

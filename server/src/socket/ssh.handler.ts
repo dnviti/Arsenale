@@ -19,6 +19,8 @@ import { getSocketClientIp } from '../utils/ip';
 import { computeBindingHash, getSocketUserAgent } from '../utils/tokenBinding';
 import prisma from '../lib/prisma';
 import { resolveDlpPolicy } from '../utils/dlp';
+import { loadPolicies, InputLineBuffer, inspectLine, ResolvedKeystrokePolicy } from '../services/keystrokeInspection.service';
+import { createNotification } from '../services/notification.service';
 
 interface ActiveTransfer {
   stream: NodeJS.ReadableStream | NodeJS.WritableStream;
@@ -88,6 +90,8 @@ export function setupSshHandler(io: Server) {
     let recordingWriter: AsciicastWriter | null = null;
     let recordingId: string | null = null;
     let dlpPolicy: ResolvedDlpPolicy | null = null;
+    let keystrokePolicies: ResolvedKeystrokePolicy[] = [];
+    const inputLineBuffer = new InputLineBuffer();
 
     async function ensureSftp(): Promise<SFTPWrapper> {
       if (sftpSession) return sftpSession;
@@ -297,6 +301,16 @@ export function setupSshHandler(io: Server) {
         const sessionId = `${user.userId}:${socket.id}`;
         activeSessions.set(sessionId, session);
 
+        // Load keystroke inspection policies for the tenant
+        if (user.tenantId) {
+          try {
+            keystrokePolicies = await loadPolicies(user.tenantId);
+          } catch (err) {
+            logger.error('Failed to load keystroke policies:', err);
+            keystrokePolicies = [];
+          }
+        }
+
         socket.emit('session:ready', { dlpPolicy });
 
         // Start recording if enabled
@@ -368,15 +382,69 @@ export function setupSshHandler(io: Server) {
     });
 
     socket.on('data', (data: string) => {
-      if (currentSession?.stream.writable) {
-        currentSession.stream.write(data);
-        if (recordingWriter) recordingWriter.writeInput(data);
-        // Throttled implicit heartbeat (at most once per 30s)
-        const now = Date.now();
-        if (now - lastActivityUpdate > 30000) {
-          lastActivityUpdate = now;
-          sessionService.heartbeatBySocketId(socket.id).catch(() => {});
+      if (!currentSession?.stream.writable) return;
+
+      // Keystroke inspection: feed data into line buffer and check completed lines
+      if (keystrokePolicies.length > 0) {
+        const completedLines = inputLineBuffer.feed(data);
+        for (const line of completedLines) {
+          const violation = inspectLine(line, keystrokePolicies);
+          if (violation) {
+            if (violation.action === 'BLOCK_AND_TERMINATE') {
+              // Drop the packet — do NOT write to the remote stream
+              auditService.log({
+                userId: user.userId,
+                action: 'SESSION_TERMINATED_POLICY_VIOLATION',
+                targetType: 'Connection',
+                targetId: currentConnectionId ?? undefined,
+                details: {
+                  policyId: violation.policyId,
+                  policyName: violation.policyName,
+                  matchedPattern: violation.matchedPattern,
+                  matchedInput: violation.matchedInput,
+                },
+                ipAddress: clientIp,
+              });
+              socket.emit('session:error', {
+                message: 'Session terminated: command blocked by security policy.',
+              });
+              // Notify tenant admins
+              if (user.tenantId) {
+                notifyTenantAdmins(user.tenantId, user.userId, violation).catch(() => {});
+              }
+              // Terminate the session
+              const sessionId = `${user.userId}:${socket.id}`;
+              cleanup(sessionId);
+              return;
+            }
+            // ALERT_ONLY: allow the data through but log and alert
+            auditService.log({
+              userId: user.userId,
+              action: 'KEYSTROKE_POLICY_ALERT',
+              targetType: 'Connection',
+              targetId: currentConnectionId ?? undefined,
+              details: {
+                policyId: violation.policyId,
+                policyName: violation.policyName,
+                matchedPattern: violation.matchedPattern,
+                matchedInput: violation.matchedInput,
+              },
+              ipAddress: clientIp,
+            });
+            if (user.tenantId) {
+              notifyTenantAdmins(user.tenantId, user.userId, violation).catch(() => {});
+            }
+          }
         }
+      }
+
+      currentSession.stream.write(data);
+      if (recordingWriter) recordingWriter.writeInput(data);
+      // Throttled implicit heartbeat (at most once per 30s)
+      const now = Date.now();
+      if (now - lastActivityUpdate > 30000) {
+        lastActivityUpdate = now;
+        sessionService.heartbeatBySocketId(socket.id).catch(() => {});
       }
     });
 
@@ -761,6 +829,44 @@ export function setupSshHandler(io: Server) {
         activeSessions.delete(sessionId);
       }
       currentSession = null;
+      inputLineBuffer.reset();
     }
   });
+}
+
+/**
+ * Send a keystroke policy violation notification to all OWNER/ADMIN members
+ * of the tenant. Fire-and-forget — never throws.
+ */
+async function notifyTenantAdmins(
+  tenantId: string,
+  violatingUserId: string,
+  violation: { policyName: string; matchedInput: string; action: string },
+): Promise<void> {
+  const admins = await prisma.tenantMember.findMany({
+    where: { tenantId, isActive: true, role: { in: ['OWNER', 'ADMIN'] } },
+    select: { userId: true },
+  });
+
+  const violatingUser = await prisma.user.findUnique({
+    where: { id: violatingUserId },
+    select: { email: true, username: true },
+  });
+  const userLabel = violatingUser?.username ?? violatingUser?.email ?? violatingUserId;
+
+  const actionLabel = violation.action === 'BLOCK_AND_TERMINATE' ? 'terminated' : 'flagged';
+  const message = `SSH session ${actionLabel}: user "${userLabel}" triggered policy "${violation.policyName}"`;
+
+  await Promise.all(
+    admins.map((admin) =>
+      createNotification({
+        userId: admin.userId,
+        type: 'KEYSTROKE_POLICY_VIOLATION',
+        message,
+        relatedId: violatingUserId,
+      }).catch((err) => {
+        logger.error('Failed to send keystroke violation notification:', err);
+      }),
+    ),
+  );
 }
