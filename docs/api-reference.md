@@ -389,6 +389,7 @@ Operational domains under `routes_operations.go` include:
 
 Notable gateway subpaths:
 
+- `GET /api/gateways/types` returns the human-readable gateway type catalog as `{"types":[...]}`. Each entry carries `type`, `displayName`, `summary`, `description`, `protocols`, `managed`, `deploymentModel`, `deploymentModes`, `defaultPort`, `requiresCredentials`, and (for managed types) `image`. The catalog is the single source of truth shared by the backend (`gatewayruntime`), the web UI, and the CLI's `arsenale gateway types` command (which reads it locally, no login required). Gateway-create validation errors reference this endpoint for the list of valid types.
 - `GET /api/gateways` now returns derived `operationalStatus`, `operationalReason`, `healthyInstances`, and `egressPolicy` fields alongside the legacy probe fields so clients can render managed and tunnel-backed gateway health consistently.
 - `/api/gateways/{id}/deploy`
 - `/api/gateways/{id}/scale`

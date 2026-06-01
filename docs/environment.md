@@ -217,6 +217,30 @@ Leave `LDAP_ENABLED=false` to disable. Compatible with FreeIPA, OpenLDAP, 389 Di
 | `SSH_AUTHORIZED_KEYS` | — | Authorized public keys (newline-separated) |
 | `GATEWAY_API_TOKEN` | — | Shared secret for gateway API sidecar |
 
+### Reverse Tunnel Transport (WebSocket / QUIC)
+
+Reverse-tunnel gateways connect outbound to the tunnel broker. The transport is
+WebSocket by default; QUIC is an opt-in native-stream transport. QUIC is
+provisioned by the installer behind `arsenale_tunnel_quic_enabled` (Ansible), and
+the broker stays WebSocket-only until a QUIC server certificate is configured.
+
+**Tunnel broker:**
+
+| Variable | Default | Description |
+|----------|---------|-------------|
+| `TUNNEL_QUIC_LISTEN_ADDR` | `:8092` | UDP `host:port` the QUIC tunnel listener binds. Mirrors the HTTP control port. Startup aborts if the bind fails. |
+| `TUNNEL_QUIC_SERVER_CERT` / `TUNNEL_QUIC_SERVER_CERT_FILE` | — | PEM server certificate enabling the QUIC listener. With no cert the broker is WebSocket-only. |
+| `TUNNEL_QUIC_SERVER_KEY` / `TUNNEL_QUIC_SERVER_KEY_FILE` | — | PEM private key for the QUIC server certificate. |
+
+**Tunnel agent (gateway side):**
+
+| Variable | Default | Description |
+|----------|---------|-------------|
+| `TUNNEL_TRANSPORT` | `wss` | Transport selection: `wss` (WebSocket), `quic` (QUIC only), or `auto` (prefer QUIC, fall back to WebSocket when QUIC cannot be established, e.g. UDP-blocked networks). |
+| `TUNNEL_QUIC_SERVER_ADDR` | — | Broker QUIC `host:port` (required when `TUNNEL_TRANSPORT` is `quic` or `auto`). |
+| `TUNNEL_QUIC_SERVER_NAME` | — | Optional TLS SNI / server-cert name override when it differs from the dial host. |
+| `TUNNEL_CA_CERT` / `TUNNEL_CA_CERT_FILE` | — | CA that signed the broker's QUIC server certificate, used by the agent to verify it. |
+
 ### Gateway Runtime Egress
 
 | Variable | Default | Description |
