@@ -36,7 +36,8 @@ source-files:
 
 Arsenale now has one installer-driven deployment story for both development and production:
 
-- `Makefile` is the human entry point,
+- `Makefile` is the human entry point (from a cloned repo),
+- `tools/installer/install-platform.sh` is the one-command bootstrap that runs the same installer on a production host **without cloning** — `curl -fsSL .../install-platform.sh | ARSENALE_DOMAIN=example.com bash`. See [`docs/installer.md`](installer.md#one-command-install-no-repo-clone),
 - `deployment/ansible/playbooks/install.yml` is the interactive installer entrypoint,
 - `deployment/ansible/playbooks/dev_refresh.yml` is the targeted dev-service refresh entrypoint,
 - `deployment/ansible/playbooks/status.yml` reads encrypted installer status,

@@ -57,6 +57,33 @@ Underlying playbooks:
 | `make dev <selector>` | `playbooks/dev_refresh.yml` | Targeted dev image rebuild and service refresh |
 | `make dev-down` | `playbooks/deploy.yml -e arsenale_env=development -e arsenale_state=absent` | Dev teardown |
 
+### One-Command Install (no repo clone)
+
+For a production host you do not need to clone the repository. The bootstrap
+[`tools/installer/install-platform.sh`](../tools/installer/install-platform.sh)
+wraps the same `playbooks/install.yml` flow:
+
+```bash
+curl -fsSL https://raw.githubusercontent.com/dnviti/arsenale/main/tools/installer/install-platform.sh \
+  | ARSENALE_DOMAIN=example.com bash
+```
+
+It auto-installs prerequisites (Ansible, Podman, OpenSSL, Git), verifies
+passwordless SSH-to-localhost and `sudo` (the production play uses `connection:
+ssh` + `become`), downloads and SHA256-verifies the `arsenale-installer_<version>.tar.gz`
+bundle published with each release, generates and encrypts secrets, and runs the
+installer non-interactively (`installer_mode=production`, `installer_backend=podman`),
+pulling prebuilt images from `ghcr.io/dnviti/arsenale`. Re-runs upgrade in place
+without rotating live secrets.
+
+Configure it via environment variables — `ARSENALE_DOMAIN`,
+`ARSENALE_INSTALL_PASSWORD`, `ARSENALE_VAULT_PASSWORD`, `ARSENALE_CAPABILITIES`,
+`ARSENALE_VERSION`, `ARSENALE_SECRETS_FILE` (a filled `SECRETS.env` for OAuth/SMTP/S3),
+`ARSENALE_HOST` / `ARSENALE_DEPLOY_USER` (target a remote host over SSH),
+`ARSENALE_NONINTERACTIVE=1`, `ARSENALE_SKIP_PREREQS=1`. The extracted bundle ships a
+trimmed `Makefile`, so post-install `make status` / `backup` / `rotate` / `deploy`
+work from the install directory (default `/opt/arsenale/installer`) without the repo.
+
 ## Modes
 
 ### Development Mode
