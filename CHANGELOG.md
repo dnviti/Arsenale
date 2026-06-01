@@ -11,6 +11,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 - Gateway creation now returns a zero-trust tunnel enrollment panel with the one-time tunnel token, client certificate, client key, `tunnel.env`, `docker-compose.yml`, and remote install commands.
+- One-command platform installer: `tools/installer/install-platform.sh` (`curl … | ARSENALE_DOMAIN=… bash`) installs the full production stack on a Linux host without cloning the repo, downloading a checksummed `arsenale-installer_<version>.tar.gz` bundle published with each release and running the existing Ansible installer.
+- QUIC reverse-tunnel transport (opt-in via `TUNNEL_TRANSPORT=quic|auto`): the tunnel broker terminates QUIC on a UDP port (default `:8092`) with a CA-signed server certificate, and the agent prefers QUIC with automatic WebSocket fallback in `auto` mode. Provisioned by the installer behind `arsenale_tunnel_quic_enabled`.
+- Gateway type catalog: `GET /api/gateways/types` and the `arsenale gateway types` CLI command expose human-readable metadata (display name, summary, protocols, deployment model/modes, default port, image) for each gateway type, sourced from a single `gatewayruntime` definition shared by backend, CLI, and web UI.
 
 ### Changed
 - Release metadata, CLI version output, browser extension manifest, and package manifests now target `1.8.4`.
